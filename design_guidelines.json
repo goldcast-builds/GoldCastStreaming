@@ -1,0 +1,188 @@
+{
+  "app_name": "GOLDCAST STREAMING",
+  "personality": "6 Glass / Luxe DARK",
+  "personality_one_liner": "A premium, cinematic, and highly polished dark interface with striking gold accents and deep contrast, optimizing for TV focus navigation and media consumption.",
+  "color": {
+    "surface": "#000000",
+    "onSurface": "#FFFFFF",
+    "surfaceSecondary": "#151515",
+    "onSurfaceSecondary": "#A0A0A0",
+    "surfaceTertiary": "#222222",
+    "onSurfaceTertiary": "#CCCCCC",
+    "surfaceInverse": "#FFFFFF",
+    "onSurfaceInverse": "#000000",
+    "brand": "#C5A030",
+    "brandPrimary": "#D4AF37",
+    "onBrandPrimary": "#000000",
+    "brandSecondary": "#E5B84B",
+    "onBrandSecondary": "#000000",
+    "brandTertiary": "#F2D675",
+    "onBrandTertiary": "#000000",
+    "success": "#4CAF50",
+    "onSuccess": "#FFFFFF",
+    "warning": "#FFC107",
+    "onWarning": "#000000",
+    "error": "#F44336",
+    "onError": "#FFFFFF",
+    "info": "#2196F3",
+    "onInfo": "#FFFFFF",
+    "border": "#2A2A2A",
+    "borderStrong": "#D4AF37",
+    "divider": "#1A1A1A"
+  },
+  "typography": {
+    "displayFontFamily": "Manrope",
+    "textFontFamily": "Manrope",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous spacing for premium feel. Large hit areas and padding to account for TV remote navigation focus rings.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "Ionicons",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use heavy translucent glass for sticky tab bars and bottom sheets.",
+      "Apply dark blur overlays over movie posters for featured content."
+    ],
+    "dont's": [
+      "Don't use glass everywhere—rely mostly on pure black for deep cinematic contrast.",
+      "Don't blur small components or list rows."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Splash",
+      "purpose": "A premium loading experience introducing the brand identity.",
+      "states": {
+        "loading": "Centered Official Logo with a subtle gold shine or shimmer animation.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Flex 1, centered content. Pure black background (#000000). Render the official GoldCast logo (gold GCS, Wi-Fi/play, white text) in the center. Auto-transition to Welcome/Home after 2-3 seconds."
+    },
+    {
+      "name": "Welcome / Home",
+      "purpose": "Entry point for managing IPTV lists or navigating to content.",
+      "states": {
+        "loading": "Skeleton cards for list loading.",
+        "empty": "Show welcome message 'Seu player IPTV completo...' and the '+ ADICIONAR LISTA' CTA.",
+        "error": "Failed to load lists, retry button."
+      },
+      "layout": "Scrollable View. Top: Official logo centered. Below: Title 'Bem-vindo ao GoldCast Streaming' and secondary text. Primary Gold CTA Button '+ ADICIONAR LISTA'. Below CTA: 'Minhas listas' section displaying connected list cards. Each list card (surfaceSecondary) shows connection status (🟢 Conectada), stats (channels/movies), and expiration date. Ensure cards have focusable states for TV (borderStrong ring)."
+    },
+    {
+      "name": "Add List Modal",
+      "purpose": "Allow users to add an IPTV list via Xtream Codes, URL, or File.",
+      "states": {
+        "loading": "Spinner overlaid while validating credentials/URL.",
+        "empty": "N/A",
+        "error": "Inline error text below the respective input field if validation fails."
+      },
+      "layout": "Bottom Sheet or full-screen Modal. Top Tab/Segmented Control to switch between 'Xtream Codes', 'URL M3U', and 'Arquivo M3U'. Render a clean form with floating or above-input labels. Primary Gold 'Salvar/Conectar' button sticky at bottom."
+    },
+    {
+      "name": "Live TV",
+      "purpose": "Browse and play live TV channels.",
+      "states": {
+        "loading": "Grid of skeleton TV channels.",
+        "empty": "Icon with 'Nenhum canal encontrado'.",
+        "error": "Failed to fetch live channels, retry button."
+      },
+      "layout": "Top: Sticky horizontal scroll row of category chips (selected chip has gold background/text, others have surfaceTertiary). Below: Grid (2-3 columns on mobile, 4-6 on TV) of landscape/16:9 channel cards. Each card displays channel logo and name. Remember TV focus handling."
+    },
+    {
+      "name": "Movies & Series",
+      "purpose": "Browse VOD content via poster grids.",
+      "states": {
+        "loading": "Grid of skeleton 2:3 posters.",
+        "empty": "Icon with 'Nenhum conteúdo encontrado'.",
+        "error": "Retry button."
+      },
+      "layout": "Same header structure as Live TV (sticky category chips). Below: Grid of 2:3 cinematic poster cards. Cards use 'expo-image' with a bottom gradient scrim. Title text overlays the bottom of the poster. Focus state scales up slightly and adds a gold border."
+    },
+    {
+      "name": "Settings",
+      "purpose": "App configuration and list management.",
+      "states": {
+        "loading": "Skeleton rows.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Vertical list of setting items. Sections: 'Gerenciar Listas' (add/edit/delete), 'Informações do App', 'Sobre'. Use clear, large touch targets and standard list rows with left icon and right chevron."
+    },
+    {
+      "name": "Video Player",
+      "purpose": "Playback of HLS/M3U8 streams.",
+      "states": {
+        "loading": "Centered spinner over black background.",
+        "empty": "N/A",
+        "error": "Playback error, return button."
+      },
+      "layout": "Full screen landscape. Uses 'expo-video'. Overlay controls (play/pause, timeline if VOD, channel info if Live TV) that fade out after 3 seconds. TV remote D-Pad support for transport controls."
+    }
+  ],
+  "images": {
+    "hero_abstract_gold": {
+      "url": "https://images.unsplash.com/photo-1513346940221-6f673d962e97?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGRhcmslMjBnb2xkJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3ODg0Mzg0OTl8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Abstract dark gold background texture"
+    },
+    "poster_placeholder_1": {
+      "url": "https://images.unsplash.com/photo-1782020934325-cfe4cea4fd9c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwxfHxjaW5lbWF0aWMlMjBkYXJrJTIwbW92aWUlMjBwb3N0ZXJ8ZW58MHx8fHwxNzg4NDM4NDk5fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Cinematic dark movie poster placeholder"
+    },
+    "poster_placeholder_2": {
+      "url": "https://images.unsplash.com/photo-1778585040075-0991abfd4ed9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwyfHxjaW5lbWF0aWMlMjBkYXJrJTIwbW92aWUlMjBwb3N0ZXJ8ZW58MHx8fHwxNzg4NDM4NDk5fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Cinematic dark movie poster placeholder 2"
+    },
+    "channel_placeholder": {
+      "url": "https://images.unsplash.com/photo-1619419508315-73b5b41dd532?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwzfHxsaXZlJTIwdHYlMjBjaGFubmVsJTIwaWNvbiUyMHBsYWNlaG9sZGVyfGVufDB8fHx8MTc4ODQzODUwMHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Multi color live TV icon placeholder"
+    }
+  },
+  "instructions_to_main_agent": [
+    "IMPORTANT: Apply 'Glass / Luxe DARK' styling with pure black (#000000) base to respect the brand identity requested.",
+    "Use Manrope (or Montserrat) heavily for headings. Keep weight to 400 or 500 maximum, relying on font sizes for hierarchy.",
+    "TV / D-Pad Navigation Support: Implement active focus states on all touchable elements using `borderStrong` (#D4AF37) borders or subtle scaling to ensure Android TV box users can navigate using remote controls.",
+    "For Movies and Series Grids, posters must maintain a 2:3 aspect ratio and feature a dark gradient scrim at the bottom to ensure title readability.",
+    "Live TV grids should use 16:9 horizontal cards with channel logos and names.",
+    "Add List Modal needs 3 distinct methods (Xtream Codes form, M3U URL input, and M3U File upload button). Validate UX for these forms, making sure inputs are high-contrast.",
+    "Do NOT use pure white cards or generic grey layouts. Keep everything cinematic, utilizing #121212 or #151515 for card backgrounds against the #000000 screen background.",
+    "Tab bar selected item should be gold (`brandPrimary`), unselected items white/gray (`onSurfaceSecondary`).",
+    "Video player requires expo-video with custom overlay controls that handle D-pad navigation.",
+    "The official logo image URL will be provided externally; create an Image slot/placeholder that correctly sizes and respects its aspect ratio on Splash and Welcome screens."
+  ]
+}
