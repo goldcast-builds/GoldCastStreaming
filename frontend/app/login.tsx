@@ -1,0 +1,148 @@
+import { useEffect, useRef, useState } from "react";
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Switch } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import Ionicons from "@react-native-vector-icons/ionicons";
+import { Logo } from "../src/components/Logo";
+import { GoldButton } from "../src/components/GoldButton";
+import { colors, radius, spacing } from "../src/utils/theme";
+import { DEFAULT_SERVERS, hostOf, Stage } from "../src/services/xtream";
+import { useSession } from "../src/store/session";
+
+const STAGE_LABEL: Record<Stage, string> = {
+  checking: "Verificando servidor...",
+  connecting: "Conectando...",
+  validating: "Validando acesso...",
+  loading: "Carregando conteúdo...",
+  done: "Conectado!",
+};
+
+export default function LoginScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const login = useSession((s) => s.login);
+  const [server, setServer] = useState(DEFAULT_SERVERS.primary);
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [remember, setRemember] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState<{ s: Stage; d?: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
+
+  const submit = async () => {
+    setError(null);
+    if (!server.trim() || !user.trim() || !pass) { setError("Preencha servidor, usuário e senha."); return; }
+    setLoading(true);
+    try {
+      await login(server, user.trim(), pass, remember, (s, d) => mounted.current && setStage({ s, d }));
+      setTimeout(() => router.replace("/(tabs)"), 350);
+    } catch (e: any) {
+      if (mounted.current) { setError(e?.message || "Falha ao conectar."); setStage(null); }
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xxl }]} keyboardShouldPersistTaps="handled" testID="login-screen">
+        <View style={styles.logoWrap}><Logo size={150} /></View>
+        <Text style={styles.brand}>GoldCast Streaming</Text>
+        <Text style={styles.subtitle}>Entre com os dados fornecidos pelo seu serviço.</Text>
+
+        <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
+          <Field label="Servidor" value={server} onChangeText={setServer} placeholder="http://servidor.com:8080" autoCapitalize="none" autoCorrect={false} keyboardType="url" testID="login-server" />
+          <View style={styles.serverChips}>
+            {[DEFAULT_SERVERS.primary, DEFAULT_SERVERS.backup].map((s, i) => {
+              const active = server.trim() === s;
+              return (
+                <Pressable key={s} testID={`server-chip-${i + 1}`} onPress={() => setServer(s)} style={({ focused }) => [styles.chip, active && styles.chipActive, focused && styles.focused]}>
+                  <Text style={[styles.chipText, active && { color: colors.onGold }]}>Servidor {i + 1} · {hostOf(s)}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Field label="Usuário" value={user} onChangeText={setUser} placeholder="usuario" autoCapitalize="none" autoCorrect={false} testID="login-user" />
+          <Field
+            label="Senha" value={pass} onChangeText={setPass} placeholder="••••••••" secureTextEntry={!showPass} autoCapitalize="none" testID="login-pass"
+            rightIcon={
+              <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={8} testID="login-toggle-pass">
+                <Ionicons name={showPass ? "eye-off" : "eye"} size={18} color={colors.textMuted} />
+              </Pressable>
+            }
+          />
+          <View style={styles.rememberRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rememberTitle}>Lembrar acesso</Text>
+              <Text style={styles.rememberHint}>Credenciais guardadas no armazenamento seguro do dispositivo.</Text>
+            </View>
+            <Switch testID="login-remember" value={remember} onValueChange={setRemember} trackColor={{ true: colors.gold, false: colors.surface3 }} thumbColor={colors.text} />
+          </View>
+        </View>
+
+        {loading && stage && (
+          <View style={styles.stageBox} testID="login-stage">
+            <ActivityIndicator color={colors.gold} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stageText}>{STAGE_LABEL[stage.s]}</Text>
+              {stage.d ? <Text style={styles.stageDetail}>{stage.d}</Text> : null}
+            </View>
+          </View>
+        )}
+        {error && (
+          <View style={styles.errorBox} testID="login-error">
+            <Ionicons name="alert-circle" size={18} color={colors.error} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
+        <GoldButton testID="login-submit" label="ENTRAR" onPress={submit} loading={loading} style={{ marginTop: spacing.xl }} />
+        <Pressable testID="login-m3u" onPress={() => router.push("/add-list")} style={({ focused }) => [styles.altLink, focused && styles.focused]}>
+          <Ionicons name="link" size={16} color={colors.gold} />
+          <Text style={styles.altText}>Usar lista M3U (URL ou arquivo)</Text>
+        </Pressable>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+function Field({ label, rightIcon, testID, ...props }: any) {
+  return (
+    <View>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.fieldWrap}>
+        <TextInput testID={testID} placeholderTextColor={colors.textDim} style={styles.input} {...props} />
+        {rightIcon ? <View style={{ marginLeft: spacing.sm }}>{rightIcon}</View> : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg },
+  content: { paddingHorizontal: spacing.lg },
+  logoWrap: { alignItems: "center" },
+  brand: { color: colors.gold, fontSize: 26, fontWeight: "700", textAlign: "center", letterSpacing: 0.6, marginTop: spacing.sm },
+  subtitle: { color: colors.textMuted, fontSize: 14, textAlign: "center", marginTop: spacing.xs },
+  fieldLabel: { color: colors.textMuted, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 },
+  fieldWrap: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: spacing.md },
+  input: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 14 },
+  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  chip: { paddingHorizontal: spacing.md, height: 34, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, justifyContent: "center" },
+  chipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
+  chipText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
+  focused: { borderColor: colors.gold, borderWidth: 2 },
+  rememberRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  rememberTitle: { color: colors.text, fontSize: 14, fontWeight: "600" },
+  rememberHint: { color: colors.textDim, fontSize: 11, marginTop: 2 },
+  stageBox: { marginTop: spacing.xl, flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md },
+  stageText: { color: colors.text, fontSize: 14 },
+  stageDetail: { color: colors.textDim, fontSize: 12, marginTop: 2 },
+  errorBox: { marginTop: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, backgroundColor: "rgba(244,67,54,0.12)", borderRadius: radius.md, borderWidth: 1, borderColor: "rgba(244,67,54,0.3)" },
+  errorText: { color: colors.error, flex: 1, fontSize: 13 },
+  altLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.lg, padding: spacing.md, borderRadius: radius.md },
+  altText: { color: colors.gold, fontSize: 14, fontWeight: "600" },
+});

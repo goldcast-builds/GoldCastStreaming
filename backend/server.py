@@ -101,6 +101,7 @@ USER_FRIENDLY_ERRORS = {
     "empty": "A lista está vazia.",
     "invalid_url": "URL inválida.",
     "invalid_m3u": "Arquivo M3U inválido ou vazio.",
+    "blocked": "O servidor não respondeu à API Xtream (endereço incorreto ou acesso bloqueado para esta região).",
 }
 
 
@@ -156,6 +157,9 @@ async def xtream_call(server: str, username: str, password: str, action: Optiona
 
     if r.status_code >= 500:
         raise HTTPException(502, USER_FRIENDLY_ERRORS["conn"])
+    if r.status_code in (403, 404):
+        # XUI/Xtream panels answer 403/404 when the client IP/region is blocked or the API path is wrong
+        raise HTTPException(502, USER_FRIENDLY_ERRORS["blocked"])
     if r.status_code >= 400:
         raise HTTPException(401, USER_FRIENDLY_ERRORS["auth"])
 
@@ -550,6 +554,37 @@ async def series_streams(list_id: str, category: Optional[str] = None, search: O
         s = search.lower()
         series = [x for x in series if s in str(x.get("name", "")).lower()]
     return series[offset:offset + limit]
+
+
+# ============================================================
+# XTREAM / XUI PROXY (used by the web preview only; native devices call the panel directly)
+# ============================================================
+class XtreamProxyReq(BaseModel):
+    server: str
+    username: str
+    password: str
+    action: Optional[str] = None
+    extra: Optional[Dict[str, Any]] = None
+
+
+@api.post("/xtream/proxy")
+async def xtream_proxy(body: XtreamProxyReq):
+    """Forward a player_api.php call. Credentials are never logged or persisted here."""
+    server = normalize_server_url(body.server)
+    logger.info("xtream proxy -> %s action=%s", urlparse(server).hostname, body.action or "auth")
+    data = await xtream_call(server, body.username, body.password, body.action, body.extra, timeout=40.0)
+    return JSONResponse(content=data)
+
+
+# ============================================================
+# PANEL INTEGRATION (kOfficePanel) — CONFIGURAÇÃO PENDENTE
+# ============================================================
+from panel_integration import panel_client  # noqa: E402
+
+
+@api.get("/panel/status")
+async def panel_status():
+    return panel_client.describe()
 
 
 app.include_router(api)

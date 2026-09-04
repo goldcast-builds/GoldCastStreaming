@@ -101,3 +101,70 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+user_problem_statement: "GoldCast Streaming — Prompts 3-7 + XUI/kOfficePanel integration: Xtream login (server/user/pass, remember), account validation (auth=1/status Active/exp_date), catalog via player_api (live/vod/series), pro player (retry max 3, CH+/CH-, EPG now/next, favorites), TV ao vivo (categories/search/favorites/recents), Filmes/Séries details, Settings (account/history)."
+
+backend:
+  - task: "POST /api/xtream/proxy forwards player_api calls; GET /api/panel/status"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py, /app/backend/panel_integration.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Proxy used by web preview only. Real panel geo-blocks non-BR IPs (404) -> use mock at http://127.0.0.1:8099 (tests/mock_xui.py)."
+
+frontend:
+  - task: "Login XUI + account card + AccessGate (expired/invalid)"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/login.tsx, /app/frontend/src/store/session.ts, /app/frontend/src/components/AccountCard.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Smoke tested login -> home account card on web with mock."
+  - task: "TV ao vivo (categories/search/favorites/recents/source switch) + Player (retry/error/controls)"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/live.tsx, /app/frontend/app/player.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "On web the mock streams cannot play (mixed content/HLS unsupported) -> expected final error after 3 retries; verify UI states/controls only."
+  - task: "Filmes/Séries grids + details + episodes; Settings account/history"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/movies.tsx, series.tsx, movie/[id].tsx, series/[id].tsx, settings.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Not yet UI-tested."
+
+metadata:
+  created_by: "main_agent"
+  version: "2.0"
+  test_sequence: 2
+
+test_plan:
+  current_focus:
+    - "Login XUI + account card + AccessGate"
+    - "TV ao vivo + Player"
+    - "Filmes/Séries + Settings"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Start mock panel first (see /app/memory/test_credentials.md). Web preview: login server field = 127.0.0.1:8099, testuser/testpass. Video playback itself cannot be validated on web."

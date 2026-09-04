@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Logo } from "../src/components/Logo";
 import { colors } from "../src/utils/theme";
+import { useSession } from "../src/store/session";
+import { listLists } from "../src/utils/api";
 
 export default function SplashRoute() {
   const router = useRouter();
@@ -21,10 +23,19 @@ export default function SplashRoute() {
       Animated.timing(shine, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
     ).start();
 
-    const t = setTimeout(() => {
-      router.replace("/(tabs)");
-    }, 2200);
-    return () => clearTimeout(t);
+    let cancelled = false;
+    const decide = async () => {
+      const [, lists] = await Promise.all([
+        useSession.getState().restore(),
+        listLists().catch(() => [] as any[]),
+        new Promise((r) => setTimeout(r, 2000)),
+      ]);
+      if (cancelled) return;
+      const hasSession = !!useSession.getState().session;
+      router.replace(hasSession || lists.length > 0 ? "/(tabs)" : "/login");
+    };
+    decide();
+    return () => { cancelled = true; };
   }, []);
 
   const shineTranslate = shine.interpolate({ inputRange: [-1, 1], outputRange: [-260, 260] });

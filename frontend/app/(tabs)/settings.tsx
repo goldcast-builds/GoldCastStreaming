@@ -1,11 +1,13 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator } from "react-native";
 import { useCallback, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Logo } from "../../src/components/Logo";
+import { AccountCard } from "../../src/components/AccountCard";
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { deleteList, IPTVList, listLists, refreshList, setActiveListId } from "../../src/utils/api";
+import { useSession } from "../../src/store/session";
 
 const TYPE_LABEL: Record<IPTVList["type"], string> = {
   xtream: "Xtream Codes",
@@ -17,6 +19,22 @@ export default function SettingsTab() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [lists, setLists] = useState<IPTVList[]>([]);
+  const [busy, setBusy] = useState(false);
+  const session = useSession((s) => s.session);
+  const ud = useSession((s) => s.ud);
+  const refreshAccount = useSession((s) => s.refreshAccount);
+  const logout = useSession((s) => s.logout);
+  const clearHistory = useSession((s) => s.clearHistory);
+  const setSource = useSession((s) => s.setSource);
+
+  const askLogout = () => {
+    const doIt = async () => { await logout(); router.replace("/login"); };
+    if (typeof window !== "undefined" && (window as any).confirm) { if ((window as any).confirm("Sair da conta?")) doIt(); return; }
+    Alert.alert("Sair", "Deseja sair da conta? Favoritos e histórico ficam guardados neste dispositivo.", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Sair", style: "destructive", onPress: doIt },
+    ]);
+  };
 
   const load = useCallback(async () => {
     try { setLists(await listLists()); } catch {}
@@ -48,7 +66,50 @@ export default function SettingsTab() {
         <Text style={styles.appVersion}>Configurações</Text>
       </View>
 
-      <Section title="Gerenciar Listas">
+      <Section title="Conta">
+        {session ? (
+          <View style={{ padding: spacing.sm, gap: spacing.sm }}>
+            <AccountCard />
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              <Pressable testID="account-refresh" onPress={async () => { setBusy(true); try { await refreshAccount(); } catch {} finally { setBusy(false); } }} style={({ focused }) => [styles.pillBtn, focused && styles.focused]}>
+                {busy ? <ActivityIndicator color={colors.gold} size="small" /> : <Ionicons name="refresh" size={16} color={colors.gold} />}
+                <Text style={styles.pillText}>ATUALIZAR CONTA</Text>
+              </Pressable>
+              <Pressable testID="account-logout" onPress={askLogout} style={({ focused }) => [styles.pillBtn, { borderColor: colors.error }, focused && styles.focused]}>
+                <Ionicons name="log-out-outline" size={16} color={colors.error} />
+                <Text style={[styles.pillText, { color: colors.error }]}>SAIR</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <Pressable testID="settings-login" style={styles.addRow} onPress={() => router.push("/login")}>
+            <Ionicons name="log-in-outline" size={20} color={colors.gold} />
+            <Text style={styles.addLabel}>Entrar com usuário e senha (Xtream/XUI)</Text>
+          </Pressable>
+        )}
+      </Section>
+
+      <Section title="Histórico e favoritos">
+        <View style={styles.row}>
+          <View style={styles.rowIcon}><Ionicons name="time-outline" size={18} color={colors.gold} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>Recentes</Text>
+            <Text style={styles.rowSub}>{ud.recents.live.length} canais · {ud.recents.vod.length} filmes · {ud.recents.series.length} séries</Text>
+          </View>
+          <Pressable testID="clear-history" onPress={() => clearHistory()} style={styles.actionBtn} hitSlop={6}>
+            <Ionicons name="trash-outline" size={16} color={colors.error} />
+          </Pressable>
+        </View>
+        <View style={styles.row}>
+          <View style={styles.rowIcon}><Ionicons name="star" size={18} color={colors.gold} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>Favoritos</Text>
+            <Text style={styles.rowSub}>{ud.favorites.live.length} canais · {ud.favorites.vod.length} filmes · {ud.favorites.series.length} séries</Text>
+          </View>
+        </View>
+      </Section>
+
+      <Section title="Gerenciar Listas M3U">
         {lists.length === 0 ? (
           <Text style={styles.hint}>Nenhuma lista cadastrada.</Text>
         ) : (
@@ -63,7 +124,7 @@ export default function SettingsTab() {
               </View>
               <Pressable
                 testID={`activate-${l.id}`}
-                onPress={async () => { await setActiveListId(l.id); load(); router.push("/(tabs)/live"); }}
+                onPress={async () => { await setActiveListId(l.id); await setSource({ kind: "list", listId: l.id }); load(); router.push("/(tabs)/live"); }}
                 style={styles.actionBtn}
                 hitSlop={6}
               >
@@ -134,4 +195,7 @@ const styles = StyleSheet.create({
   addRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, justifyContent: "center" },
   addLabel: { color: colors.gold, fontSize: 14, fontWeight: "600" },
   hint: { color: colors.textMuted, padding: spacing.md, textAlign: "center", fontSize: 13 },
+  pillBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 42, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.gold },
+  pillText: { color: colors.gold, fontSize: 11, fontWeight: "700", letterSpacing: 0.4 },
+  focused: { borderWidth: 2 },
 });

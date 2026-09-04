@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,13 +9,16 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Logo } from "../../src/components/Logo";
 import { GoldButton } from "../../src/components/GoldButton";
+import { AccountCard } from "../../src/components/AccountCard";
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { deleteList, IPTVList, listLists, refreshList, setActiveListId } from "../../src/utils/api";
+import { useSession } from "../../src/store/session";
 
 function fmtExp(exp?: string | null): string | null {
   if (!exp) return null;
@@ -105,6 +108,14 @@ function ListCard({
 export default function HomeTab() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const session = useSession((s) => s.session);
+  const setSource = useSession((s) => s.setSource);
+  const setQueue = useSession((s) => s.setQueue);
+  const progress = useSession((s) => s.ud.progress);
+  const continueList = useMemo(
+    () => Object.values(progress).filter((p) => p.duration > 0 && p.position / p.duration < 0.97).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 12),
+    [progress],
+  );
   const [lists, setLists] = useState<IPTVList[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -150,6 +161,7 @@ export default function HomeTab() {
 
   const handleOpen = async (item: IPTVList) => {
     await setActiveListId(item.id);
+    await setSource({ kind: "list", listId: item.id });
     router.push("/(tabs)/live");
   };
 
@@ -166,16 +178,61 @@ export default function HomeTab() {
 
       <Text style={styles.welcome}>Bem-vindo ao</Text>
       <Text style={styles.brand}>GoldCast Streaming</Text>
-      <Text style={styles.subtitle}>
-        Seu player IPTV completo.{"\n"}Adicione sua lista e aproveite o melhor conteúdo.
-      </Text>
+
+      {session ? (
+        <View style={{ marginTop: spacing.lg, gap: spacing.md }}>
+          <AccountCard compact />
+          <View style={styles.quickRow}>
+            {([
+              ["TV AO VIVO", "tv", "/(tabs)/live", "quick-live"],
+              ["FILMES", "film", "/(tabs)/movies", "quick-movies"],
+              ["SÉRIES", "albums", "/(tabs)/series", "quick-series"],
+            ] as const).map(([label, icon, path, tid]) => (
+              <Pressable key={label} testID={tid} onPress={async () => { await setSource({ kind: "xtream" }); router.push(path as any); }} style={({ focused, pressed }) => [styles.quick, focused && styles.cardFocused, pressed && { opacity: 0.85 }]}>
+                <Ionicons name={icon as any} size={26} color={colors.gold} />
+                <Text style={styles.quickLabel}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {continueList.length > 0 && (
+            <View>
+              <Text style={styles.sectionTitle}>Continuar assistindo</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.sm }}>
+                {continueList.map((p) => (
+                  <Pressable key={p.item.progressKey || p.item.id} testID={`continue-${p.item.id}`} onPress={() => { setQueue([p.item], 0); router.push("/player"); }} style={({ focused }) => [styles.contCard, focused && styles.cardFocused]}>
+                    <View style={styles.contThumb}>
+                      {p.logo ? <Image source={{ uri: p.logo }} style={{ width: "100%", height: "100%" }} contentFit="cover" /> : <Ionicons name="play-circle" size={28} color={colors.textDim} />}
+                      <View style={styles.contTrack}><View style={[styles.contFill, { width: `${Math.min(100, (p.position / Math.max(1, p.duration)) * 100)}%` }]} /></View>
+                    </View>
+                    <Text style={styles.contTitle} numberOfLines={2}>{p.title}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+      ) : (
+        <>
+          <Text style={styles.subtitle}>
+            Entre com o servidor, usuário e senha do seu serviço{"\n"}ou adicione uma lista M3U.
+          </Text>
+          <GoldButton
+            testID="home-login"
+            label="ENTRAR COM USUÁRIO E SENHA"
+            icon={<Ionicons name="log-in-outline" size={20} color={colors.onGold} />}
+            onPress={() => router.push("/login")}
+            style={{ marginTop: spacing.xl }}
+          />
+        </>
+      )}
 
       <GoldButton
         testID="add-list-primary"
-        label="+ ADICIONAR LISTA"
-        icon={<Ionicons name="add-circle" size={20} color={colors.onGold} />}
+        label="+ ADICIONAR LISTA M3U"
+        variant={session ? "outline" : "primary"}
+        icon={<Ionicons name="add-circle" size={20} color={session ? colors.gold : colors.onGold} />}
         onPress={() => router.push("/add-list")}
-        style={{ marginTop: spacing.xl }}
+        style={{ marginTop: spacing.md }}
       />
 
       <View style={styles.sectionHeader}>
@@ -291,4 +348,12 @@ const styles = StyleSheet.create({
   metaLabel: { color: colors.textDim, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 },
   metaValue: { color: colors.text, fontSize: 15, fontWeight: "600", marginTop: 2 },
   metaHint: { color: colors.textDim, fontSize: 12, marginTop: spacing.sm, fontStyle: "italic" },
+  quickRow: { flexDirection: "row", gap: spacing.md },
+  quick: { flex: 1, backgroundColor: colors.surface2, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingVertical: spacing.lg, alignItems: "center", gap: spacing.sm },
+  quickLabel: { color: colors.text, fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
+  contCard: { width: 150 },
+  contThumb: { width: 150, aspectRatio: 16 / 9, borderRadius: radius.md, backgroundColor: colors.surface2, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  contTrack: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3, backgroundColor: "rgba(255,255,255,0.2)" },
+  contFill: { height: 3, backgroundColor: colors.gold },
+  contTitle: { color: colors.text, fontSize: 12, fontWeight: "600", marginTop: 6 },
 });
