@@ -120,3 +120,21 @@ export async function setActiveListId(id: string | null): Promise<void> {
 export async function getActiveListId(): Promise<string | null> {
   return AsyncStorage.getItem(ACTIVE_KEY);
 }
+
+export async function fetchChannelEPG(
+  serverUrl: string,
+  username: string,
+  pass: string,
+  streamId: number | string
+) {
+  try {
+    const cleanUrl = serverUrl.replace(/\/+$/, '');
+    const url = `${cleanUrl}/player_api.php?username=${username}&password=${pass}&action=get_short_epg&stream_id=${streamId}&limit=4`;
+    const response = await fetch(url);
+    const data = await response.json();
+    return data.epg_listings || [];
+  } catch (error) {
+    console.error('Erro ao carregar EPG:', error);
+    return [];
+  }
+}
