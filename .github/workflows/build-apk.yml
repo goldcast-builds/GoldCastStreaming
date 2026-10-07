@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK (Expo)
 
 on:
   push:
@@ -24,32 +24,22 @@ jobs:
           distribution: 'zulu'
           java-version: 17
 
-      - name: Instalar dependências e preparar frontend
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar dependências
         run: |
           cd frontend
           npm install
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-          npm run build
 
-          # Deteta se a pasta gerada é 'dist' ou 'build'
-          WEB_DIR="dist"
-          if [ -d "build" ]; then
-            WEB_DIR="build"
-          fi
-
-          # Se a pasta android não existir, cria-a automaticamente
-          if [ ! -d "android" ]; then
-            npx cap init "GoldCast" "com.goldcast.streaming" --web-dir $WEB_DIR
-            npx cap add android
-          else
-            npx cap sync android
-          fi
-
-      - name: Dar permissão ao executável do Gradle
+      - name: Gerar estrutura nativa Android via Expo Prebuild
         run: |
-          if [ -f frontend/android/gradlew ]; then
-            chmod +x frontend/android/gradlew
-          fi
+          cd frontend
+          npx expo prebuild --platform android --no-install
+
+      - name: Dar permissão ao executável Gradle
+        run: |
+          chmod +x frontend/android/gradlew
 
       - name: Compilar APK (Debug)
         run: |
