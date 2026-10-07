@@ -10,28 +10,41 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.gold,
-        tabBarInactiveTintColor: "#8A8A8A",
+        tabBarInactiveTintColor: "#8C92A4",
         tabBarStyle: {
-          backgroundColor: Platform.OS === "web" ? colors.bg : "rgba(0,0,0,0.75)",
-          borderTopColor: colors.border,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          ...(Platform.OS === "web" ? { height: 64 } : {}),
+          backgroundColor: Platform.OS === "web" ? colors.bg : "rgba(9, 10, 14, 0.88)",
+          borderTopColor: "rgba(255, 255, 255, 0.08)",
+          borderTopWidth: 1,
+          height: Platform.OS === "ios" ? 86 : 64,
+          paddingTop: 8,
+          paddingBottom: Platform.OS === "ios" ? 28 : 10,
+          elevation: 10,
         },
         tabBarBackground: () =>
           Platform.OS !== "web" ? (
-            <BlurView tint="dark" intensity={40} style={StyleSheet.absoluteFill} />
+            <BlurView tint="dark" intensity={85} style={StyleSheet.absoluteFill} />
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg }]} />
           ),
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600", letterSpacing: 0.3 },
-        tabBarItemStyle: { alignSelf: "center" },
+        tabBarLabelStyle: { 
+          fontSize: 10.5, 
+          fontWeight: "700", 
+          letterSpacing: 0.2,
+          marginTop: 2,
+        },
+        tabBarItemStyle: { 
+          alignSelf: "center",
+          paddingVertical: 2,
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Início",
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} />
+          ),
           tabBarButtonTestID: "tab-home",
         }}
       />
@@ -39,7 +52,9 @@ export default function TabsLayout() {
         name="live"
         options={{
           title: "TV ao vivo",
-          tabBarIcon: ({ color, size }) => <Ionicons name="tv" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "tv" : "tv-outline"} size={22} color={color} />
+          ),
           tabBarButtonTestID: "tab-live",
         }}
       />
@@ -47,7 +62,9 @@ export default function TabsLayout() {
         name="movies"
         options={{
           title: "Filmes",
-          tabBarIcon: ({ color, size }) => <Ionicons name="film" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "film" : "film-outline"} size={22} color={color} />
+          ),
           tabBarButtonTestID: "tab-movies",
         }}
       />
@@ -55,7 +72,9 @@ export default function TabsLayout() {
         name="series"
         options={{
           title: "Séries",
-          tabBarIcon: ({ color, size }) => <Ionicons name="albums" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "albums" : "albums-outline"} size={22} color={color} />
+          ),
           tabBarButtonTestID: "tab-series",
         }}
       />
@@ -63,7 +82,9 @@ export default function TabsLayout() {
         name="settings"
         options={{
           title: "Configurações",
-          tabBarIcon: ({ color, size }) => <Ionicons name="settings-sharp" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "settings" : "settings-outline"} size={22} color={color} />
+          ),
           tabBarButtonTestID: "tab-settings",
         }}
       />
