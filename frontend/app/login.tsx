@@ -6,7 +6,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { Logo } from "../src/components/Logo";
 import { GoldButton } from "../src/components/GoldButton";
 import { colors, radius, spacing } from "../src/utils/theme";
-import { DEFAULT_SERVERS, hostOf, Stage } from "../src/services/xtream";
+import { DEFAULT_SERVERS, SERVER_LABELS, Stage } from "../src/services/xtream";
 import { useSession } from "../src/store/session";
 
 const STAGE_LABEL: Record<Stage, string> = {
@@ -22,6 +22,7 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
   const [server, setServer] = useState(DEFAULT_SERVERS.primary);
+  const [custom, setCustom] = useState(false);
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -34,7 +35,7 @@ export default function LoginScreen() {
 
   const submit = async () => {
     setError(null);
-    if (!server.trim() || !user.trim() || !pass) { setError("Preencha servidor, usuário e senha."); return; }
+    if (!server.trim() || !user.trim() || !pass) { setError(custom && !server.trim() ? "Informe o endereço do servidor." : "Preencha usuário e senha."); return; }
     setLoading(true);
     try {
       await login(server, user.trim(), pass, remember, (s, d) => mounted.current && setStage({ s, d }));
@@ -54,17 +55,25 @@ export default function LoginScreen() {
         <Text style={styles.subtitle}>Entre com os dados fornecidos pelo seu serviço.</Text>
 
         <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
-          <Field label="Servidor" value={server} onChangeText={setServer} placeholder="http://servidor.com:8080" autoCapitalize="none" autoCorrect={false} keyboardType="url" testID="login-server" />
+          <Text style={styles.fieldLabel}>Servidor</Text>
           <View style={styles.serverChips}>
             {[DEFAULT_SERVERS.primary, DEFAULT_SERVERS.backup].map((s, i) => {
-              const active = server.trim() === s;
+              const active = !custom && server === s;
               return (
-                <Pressable key={s} testID={`server-chip-${i + 1}`} onPress={() => setServer(s)} style={({ focused }) => [styles.chip, active && styles.chipActive, focused && styles.focused]}>
-                  <Text style={[styles.chipText, active && { color: colors.onGold }]}>Servidor {i + 1} · {hostOf(s)}</Text>
+                <Pressable key={s} testID={`server-chip-${i + 1}`} onPress={() => { setCustom(false); setServer(s); }} style={({ focused }) => [styles.serverBtn, active && styles.serverBtnActive, focused && styles.focused]}>
+                  <Ionicons name="server-outline" size={18} color={active ? colors.onGold : colors.gold} />
+                  <Text style={[styles.serverText, active && { color: colors.onGold }]}>{SERVER_LABELS[s]}</Text>
                 </Pressable>
               );
             })}
           </View>
+          <Pressable testID="server-custom-toggle" onPress={() => { setCustom((v) => !v); if (!custom) setServer(""); else setServer(DEFAULT_SERVERS.primary); }} style={({ focused }) => [styles.customLink, focused && styles.focused]}>
+            <Ionicons name={custom ? "chevron-up" : "chevron-down"} size={14} color={colors.textDim} />
+            <Text style={styles.customText}>Outro servidor</Text>
+          </Pressable>
+          {custom && (
+            <Field label="Endereço do servidor" value={server} onChangeText={setServer} placeholder="http://servidor.com:8080" autoCapitalize="none" autoCorrect={false} keyboardType="url" testID="login-server" />
+          )}
           <Field label="Usuário" value={user} onChangeText={setUser} placeholder="usuario" autoCapitalize="none" autoCorrect={false} testID="login-user" />
           <Field
             label="Senha" value={pass} onChangeText={setPass} placeholder="••••••••" secureTextEntry={!showPass} autoCapitalize="none" testID="login-pass"
@@ -130,10 +139,12 @@ const styles = StyleSheet.create({
   fieldLabel: { color: colors.textMuted, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 },
   fieldWrap: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: spacing.md },
   input: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 14 },
-  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: { paddingHorizontal: spacing.md, height: 34, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, justifyContent: "center" },
-  chipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
-  chipText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
+  serverChips: { flexDirection: "row", gap: spacing.sm },
+  serverBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 52, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  serverBtnActive: { backgroundColor: colors.gold, borderColor: colors.gold },
+  serverText: { color: colors.text, fontSize: 12, fontWeight: "700", letterSpacing: 0.4 },
+  customLink: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-end", paddingVertical: 4, paddingHorizontal: 6, borderRadius: radius.sm },
+  customText: { color: colors.textDim, fontSize: 12 },
   focused: { borderColor: colors.gold, borderWidth: 2 },
   rememberRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   rememberTitle: { color: colors.text, fontSize: 14, fontWeight: "600" },

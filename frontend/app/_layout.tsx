@@ -5,6 +5,7 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useEffect } from "react";
 import * as SplashScreen from "expo-splash-screen";
+import { useSession } from "../src/store/session";
 
 LogBox.ignoreAllLogs(true);
 
@@ -18,6 +19,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   useEffect(() => {
+    useSession.getState().restore();
     // Prewarm assets: force resolveAssetSource and prefetch when on web
     _WARM.forEach((a) => {
       try {
@@ -43,6 +45,7 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="index" />
+              <Stack.Screen name="device" />
               <Stack.Screen name="login" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="movie/[id]" options={{ animation: "slide_from_right" }} />

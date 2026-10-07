@@ -14,6 +14,7 @@ USER, PASS = "testuser", "testpass"
 EXPIRED_USER = "expired"
 HLS = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
 MP4 = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+WEBM = "https://test-videos.co.uk/vids/bigbuckbunny/webm/vp9/720/Big_Buck_Bunny_720_10s_1MB.webm"
 NOW = int(time.time())
 
 
@@ -29,7 +30,7 @@ def user_info(status="Active", exp=NOW + 86400 * 120, trial=0):
     }
 
 
-SERVER_INFO = {"xui": True, "version": "1.5.5", "revision": 2, "url": "127.0.0.1", "port": "8099", "https_port": "8099",
+SERVER_INFO = {"xui": True, "version": "1.5.5", "revision": 2, "url": "", "port": "", "https_port": "",
                "server_protocol": "http", "rtmp_port": "8880", "timezone": "America/Sao_Paulo", "timestamp_now": NOW}
 
 LIVE_CATS = [{"category_id": "1", "category_name": "Esportes", "parent_id": 0},
@@ -102,7 +103,8 @@ async def live(u: str, p: str, sid: str, ext: str):
 @app.get("/movie/{u}/{p}/{sid}.{ext}")
 @app.get("/series/{u}/{p}/{sid}.{ext}")
 async def vod(u: str, p: str, sid: str, ext: str):
-    return JSONResponse(status_code=302, content=None, headers={"Location": MP4})
+    # stream_id 5000 -> VP9/WebM sample (plays even in codec-less headless browsers); others -> H.264 MP4
+    return JSONResponse(status_code=302, content=None, headers={"Location": WEBM if sid == "5000" else MP4})
 
 
 if __name__ == "__main__":

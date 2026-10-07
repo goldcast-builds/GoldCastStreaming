@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, radius, spacing } from "../utils/theme";
@@ -8,7 +8,9 @@ import { accountState, useSession } from "../store/session";
 export function AccessGate({ children }: { children: React.ReactNode }) {
   const session = useSession((s) => s.session);
   const source = useSession((s) => s.source);
+  const restored = useSession((s) => s.restored);
   const router = useRouter();
+  if (!restored) return <View style={styles.root}><ActivityIndicator color={colors.gold} /></View>;
   if (source?.kind === "list") return <>{children}</>;
   const st = accountState(session);
   if (st === "active") return <>{children}</>;

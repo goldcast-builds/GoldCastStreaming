@@ -31,8 +31,9 @@ export default function SplashRoute() {
         new Promise((r) => setTimeout(r, 2000)),
       ]);
       if (cancelled) return;
-      const hasSession = !!useSession.getState().session;
-      router.replace(hasSession || lists.length > 0 ? "/(tabs)" : "/login");
+      const { session, deviceMode } = useSession.getState();
+      if (!deviceMode) { router.replace("/device"); return; }
+      router.replace(session || lists.length > 0 ? "/(tabs)" : "/login");
     };
     decide();
     return () => { cancelled = true; };

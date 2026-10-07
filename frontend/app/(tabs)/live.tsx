@@ -1,8 +1,8 @@
 import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, ActivityIndicator, TextInput, Modal } from "react-native";
 import { Image } from "expo-image";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { Category, getLiveCategories, getLiveStreams, IPTVList, listLists } from "../../src/utils/api";
@@ -26,6 +26,8 @@ export default function LiveTab() {
 function LiveContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ cat?: string; focusSearch?: string }>();
+  const searchRef = useRef<TextInput>(null);
   const session = useSession((s) => s.session);
   const source = useSession((s) => s.source);
   const setSource = useSession((s) => s.setSource);
@@ -37,6 +39,7 @@ function LiveContent() {
   const recents = useSession((s) => s.ud.recents.live);
   const toggleFav = useSession((s) => s.toggleFav);
   const setQueue = useSession((s) => s.setQueue);
+  const liveFormat = useSession((s) => s.prefs.liveFormat);
 
   const [lists, setLists] = useState<IPTVList[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -54,6 +57,11 @@ function LiveContent() {
     listLists().then(setLists).catch(() => {});
     if (!listMode && session) loadLive();
   }, [listMode, session?.server, loadLive]));
+
+  useEffect(() => {
+    if (params.cat) setSelectedCat(String(params.cat));
+    if (params.focusSearch) setTimeout(() => searchRef.current?.focus(), 300);
+  }, [params.cat, params.focusSearch]);
 
   useEffect(() => {
     if (!listMode) return;
@@ -94,9 +102,9 @@ function LiveContent() {
     if (q) src = src.filter((c) => (c.name || "").toLowerCase().includes(q) || (c.epg_channel_id || "").toLowerCase().includes(q));
     return src.map((c) => ({
       id: String(c.stream_id), name: c.name, logo: c.stream_icon, category: catName[String(c.category_id)] || "",
-      urls: liveUrls(session, c.stream_id), streamId: c.stream_id, epgId: c.epg_channel_id, raw: c,
+      urls: liveUrls(session, c.stream_id, liveFormat === "auto" ? undefined : liveFormat), streamId: c.stream_id, epgId: c.epg_channel_id, raw: c,
     }));
-  }, [listMode, listItems, session, catalog.live, selectedCat, q, favs, recents, catName]);
+  }, [listMode, listItems, session, catalog.live, selectedCat, q, favs, recents, catName, liveFormat]);
 
   // In list (M3U) mode favorites/recents are filtered client-side too
   const visibleRows = useMemo(() => {
@@ -131,7 +139,7 @@ function LiveContent() {
 
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={16} color={colors.textDim} />
-        <TextInput testID="live-search" placeholder="Buscar canais..." placeholderTextColor={colors.textDim} value={search} onChangeText={setSearch} style={styles.search} autoCorrect={false} />
+        <TextInput ref={searchRef} testID="live-search" placeholder="Buscar canais..." placeholderTextColor={colors.textDim} value={search} onChangeText={setSearch} style={styles.search} autoCorrect={false} />
         {search.length > 0 && <Pressable onPress={() => setSearch("")} hitSlop={8}><Ionicons name="close-circle" size={16} color={colors.textDim} /></Pressable>}
       </View>
 

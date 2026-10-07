@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, radius, spacing } from "../utils/theme";
 import { accountState, useSession } from "../store/session";
-import { fmtUnixSP, hostOf } from "../services/xtream";
+import { fmtUnixSP, serverLabel } from "../services/xtream";
 
 const NA = "Não informado";
 
@@ -23,7 +23,7 @@ export function AccountCard({ compact }: { compact?: boolean }) {
 
   const rows: [string, string][] = [
     ["Usuário", ui.username || session.username],
-    ["Servidor", si.url ? `${si.url}${si.port ? ":" + si.port : ""}${si.https_port ? " · HTTPS " + si.https_port : ""}` : hostOf(session.server)],
+    ["Servidor", serverLabel(session.server)],
     ["Expira em", exp || NA],
     ["Conexões", cons || NA],
     ["Tipo de conta", isTrial == null ? NA : isTrial ? "Teste" : "Normal"],
@@ -31,7 +31,6 @@ export function AccountCard({ compact }: { compact?: boolean }) {
   if (!compact) {
     rows.push(["Criada em", created || NA]);
     rows.push(["Formatos", (ui.allowed_output_formats || []).join(", ") || NA]);
-    if (si.timezone) rows.push(["Fuso do servidor", si.timezone]);
     if (si.xui != null) rows.push(["Painel", `XUI${si.version ? " " + si.version : ""}`]);
     rows.push(["Canais", catalog.liveLoaded ? String(catalog.live.length) : "—"]);
     rows.push(["Filmes", catalog.vodLoaded ? String(catalog.vod.length) : "—"]);

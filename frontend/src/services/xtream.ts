@@ -30,24 +30,35 @@ export const MSG = {
   auth: "Usuário ou senha inválidos.",
   expired: "Seu acesso expirou ou está inativo.",
   incompatible: "Servidor incompatível com Xtream Codes/XUI.",
-  blocked: "O servidor não respondeu à API (endereço incorreto ou acesso bloqueado).",
+  blocked: "O servidor não respondeu à API. Verifique o servidor ou aguarde alguns minutos e tente novamente.",
 };
+
+export const SERVER_LABELS: Record<string, string> = {
+  [DEFAULT_SERVERS.primary]: "SERVIDOR 1 (DNS 1)",
+  [DEFAULT_SERVERS.backup]: "SERVIDOR 2 (DNS 2)",
+};
+/** Public label for a server — never exposes the URL for the built-in servers. */
+export function serverLabel(server: string): string {
+  return SERVER_LABELS[server] || "Servidor personalizado";
+}
 
 /** Accepts dominio, dominio:porta, http(s)://dominio[:porta][/path]. Keeps scheme + port exactly as typed. */
 export function normalizeServer(input: string): string {
   let s = (input || "").trim();
   if (!s) throw new XtreamError("network", MSG.invalidUrl);
   if (!/^https?:\/\//i.test(s)) s = "http://" + s;
-  const m = s.match(/^(https?):\/\/([^/?#\s]+)/i);
+  const m = s.match(/^(https?):\/\/([^/?#\s]+)(\/[^?#\s]*)?/i);
   if (!m) throw new XtreamError("network", MSG.invalidUrl);
   const scheme = m[1].toLowerCase();
   const hostPort = m[2];
+  let path = (m[3] || "").replace(/\/+$/, "");
+  if (/\/(player_api|get)\.php$/i.test(path)) path = path.replace(/\/[^/]+$/, "");
   const hp = hostPort.match(/^([^:]+)(?::(\d{1,5}))?$/);
   if (!hp) throw new XtreamError("network", MSG.invalidUrl);
   const host = hp[1].toLowerCase();
   const port = hp[2];
   if (!/^[a-z0-9.-]+$/.test(host)) throw new XtreamError("network", MSG.invalidUrl);
-  return port ? `${scheme}://${host}:${port}` : `${scheme}://${host}`;
+  return (port ? `${scheme}://${host}:${port}` : `${scheme}://${host}`) + path;
 }
 
 export function hostOf(server: string): string {
@@ -120,7 +131,19 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Re
   }
 }
 
+// XUI panels temporarily ban IPs that fire many requests at once -> serialize API calls with a small gap.
+let chain: Promise<any> = Promise.resolve();
+function serialized<T>(fn: () => Promise<T>): Promise<T> {
+  const run = chain.then(fn, fn);
+  chain = run.then(() => new Promise((r) => setTimeout(r, 250)), () => new Promise((r) => setTimeout(r, 250)));
+  return run;
+}
+
 async function callApi(server: string, username: string, password: string, action?: string, extra?: Record<string, any>): Promise<any> {
+  return serialized(() => callApiNow(server, username, password, action, extra));
+}
+
+async function callApiNow(server: string, username: string, password: string, action?: string, extra?: Record<string, any>): Promise<any> {
   let res: Response;
   if (Platform.OS === "web") {
     res = await fetchWithTimeout(`${BACKEND}/api/xtream/proxy`, {
@@ -221,8 +244,9 @@ export function buildPlaybackBases(authServer: string, info: ServerInfo): string
   return bases;
 }
 
-export function liveUrls(s: XtreamSession, streamId: number | string): string[] {
-  return s.playbackBases.map((b) => `${b}/live/${encodeURIComponent(s.username)}/${encodeURIComponent(s.password)}/${streamId}.${s.liveFormat}`);
+export function liveUrls(s: XtreamSession, streamId: number | string, format?: "m3u8" | "ts"): string[] {
+  const fmt = format || s.liveFormat;
+  return s.playbackBases.map((b) => `${b}/live/${encodeURIComponent(s.username)}/${encodeURIComponent(s.password)}/${streamId}.${fmt}`);
 }
 export function movieUrls(s: XtreamSession, streamId: number | string, ext?: string): string[] {
   return s.playbackBases.map((b) => `${b}/movie/${encodeURIComponent(s.username)}/${encodeURIComponent(s.password)}/${streamId}.${ext || "mp4"}`);

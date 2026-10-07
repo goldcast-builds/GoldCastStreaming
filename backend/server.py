@@ -116,11 +116,14 @@ def normalize_server_url(server: str) -> str:
     parsed = urlparse(s)
     if not parsed.hostname:
         raise HTTPException(400, USER_FRIENDLY_ERRORS["invalid_url"])
-    # Preserve user-provided port; rebuild cleanly (strip trailing slash / path)
+    # Preserve user-provided port and an optional base path (never add or guess paths)
     netloc = parsed.hostname
     if parsed.port:
         netloc = f"{parsed.hostname}:{parsed.port}"
-    return f"{parsed.scheme}://{netloc}"
+    path = parsed.path.rstrip("/")
+    if path.endswith("/player_api.php") or path.endswith("/get.php"):
+        path = path.rsplit("/", 1)[0]
+    return f"{parsed.scheme}://{netloc}{path}"
 
 
 def sanitize_list(doc: dict) -> dict:
@@ -588,6 +591,11 @@ async def panel_status():
 
 
 app.include_router(api)
+
+# QA only: mount the mock XUI panel when explicitly enabled (never on by default)
+if os.environ.get("ENABLE_MOCK_XUI") == "1":
+    from tests.mock_xui import app as _mock_xui_app  # noqa: E402
+    app.mount("/api/mock-xui", _mock_xui_app)
 
 app.add_middleware(
     CORSMiddleware,

@@ -8,6 +8,11 @@ import {
 
 const SESSION_KEY = "goldcast_session_v1";
 const SOURCE_KEY = "goldcast_source_v1";
+const DEVICE_KEY = "goldcast_device_mode";
+const PREFS_KEY = "goldcast_prefs_v1";
+export interface Prefs { autoReconnect: boolean; autoplay: boolean; liveFormat: "auto" | "m3u8" | "ts"; }
+const defaultPrefs = (): Prefs => ({ autoReconnect: true, autoplay: true, liveFormat: "auto" });
+export type DeviceMode = "tv" | "mobile";
 
 // ---------- secure persistence (SecureStore on device, AsyncStorage on web) ----------
 async function secureSet(key: string, value: string | null) {
@@ -65,6 +70,11 @@ const emptyCatalog = (): Catalog => ({
 
 interface State {
   restored: boolean;
+  deviceMode: DeviceMode | null;
+  setDeviceMode: (m: DeviceMode) => Promise<void>;
+  prefs: Prefs;
+  setPrefs: (p: Partial<Prefs>) => Promise<void>;
+  clearCatalog: () => void;
   session: XtreamSession | null;
   source: Source | null;
   catalog: Catalog;
@@ -113,8 +123,15 @@ function persistUD(s: XtreamSession | null, ud: UserData) {
   saveTimer = setTimeout(() => AsyncStorage.setItem(k, JSON.stringify(ud)).catch(() => {}), 300);
 }
 
+let restoring: Promise<void> | null = null;
+
 export const useSession = create<State>((set, get) => ({
   restored: false,
+  deviceMode: null,
+  setDeviceMode: async (m) => { set({ deviceMode: m }); await AsyncStorage.setItem(DEVICE_KEY, m); },
+  prefs: defaultPrefs(),
+  setPrefs: async (p) => { const prefs = { ...get().prefs, ...p }; set({ prefs }); await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); },
+  clearCatalog: () => set({ catalog: emptyCatalog() }),
   session: null,
   source: null,
   catalog: emptyCatalog(),
@@ -125,8 +142,12 @@ export const useSession = create<State>((set, get) => ({
   queueIndex: 0,
 
   restore: async () => {
+    if (get().restored || restoring) return restoring || undefined;
+    restoring = (async () => {
     try {
-      const [raw, src] = await Promise.all([secureGet(SESSION_KEY), AsyncStorage.getItem(SOURCE_KEY)]);
+      const [raw, src, dm, pr] = await Promise.all([secureGet(SESSION_KEY), AsyncStorage.getItem(SOURCE_KEY), AsyncStorage.getItem(DEVICE_KEY), AsyncStorage.getItem(PREFS_KEY)]);
+      if (dm === "tv" || dm === "mobile") set({ deviceMode: dm });
+      if (pr) { try { set({ prefs: { ...defaultPrefs(), ...JSON.parse(pr) } }); } catch {} }
       let session: XtreamSession | null = null;
       if (raw) {
         const saved = JSON.parse(raw);
@@ -151,6 +172,8 @@ export const useSession = create<State>((set, get) => ({
     } catch {
       set({ restored: true });
     }
+    })();
+    return restoring;
   },
 
   login: async (server, username, password, remember, onStage) => {
