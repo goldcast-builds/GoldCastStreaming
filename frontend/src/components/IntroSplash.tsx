@@ -1,39 +1,44 @@
-import React, { useRef } from "react";
+import React, { useEffect } from "react";
 import { StyleSheet, View, Pressable, StatusBar } from "react-native";
-import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
 
 interface IntroSplashProps {
   onFinish: () => void;
 }
 
 export function IntroSplash({ onFinish }: IntroSplashProps) {
-  const videoRef = useRef<Video>(null);
+  // Inicializa o player com o vídeo da logo
+  const player = useVideoPlayer(require("../../assets/Intro.mp4"), (p) => {
+    p.loop = false;
+    p.play();
+  });
 
-  const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-    // Quando a reprodução terminar, fecha a abertura
-    if (status.isLoaded && status.didJustFinish) {
+  useEffect(() => {
+    // Quando o vídeo terminar, libera a tela inicial
+    const subscription = player.addListener("playToEnd", () => {
       onFinish();
-    }
-  };
+    });
+
+    // Trava de segurança: garante a entrada no app após 5s caso o vídeo demore
+    const fallbackTimer = setTimeout(() => {
+      onFinish();
+    }, 5000);
+
+    return () => {
+      subscription.remove();
+      clearTimeout(fallbackTimer);
+    };
+  }, [player, onFinish]);
 
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      {/* Permite ao utilizador tocar no ecrã para saltar a abertura */}
       <Pressable style={styles.pressArea} onPress={onFinish}>
-        <Video
-          ref={videoRef}
-          source={require("../../assets/Intro.mp4")}
+        <VideoView
+          player={player}
           style={StyleSheet.absoluteFillObject}
-          resizeMode={ResizeMode.CONTAIN}
-          shouldPlay
-          isLooping={false}
-          isMuted={false}
-          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-          onError={() => {
-            // Em caso de qualquer falha no vídeo, avança logo para o ecrã inicial
-            onFinish();
-          }}
+          contentFit="contain"
+          nativeControls={false}
         />
       </Pressable>
     </View>
