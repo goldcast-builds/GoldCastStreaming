@@ -60,7 +60,6 @@ export function CatalogGrid({
     <View style={[styles.root, { paddingTop: insets.top + spacing.sm }]} testID={`${testIDPrefix}-screen`}>
       <Text style={styles.h1}>{title}</Text>
       
-      {/* Barra de Pesquisa Moderna */}
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={17} color={colors.textMuted} />
         <TextInput 
@@ -79,7 +78,6 @@ export function CatalogGrid({
         )}
       </View>
 
-      {/* Categorias em Cápsulas Horizontais */}
       <View style={styles.chipsWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg }}>
           {allCats.map((c) => {
@@ -104,7 +102,6 @@ export function CatalogGrid({
         </ScrollView>
       </View>
 
-      {/* Estados de Carregamento, Erro e Lista */}
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={colors.gold} size="large" /><Text style={styles.emptyText}>A carregar catálogo...</Text></View>
       ) : error ? (
@@ -125,7 +122,7 @@ export function CatalogGrid({
           keyExtractor={(i) => i.id}
           numColumns={COLS}
           columnWrapperStyle={{ gap: spacing.md, paddingHorizontal: spacing.lg }}
-          contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.md, paddingBottom: 110 }}
+          contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.md, paddingBottom: 120 }}
           renderItem={({ item }) => <PosterCard item={item} width={CARD_W} fav={favIds.includes(item.id)} onPress={() => onOpen(item)} onFav={() => onFav(item)} testIDPrefix={testIDPrefix} />}
           initialNumToRender={12}
           maxToRenderPerBatch={12}
@@ -155,9 +152,9 @@ const PosterCard = memo(function PosterCard({ item, width, fav, onPress, onFav, 
         {item.poster ? (
           <Image 
             source={{ uri: item.poster }} 
-            style={StyleSheet.absoluteFillObject} 
+            style={styles.posterImage} 
             contentFit="cover" 
-            transition={200} 
+            transition={150} 
             recyclingKey={item.id} 
             cachePolicy="memory-disk" 
           />
@@ -165,21 +162,17 @@ const PosterCard = memo(function PosterCard({ item, width, fav, onPress, onFav, 
           <Ionicons name="film" size={32} color={colors.textDim} />
         )}
 
-        {/* Gradiente estilo Netflix / Prime com 3 níveis de profundidade */}
         <LinearGradient 
-          colors={["transparent", "rgba(9,10,14,0.45)", "rgba(9,10,14,0.98)"]} 
-          locations={[0, 0.55, 1]}
+          colors={["transparent", "rgba(0,0,0,0.85)"]} 
           style={styles.scrim} 
         />
 
-        {/* Emblema de Favorito com fundo translúcido */}
         {fav && (
           <View style={styles.favBadge}>
             <Ionicons name="star" size={12} color={colors.gold} />
           </View>
         )}
 
-        {/* Informações de Título e Categoria */}
         <View style={styles.posterMeta}>
           <Text style={styles.posterTitle} numberOfLines={2}>{item.name}</Text>
           {(item.year || item.genre) && (
@@ -189,7 +182,6 @@ const PosterCard = memo(function PosterCard({ item, width, fav, onPress, onFav, 
           )}
         </View>
 
-        {/* Barra de Progresso elegante */}
         {item.progress != null && item.progress > 0 && (
           <View style={styles.progTrack}>
             <View style={[styles.progFill, { width: `${Math.min(100, item.progress * 100)}%` }]} />
@@ -205,7 +197,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm, padding: spacing.xl },
   h1: { color: colors.text, fontSize: 24, fontWeight: "800", letterSpacing: -0.5, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
   
-  // Barra de Pesquisa Flutuante
   searchWrap: { 
     flexDirection: "row", 
     alignItems: "center", 
@@ -221,7 +212,6 @@ const styles = StyleSheet.create({
   },
   search: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "500" },
   
-  // Cápsulas de Categorias
   chipsWrap: { height: 50, justifyContent: "center" },
   chip: { 
     height: 34, 
@@ -242,20 +232,15 @@ const styles = StyleSheet.create({
   chipTextActive: { color: colors.onGold, fontWeight: "800" },
   focused: { borderColor: colors.gold, borderWidth: 2 },
   
-  // Cartão com Sombra e Cantos Redondos
   poster: { 
     borderRadius: 8, 
     overflow: "hidden", 
     backgroundColor: colors.surface2,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 3 }
   },
   posterFocused: { borderWidth: 2, borderColor: colors.gold, transform: [{ scale: 1.04 }] },
-  posterImgWrap: { width: "100%", aspectRatio: 2 / 3, backgroundColor: "#0E1017", alignItems: "center", justifyContent: "center" },
-  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "70%" },
+  posterImgWrap: { width: "100%", aspectRatio: 2 / 3, backgroundColor: "#141721", alignItems: "center", justifyContent: "center" },
+  posterImage: { width: "100%", height: "100%" },
+  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "55%" },
   
   favBadge: {
     position: "absolute",
@@ -267,10 +252,9 @@ const styles = StyleSheet.create({
   },
   
   posterMeta: { position: "absolute", left: 8, right: 8, bottom: 8 },
-  posterTitle: { color: colors.text, fontSize: 12, fontWeight: "700", lineHeight: 15, textShadowColor: "rgba(0,0,0,0.8)", textShadowRadius: 3 },
+  posterTitle: { color: colors.text, fontSize: 12, fontWeight: "700", lineHeight: 15 },
   posterSub: { color: colors.textMuted, fontSize: 10, fontWeight: "500", marginTop: 3 },
   
-  // Barra de Progresso
   progTrack: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3.5, backgroundColor: "rgba(255,255,255,0.22)" },
   progFill: { height: 3.5, backgroundColor: colors.gold },
   
