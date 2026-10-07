@@ -1,0 +1,63 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clonar repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configurar Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+
+      - name: Instalar dependências e preparar frontend
+        run: |
+          cd frontend
+          npm install
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm run build
+
+          # Deteta se a pasta gerada é 'dist' ou 'build'
+          WEB_DIR="dist"
+          if [ -d "build" ]; then
+            WEB_DIR="build"
+          fi
+
+          # Se a pasta android não existir, cria-a automaticamente
+          if [ ! -d "android" ]; then
+            npx cap init "GoldCast" "com.goldcast.streaming" --web-dir $WEB_DIR
+            npx cap add android
+          else
+            npx cap sync android
+          fi
+
+      - name: Dar permissão ao executável do Gradle
+        run: |
+          if [ -f frontend/android/gradlew ]; then
+            chmod +x frontend/android/gradlew
+          fi
+
+      - name: Compilar APK (Debug)
+        run: |
+          cd frontend/android
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Disponibilizar APK para transferência
+        uses: actions/upload-artifact@v4
+        with:
+          name: GoldCast-Debug-APK
+          path: frontend/android/app/build/outputs/apk/debug/*.apk
