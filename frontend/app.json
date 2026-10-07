@@ -22,7 +22,8 @@
         "backgroundColor": "#000000"
       },
       "package": "com.emergent.goldcastplayer.jcke8k",
-      "permissions": ["INTERNET", "ACCESS_NETWORK_STATE"]
+      "permissions": ["INTERNET", "ACCESS_NETWORK_STATE"],
+      "usesCleartextTraffic": true
     },
     "web": {
       "bundler": "metro",
