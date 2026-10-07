@@ -34,6 +34,11 @@ jobs:
           cd frontend
           npx expo prebuild --platform android --no-install
 
+      - name: Forçar permissão de HTTP no AndroidManifest
+        run: |
+          sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' frontend/android/app/src/main/AndroidManifest.xml
+          grep -n "usesCleartextTraffic" frontend/android/app/src/main/AndroidManifest.xml
+
       - name: Dar permissão ao executável Gradle
         run: |
           chmod +x frontend/android/gradlew
