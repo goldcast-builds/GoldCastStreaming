@@ -3,11 +3,17 @@ import { Tabs } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Platform, StyleSheet, View } from "react-native";
 import { BlurView } from "expo-blur";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../../src/utils/theme";
 import { IntroSplash } from "../../src/components/IntroSplash";
 
 export default function TabsLayout() {
   const [showIntro, setShowIntro] = useState(true);
+  const insets = useSafeAreaInsets();
+
+  // Calcula a margem inferior para nunca colidir com os botões ou gestos do celular
+  const bottomPadding = insets.bottom > 0 ? insets.bottom : 8;
+  const tabHeight = 56 + bottomPadding;
 
   return (
     <View style={styles.container}>
@@ -17,12 +23,12 @@ export default function TabsLayout() {
           tabBarActiveTintColor: colors.gold,
           tabBarInactiveTintColor: "#8C92A4",
           tabBarStyle: {
-            backgroundColor: Platform.OS === "web" ? colors.bg : "rgba(9, 10, 14, 0.88)",
+            backgroundColor: Platform.OS === "web" ? colors.bg : "rgba(9, 10, 14, 0.94)",
             borderTopColor: "rgba(255, 255, 255, 0.08)",
             borderTopWidth: 1,
-            height: Platform.OS === "ios" ? 86 : 64,
-            paddingTop: 8,
-            paddingBottom: Platform.OS === "ios" ? 28 : 10,
+            height: tabHeight,
+            paddingTop: 6,
+            paddingBottom: bottomPadding,
             elevation: 10,
           },
           tabBarBackground: () =>
@@ -95,7 +101,7 @@ export default function TabsLayout() {
         />
       </Tabs>
 
-      {/* Vinheta de Abertura Cinematográfica */}
+      {/* Abertura por cima da aplicação */}
       {showIntro && (
         <IntroSplash onFinish={() => setShowIntro(false)} />
       )}
