@@ -1,20 +1,20 @@
 export const colors = {
-  bg: "#000000",
-  surface: "#0F0F0F",
-  surface2: "#151515",
-  surface3: "#1E1E1E",
-  border: "#2A2A2A",
-  borderFocus: "#D4AF37",
-  text: "#FFFFFF",
-  textMuted: "#A0A0A0",
-  textDim: "#6E6E6E",
-  gold: "#D4AF37",
-  goldLight: "#E5B84B",
-  goldDark: "#C5A030",
+  bg: "#090A0E",               // Preto carvão profundo (estilo Netflix/Prime)
+  surface: "#13151F",          // Fundo dos cartões e caixas de texto
+  surface2: "#1A1D2B",         // Cartões com relevo/foco
+  surface3: "#24283B",         // Fundo de botões secundários e separadores
+  border: "#1F2333",           // Bordas subtis e elegantes
+  borderFocus: "#E5A93B",      // Borda com foco em dourado vivo
+  text: "#FFFFFF",             // Texto principal nítido
+  textMuted: "#9AA0B4",        // Sinopses e categorias em cinzento suave
+  textDim: "#5E6378",          // Informações secundárias e rodapés
+  gold: "#E5A93B",             // Dourado metálico refinado
+  goldLight: "#F5BE58",
+  goldDark: "#B88320",
   onGold: "#000000",
   success: "#4CAF50",
   warning: "#FFC107",
-  error: "#F44336",
+  error: "#E50914",            // Vermelho vivo clássico de streaming
   info: "#2196F3",
 };
 
