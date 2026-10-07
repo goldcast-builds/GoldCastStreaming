@@ -1,47 +1,7 @@
-name: Build Android APK (Expo)
-
-on:
-  push:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Clonar repositório
-        uses: actions/checkout@v4
-
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Configurar Java JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: 17
-
-      - name: Instalar dependências
-        run: |
-          cd frontend
-          npm install
-
-      - name: Gerar estrutura nativa Android (Expo Prebuild)
-        run: |
-          cd frontend
-          npx expo prebuild --platform android --no-install
-
-      - name: Dar permissão ao executável Gradle
-        run: |
-          chmod +x frontend/android/gradlew
-
-      - name: Compilar APK (Debug - ARM64)
+- name: Compilar APK (Release Standalone)
         run: |
           cd frontend/android
-          ./gradlew assembleDebug \
+          ./gradlew assembleRelease \
             --no-daemon \
             --max-workers=2 \
             -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m" \
@@ -50,5 +10,5 @@ jobs:
       - name: Disponibilizar APK para transferência
         uses: actions/upload-artifact@v4
         with:
-          name: GoldCast-Debug-APK
-          path: frontend/android/app/build/outputs/apk/debug/*.apk
+          name: GoldCast-Release-APK
+          path: frontend/android/app/build/outputs/apk/release/*.apk
