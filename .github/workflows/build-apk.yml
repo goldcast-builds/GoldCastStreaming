@@ -24,15 +24,12 @@ jobs:
           distribution: 'zulu'
           java-version: 17
 
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Instalar dependências
         run: |
           cd frontend
           npm install
 
-      - name: Gerar estrutura nativa Android via Expo Prebuild
+      - name: Gerar estrutura nativa Android (Expo Prebuild)
         run: |
           cd frontend
           npx expo prebuild --platform android --no-install
