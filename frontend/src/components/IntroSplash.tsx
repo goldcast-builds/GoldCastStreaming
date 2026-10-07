@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, View, Pressable, StatusBar } from "react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
 
@@ -7,36 +7,45 @@ interface IntroSplashProps {
 }
 
 export function IntroSplash({ onFinish }: IntroSplashProps) {
-  // Inicializa o player com o vídeo da logo
+  const [hasFinished, setHasFinished] = useState(false);
+
+  const finishPlayback = () => {
+    if (!hasFinished) {
+      setHasFinished(true);
+      onFinish();
+    }
+  };
+
   const player = useVideoPlayer(require("../../assets/Intro.mp4"), (p) => {
     p.loop = false;
+    p.muted = false;
     p.play();
   });
 
   useEffect(() => {
-    // Quando o vídeo terminar, libera a tela inicial
     const subscription = player.addListener("playToEnd", () => {
-      onFinish();
+      finishPlayback();
     });
 
-    // Trava de segurança: garante a entrada no app após 5s caso o vídeo demore
+    // Trava para permitir tocar os 9 segundos do vídeo sem cortar
     const fallbackTimer = setTimeout(() => {
-      onFinish();
-    }, 5000);
+      finishPlayback();
+    }, 12000);
 
     return () => {
       subscription.remove();
       clearTimeout(fallbackTimer);
     };
-  }, [player, onFinish]);
+  }, [player]);
 
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      <Pressable style={styles.pressArea} onPress={onFinish}>
+      {/* Permite tocar na tela para avançar a qualquer momento */}
+      <Pressable style={styles.pressArea} onPress={finishPlayback}>
         <VideoView
           player={player}
-          style={StyleSheet.absoluteFillObject}
+          style={styles.video}
           contentFit="contain"
           nativeControls={false}
         />
@@ -49,13 +58,19 @@ const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000000",
-    zIndex: 99999,
+    zIndex: 999999,
+    elevation: 999999, // Renderiza na frente de tudo no Android
     justifyContent: "center",
     alignItems: "center",
   },
   pressArea: {
-    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
     justifyContent: "center",
     alignItems: "center",
+  },
+  video: {
+    width: "100%",
+    height: "100%",
   },
 });
