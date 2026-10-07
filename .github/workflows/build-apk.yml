@@ -38,10 +38,14 @@ jobs:
         run: |
           chmod +x frontend/android/gradlew
 
-      - name: Compilar APK (Debug)
+      - name: Compilar APK (Debug - ARM64)
         run: |
           cd frontend/android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug \
+            --no-daemon \
+            --max-workers=2 \
+            -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m" \
+            -PreactNativeArchitectures=arm64-v8a
 
       - name: Disponibilizar APK para transferência
         uses: actions/upload-artifact@v4
