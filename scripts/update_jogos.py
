@@ -1,0 +1,111 @@
+import json
+import os
+import urllib.request
+from datetime import datetime, timezone, timedelta
+
+# Fuso horário de Brasília (UTC-3)
+BRT = timezone(timedelta(hours=-3))
+HOJE_BRT = datetime.now(BRT).strftime("%Y%m%d")
+
+LEAGUES = [
+    ("bra.1", "Brasileirão Série A", "Premiere"),
+    ("bra.copa_do_brasil", "Copa do Brasil", "SporTV / Premiere"),
+    ("conmebol.libertadores", "Libertadores", "ESPN / Premiere"),
+    ("conmebol.sudamericana", "Sul-Americana", "ESPN"),
+    ("uefa.champions", "Champions League", "TNT Sports"),
+    ("esp.1", "La Liga", "ESPN"),
+    ("eng.1", "Premier League", "ESPN"),
+    ("ita.1", "Serie A", "ESPN"),
+]
+
+def extrair_jogos():
+    jogos = []
+    jogo_id = 1
+
+    for league_slug, league_name, canal_padrao in LEAGUES:
+        url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={HOJE_BRT}"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            continue
+
+        events = data.get("events", [])
+        for ev in events:
+            comps = ev.get("competitions", [])
+            if not comps:
+                continue
+            comp = comps[0]
+            competitors = comp.get("competitors", [])
+            if len(competitors) < 2:
+                continue
+
+            time_casa = competitors[0].get("team", {}).get("shortDisplayName") or competitors[0].get("team", {}).get("name", "Time 1")
+            time_fora = competitors[1].get("team", {}).get("shortDisplayName") or competitors[1].get("team", {}).get("name", "Time 2")
+            if competitors[0].get("homeAway") != "home":
+                time_casa, time_fora = time_fora, time_casa
+
+            # Horário no fuso de Brasília
+            date_str = ev.get("date", "")
+            horario = "A definir"
+            if date_str:
+                try:
+                    dt = datetime.fromisoformat(date_str.replace("Z", "+00:00")).astimezone(BRT)
+                    horario = dt.strftime("%H:%M")
+                except Exception:
+                    pass
+
+            # Status ao vivo
+            status_type = comp.get("status", {}).get("type", {})
+            ao_vivo = status_type.get("state") == "in"
+
+            # Canal de transmissão
+            canal = canal_padrao
+            broadcasts = comp.get("broadcasts", [])
+            if broadcasts:
+                names = broadcasts[0].get("names", [])
+                if names:
+                    canal = " / ".join(names)
+
+            estadio = comp.get("venue", {}).get("fullName", "")
+
+            jogos.append({
+                "id": str(jogo_id),
+                "campeonato": league_name,
+                "time_casa": time_casa,
+                "time_fora": time_fora,
+                "horario": horario,
+                "ao_vivo": ao_vivo,
+                "estadio": estadio,
+                "canal_nome": canal
+            })
+            jogo_id += 1
+
+    # Se não houver jogos nos campeonatos mapeados hoje, mantém um card informativo elegante
+    if not jogos:
+        jogos.append({
+            "id": "1",
+            "campeonato": "PROGRAMAÇÃO ESPORTIVA",
+            "time_casa": "Sem grandes jogos",
+            "time_fora": "agendados para hoje",
+            "horario": "--:--",
+            "ao_vivo": False,
+            "estadio": "Confira os canais ao vivo",
+            "canal_nome": "Canais Esportivos"
+        })
+
+    return jogos
+
+def main():
+    dest_path = os.path.join("frontend", "src", "data", "jogos.json")
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+    jogos = extrair_jogos()
+
+    with open(dest_path, "w", encoding="utf-8") as f:
+        json.dump(jogos, f, ensure_ascii=False, indent=2)
+
+    print(f"Sucesso: {len(jogos)} jogos gravados em {dest_path}")
+
+if __name__ == "__main__":
+    main()
