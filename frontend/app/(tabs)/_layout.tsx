@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, Text } from "react-native";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../../src/utils/theme";
@@ -52,8 +51,8 @@ export default function TabsLayout() {
           name="index"
           options={{
             title: "Início",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} />
+            tabBarIcon: () => (
+              <Text style={{ fontSize: 20 }}>🏠</Text>
             ),
             tabBarButtonTestID: "tab-home",
           }}
@@ -62,8 +61,8 @@ export default function TabsLayout() {
           name="live"
           options={{
             title: "TV ao vivo",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons name={focused ? "tv" : "tv-outline"} size={22} color={color} />
+            tabBarIcon: () => (
+              <Text style={{ fontSize: 20 }}>📺</Text>
             ),
             tabBarButtonTestID: "tab-live",
           }}
@@ -72,8 +71,8 @@ export default function TabsLayout() {
           name="movies"
           options={{
             title: "Filmes",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons name={focused ? "film" : "film-outline"} size={22} color={color} />
+            tabBarIcon: () => (
+              <Text style={{ fontSize: 20 }}>🎬</Text>
             ),
             tabBarButtonTestID: "tab-movies",
           }}
@@ -82,8 +81,8 @@ export default function TabsLayout() {
           name="series"
           options={{
             title: "Séries",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons name={focused ? "albums" : "albums-outline"} size={22} color={color} />
+            tabBarIcon: () => (
+              <Text style={{ fontSize: 20 }}>🎞️</Text>
             ),
             tabBarButtonTestID: "tab-series",
           }}
@@ -92,8 +91,8 @@ export default function TabsLayout() {
           name="settings"
           options={{
             title: "Configurações",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons name={focused ? "settings" : "settings-outline"} size={22} color={color} />
+            tabBarIcon: () => (
+              <Text style={{ fontSize: 20 }}>⚙️</Text>
             ),
             tabBarButtonTestID: "tab-settings",
           }}
