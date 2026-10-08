@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Tabs } from "expo-router";
-import Ionicons from "@react-native-vector-icons/ionicons";
+import { Ionicons } from "@expo/vector-icons";
 import { Platform, StyleSheet, View } from "react-native";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,7 +11,6 @@ export default function TabsLayout() {
   const [showIntro, setShowIntro] = useState(true);
   const insets = useSafeAreaInsets();
 
-  // Calcula a margem inferior para nunca colidir com os botões ou gestos do celular
   const bottomPadding = insets.bottom > 0 ? insets.bottom : 8;
   const tabHeight = 56 + bottomPadding;
 
