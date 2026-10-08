@@ -1,11 +1,12 @@
-import { useCallback, useState } from "react";
-import { View, Text, StyleSheet, Pressable, useWindowDimensions, ScrollView, Platform } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { View, Text, StyleSheet, Pressable, useWindowDimensions, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Logo } from "../../src/components/Logo";
 import { GoldButton } from "../../src/components/GoldButton";
+import { TrendingMarquee, MarqueeItem } from "../../src/components/TrendingMarquee";
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { listLists } from "../../src/utils/api";
 import { useSession } from "../../src/store/session";
@@ -19,31 +20,56 @@ const MAIN = [
 export default function HomeTab() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const session = useSession((s) => s.session);
   const source = useSession((s) => s.source);
   const setSource = useSession((s) => s.setSource);
+  const catalog = useSession((s) => s.catalog);
+  const loadVod = useSession((s) => s.loadVod);
   const [hasLists, setHasLists] = useState(false);
 
-  useFocusEffect(useCallback(() => { 
-    listLists().then((l) => setHasLists(l.length > 0)).catch(() => {}); 
-  }, []));
+  // Carrega listas e catálogos em background
+  useFocusEffect(
+    useCallback(() => {
+      listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
+      if (source?.kind === "xtream" && !catalog.vodLoaded) {
+        loadVod();
+      }
+    }, [source?.kind, catalog.vodLoaded, loadVod])
+  );
 
   const hasContent = !!session || hasLists;
+
+  // Filtra até 15 títulos com capas válidas para a animação flutuante
+  const marqueeItems: MarqueeItem[] = useMemo(() => {
+    if (!catalog.vod || catalog.vod.length === 0) return [];
+    return catalog.vod
+      .filter((v) => !!v.stream_icon)
+      .slice(0, 15)
+      .map((v) => ({
+        id: String(v.stream_id),
+        name: v.name,
+        poster: v.stream_icon,
+        type: "movie",
+      }));
+  }, [catalog.vod]);
 
   const go = async (path: string) => {
     if (session && source?.kind !== "list") await setSource({ kind: "xtream" });
     router.push(path as any);
   };
 
+  const handleOpenMarqueeItem = (item: MarqueeItem) => {
+    router.push({ pathname: "/movie/[id]", params: { id: item.id } });
+  };
+
   return (
     <ScrollView 
       style={styles.root} 
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + 90 }]} 
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + 110 }]} 
       testID="home-screen"
       showsVerticalScrollIndicator={false}
     >
-      {/* Barra Superior Minimalista */}
+      {/* Barra Superior */}
       <View style={styles.topBar}>
         <Logo size={105} />
         <Pressable 
@@ -58,7 +84,7 @@ export default function HomeTab() {
 
       {hasContent ? (
         <View style={styles.mainContainer}>
-          {/* Banner Hero Cinematográfico Estilo Streaming */}
+          {/* Banner Hero */}
           <View style={styles.heroBanner}>
             <LinearGradient
               colors={["#1C180E", "#151722", "#090A0E"]}
@@ -98,7 +124,7 @@ export default function HomeTab() {
             </View>
           </View>
 
-          {/* Secção de Categorias Principais (Estilo Hub de Conteúdos) */}
+          {/* Navegação Principal */}
           <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
 
           <View style={styles.gridNav}>
@@ -126,15 +152,22 @@ export default function HomeTab() {
             ))}
           </View>
 
-          {/* Secção de Atalhos Rápidos */}
+          {/* Atalhos Rápidos */}
           <View style={styles.quickActionsRow}>
             <SmallTile testID="home-favorites" icon="star-outline" label="Favoritos" onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })} />
             <SmallTile testID="home-account" icon="person-outline" label="Conta" onPress={() => router.push(session ? "/(tabs)/settings" : "/login")} />
             <SmallTile testID="home-settings" icon="settings-outline" label="Ajustes" onPress={() => router.push("/(tabs)/settings")} />
           </View>
+
+          {/* Letreiro Flutuante Animado com Capas em Movimento Contínuo */}
+          {marqueeItems.length > 0 && (
+            <TrendingMarquee 
+              items={marqueeItems} 
+              onPressItem={handleOpenMarqueeItem} 
+            />
+          )}
         </View>
       ) : (
-        /* Ecrã de Boas-vindas para Utilizador Desconectado */
         <View style={styles.loggedOutBox}>
           <Text style={styles.brand}>GoldCast Streaming</Text>
           <Text style={styles.hint}>Inicie sessão com os dados fornecidos pelo seu serviço para carregar a programação.</Text>
@@ -163,7 +196,6 @@ const styles = StyleSheet.create({
   
   mainContainer: { gap: spacing.lg },
 
-  // Hero Banner Estilo Netflix/Prime
   heroBanner: {
     borderRadius: 14,
     overflow: "hidden",
@@ -247,7 +279,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Lista de Navegação Principal
   sectionHeader: {
     color: colors.textDim,
     fontSize: 11,
@@ -299,7 +330,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Atalhos Inferiores em Cápsula
   quickActionsRow: {
     flexDirection: "row",
     gap: 10,
@@ -327,7 +357,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Estado Sem Sessão
   loggedOutBox: {
     width: "100%",
     maxWidth: 420,
