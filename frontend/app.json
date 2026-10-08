@@ -26,7 +26,16 @@
       },
       "package": "com.emergent.goldcastplayer.jcke8k",
       "permissions": ["INTERNET", "ACCESS_NETWORK_STATE"],
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "intentFilters": [
+        {
+          "action": "MAIN",
+          "category": [
+            "LAUNCHER",
+            "LEANBACK_LAUNCHER"
+          ]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",
