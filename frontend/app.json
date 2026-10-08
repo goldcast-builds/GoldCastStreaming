@@ -19,23 +19,14 @@
         }
       }
     },
-    "android": {
+"android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
       "package": "com.emergent.goldcastplayer.jcke8k",
       "permissions": ["INTERNET", "ACCESS_NETWORK_STATE"],
-      "usesCleartextTraffic": true,
-      "intentFilters": [
-        {
-          "action": "MAIN",
-          "category": [
-            "LAUNCHER",
-            "LEANBACK_LAUNCHER"
-          ]
-        }
-      ]
+      "usesCleartextTraffic": true
     },
     "web": {
       "bundler": "metro",
