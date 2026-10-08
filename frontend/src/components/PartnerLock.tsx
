@@ -1,0 +1,215 @@
+import React, { useState } from "react";
+import { View, Text, StyleSheet, TextInput, Modal, ActivityIndicator, Alert, Pressable } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Ionicons from "@react-native-vector-icons/ionicons";
+import { Logo } from "./Logo";
+import { colors, radius, spacing } from "../utils/theme";
+
+// SUBSTITUA PELO LINK RAW DO SEU GIST DE PARCEIROS CRIADO NO PASSO 1
+const URL_PARCEIROS = "https://gist.githubusercontent.com/anderson009470/SEU_ID/raw/parceiros.json";
+
+interface PartnerLockProps {
+  visible: boolean;
+  onSuccess: (empresa: string) => void;
+}
+
+export function PartnerLock({ visible, onSuccess }: PartnerLockProps) {
+  const [codigo, setCodigo] = useState("");
+  const [carregando, setCarregando] = useState(false);
+
+  const validarCodigo = async () => {
+    const chaveFormatada = codigo.trim().toUpperCase();
+    if (!chaveFormatada) {
+      Alert.alert("Atenção", "Por favor, digite o código de ativação da sua empresa parceira.");
+      return;
+    }
+
+    setCarregando(true);
+    try {
+      // Adiciona timestamp para não pegar cache antigo
+      const res = await fetch(`${URL_PARCEIROS}?t=${Date.now()}`);
+      if (!res.ok) {
+        throw new Error("Não foi possível conectar ao servidor de licenças.");
+      }
+
+      const parceiros = await res.json();
+      const parceiro = parceiros[chaveFormatada];
+
+      if (!parceiro) {
+        Alert.alert("Código Inválido", "O código inserido não foi encontrado ou não existe.");
+        setCarregando(false);
+        return;
+      }
+
+      if (!parceiro.ativo) {
+        Alert.alert("Acesso Suspenso", "Esta licença corporativa está temporariamente inativa. Contate o suporte.");
+        setCarregando(false);
+        return;
+      }
+
+      // Verifica validade se existir
+      if (parceiro.validade) {
+        const dataValidade = new Date(parceiro.validade);
+        if (dataValidade < new Date()) {
+          Alert.alert("Licença Expirada", "A licença desta empresa parceira expirou.");
+          setCarregando(false);
+          return;
+        }
+      }
+
+      // Salva no armazenamento do celular para não pedir novamente
+      await AsyncStorage.setItem("goldcast_partner_code", chaveFormatada);
+      await AsyncStorage.setItem("goldcast_partner_name", parceiro.empresa || "Parceiro Oficial");
+
+      Alert.alert("Acesso Liberado!", `Bem-vindo(a)!\nLicença ativada por: ${parceiro.empresa}`);
+      onSuccess(parceiro.empresa);
+    } catch (err: any) {
+      Alert.alert("Erro de Conexão", "Verifique sua internet e tente novamente.");
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="fade" transparent={false}>
+      <View style={styles.container}>
+        <View style={styles.content}>
+          <Logo size={130} />
+          
+          <View style={styles.badge}>
+            <Ionicons name="shield-checkmark" size={14} color={colors.gold} />
+            <Text style={styles.badgeText}>ACESSO EXCLUSIVO POR PARCERIA</Text>
+          </View>
+
+          <Text style={styles.title}>Ativação de Licença</Text>
+          <Text style={styles.subtitle}>
+            Digite abaixo o código de liberação fornecido pela sua empresa ou estabelecimento parceiro para liberar o aplicativo.
+          </Text>
+
+          <View style={styles.inputBox}>
+            <Ionicons name="key-outline" size={20} color={colors.gold} style={{ marginLeft: 12 }} />
+            <TextInput
+              style={styles.input}
+              placeholder="Ex: ACADEMIA-VIP"
+              placeholderTextColor={colors.textDim}
+              value={codigo}
+              onChangeText={setCodigo}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]}
+            onPress={validarCodigo}
+            disabled={carregando}
+          >
+            {carregando ? (
+              <ActivityIndicator color={colors.onGold} size="small" />
+            ) : (
+              <>
+                <Ionicons name="lock-open-outline" size={18} color={colors.onGold} />
+                <Text style={styles.btnText}>LIBERAR ACESSO</Text>
+              </>
+            )}
+          </Pressable>
+
+          <Text style={styles.footerHelp}>
+            Ainda não tem um código? Entre em contato com a empresa que indicou o serviço.
+          </Text>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#0B0C10",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  content: {
+    width: "100%",
+    maxWidth: 380,
+    alignItems: "center",
+    gap: 14,
+  },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(229, 169, 59, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(229, 169, 59, 0.3)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    marginTop: 8,
+  },
+  badgeText: {
+    color: colors.gold,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  title: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  subtitle: {
+    color: colors.textMuted,
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 19,
+    paddingHorizontal: 10,
+  },
+  inputBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    width: "100%",
+    height: 52,
+    marginTop: 8,
+  },
+  input: {
+    flex: 1,
+    height: "100%",
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "700",
+    paddingHorizontal: 12,
+    letterSpacing: 1.5,
+  },
+  btn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.gold,
+    height: 50,
+    borderRadius: radius.md,
+    width: "100%",
+    marginTop: 6,
+  },
+  btnText: {
+    color: colors.onGold,
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  footerHelp: {
+    color: colors.textDim,
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 14,
+    lineHeight: 16,
+  },
+});
