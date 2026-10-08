@@ -12,10 +12,8 @@ export const DEFAULT_SERVERS = {
 };
 
 const BACKEND = process.env.EXPO_PUBLIC_BACKEND_URL;
-const TIMEOUT_MS = 25000;
+const TIMEOUT_MS = 60000;
 const UA = "IPTVSmartersPro";
-
-export type Stage = "checking" | "connecting" | "validating" | "loading" | "done";
 
 export class XtreamError extends Error {
   kind: "network" | "auth" | "expired" | "incompatible" | "blocked";
@@ -91,84 +89,36 @@ export interface ServerInfo {
 }
 
 export interface XtreamSession {
-  server: string;
+  server: string;       // server used for API calls (normalized, as typed / fallback)
   username: string;
   password: string;
   userInfo: UserInfo;
   serverInfo: ServerInfo;
-  playbackBases: string[];
+  playbackBases: string[]; // ordered candidates (https preferred when advertised)
   liveFormat: "m3u8" | "ts";
   connectedAt: number;
 }
 
-export interface Category {
-  category_id: string;
-  category_name: string;
-  parent_id?: number;
-}
-
+export interface Category { category_id: string; category_name: string; parent_id?: number }
 export interface LiveStream {
-  num?: number;
-  name: string;
-  stream_type?: string;
-  stream_id: number;
-  stream_icon?: string;
-  epg_channel_id?: string | null;
-  category_id?: string;
-  category_ids?: number[];
-  tv_archive?: number;
+  num?: number; name: string; stream_type?: string; stream_id: number; stream_icon?: string;
+  epg_channel_id?: string | null; category_id?: string; category_ids?: number[]; tv_archive?: number;
 }
-
 export interface VodStream {
-  num?: number;
-  name: string;
-  stream_id: number;
-  stream_icon?: string;
-  rating?: string | number;
-  category_id?: string;
-  container_extension?: string;
-  added?: string;
-  year?: string;
-  genre?: string;
+  num?: number; name: string; stream_id: number; stream_icon?: string; rating?: string | number;
+  category_id?: string; container_extension?: string; added?: string; year?: string; genre?: string;
 }
-
 export interface SeriesItem {
-  num?: number;
-  name: string;
-  series_id: number;
-  cover?: string;
-  plot?: string;
-  cast?: string;
-  genre?: string;
-  releaseDate?: string;
-  rating?: string | number;
-  category_id?: string;
-  episode_run_time?: string;
+  num?: number; name: string; series_id: number; cover?: string; plot?: string; cast?: string;
+  genre?: string; releaseDate?: string; rating?: string | number; category_id?: string; episode_run_time?: string;
 }
-
 export interface Episode {
-  id: string;
-  episode_num: number | string;
-  title: string;
-  container_extension: string;
-  season?: number;
-  info?: {
-    plot?: string;
-    duration?: string;
-    movie_image?: string;
-    releasedate?: string;
-    rating?: string | number;
-  };
+  id: string; episode_num: number | string; title: string; container_extension: string; season?: number;
+  info?: { plot?: string; duration?: string; movie_image?: string; releasedate?: string; rating?: string | number };
 }
-
 export interface EpgEntry {
-  id?: string;
-  title: string;
-  description?: string;
-  start: string;
-  end: string;
-  start_timestamp: number;
-  stop_timestamp: number;
+  id?: string; title: string; description?: string; start: string; end: string;
+  start_timestamp: number; stop_timestamp: number;
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Response> {
@@ -177,342 +127,303 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Re
   try {
     return await fetch(url, { ...init, signal: ctrl.signal });
   } catch (e: any) {
-    if (e?.name === "AbortError") {
-      throw new XtreamError("network", MSG.timeout);
-    }
+    if (e?.name === "AbortError") throw new XtreamError("network", MSG.timeout);
     throw new XtreamError("network", MSG.network);
   } finally {
     clearTimeout(t);
   }
 }
 
+// XUI panels temporarily ban IPs that fire many requests at once -> serialize API calls with a small gap.
 let chain: Promise<any> = Promise.resolve();
-
 function serialized<T>(fn: () => Promise<T>): Promise<T> {
   const run = chain.then(fn, fn);
   chain = run.then(() => new Promise((r) => setTimeout(r, 250)), () => new Promise((r) => setTimeout(r, 250)));
   return run;
 }
 
-function httpStatusMessage(status: number | undefined, fallback: string): string {
-  if (!status) return fallback;
-  return `HTTP ${status}: ${fallback}`;
-}
-
-function toQueryParams(obj: Record<string, any>): URLSearchParams {
-  const params = new URLSearchParams();
-  Object.entries(obj).forEach(([key, value]) => {
-    if (value === undefined || value === null) return;
-    if (typeof value === "object") {
-      params.append(key, JSON.stringify(value));
-      return;
-    }
-    params.append(key, String(value));
-  });
-  return params;
-}
-
-async function callApiNow(
-  server: string,
-  username: string,
-  password: string,
-  action?: string,
-  extra?: Record<string, any>,
-): Promise<any> {
-  const normalizedServer = normalizeServer(server);
-
-  const params = new URLSearchParams();
-  params.set("username", username);
-  params.set("password", password);
-
-  if (action) {
-    params.set("action", action);
-  }
-
-  if (extra) {
-    Object.entries(extra).forEach(([key, value]) => {
-      if (value === undefined || value === null) return;
-      params.set(key, String(value));
-    });
-  }
-
-  const url = `${normalizedServer}/player_api.php?${params.toString()}`;
-
-  try {
-    // Native app: direct route, same as IPTV clients
-    if (Platform.OS !== "web") {
-      const res = await fetchWithTimeout(url, {
-        method: "GET",
-        headers: {
-          "User-Agent": UA,
-          // CRITICAL: some Xtream/XUI panels reject requests with application/json
-          Accept: "*/*",
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
-        },
-      });
-
-      if (!res.ok) {
-        const bodyText = await res.text().catch(() => "");
-        const detail = bodyText ? ` ${bodyText.trim().slice(0, 180)}` : "";
-        throw new XtreamError(
-          "blocked",
-          `${httpStatusMessage(res.status, MSG.blocked)}${detail}`,
-        );
-      }
-
-      const contentType = res.headers.get("content-type") || "";
-      try {
-        if (contentType.includes("application/json")) {
-          return await res.json();
-        }
-        const text = await res.text();
-        try {
-          return JSON.parse(text);
-        } catch {
-          return text;
-        }
-      } catch {
-        throw new XtreamError("incompatible", "Servidor incompatível com Xtream Codes/XUI.");
-      }
-    }
-
-    // Web fallback: call through local backend proxy
-    if (!BACKEND) {
-      throw new XtreamError("network", "Backend não configurado para preview web.");
-    }
-
-    const res = await fetchWithTimeout(`${BACKEND}/api/xtream/proxy`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": UA,
-        Accept: "*/*",
-      },
-      body: JSON.stringify({
-        server: normalizedServer,
-        username,
-        password,
-        action,
-        extra,
-      }),
-    });
-
-    if (!res.ok) {
-      const bodyText = await res.text().catch(() => "");
-      const detail = bodyText ? ` ${bodyText.trim().slice(0, 180)}` : "";
-      throw new XtreamError(
-        "blocked",
-        `${httpStatusMessage(res.status, MSG.blocked)}${detail}`,
-      );
-    }
-
-    const data = await res.json().catch(() => null);
-    if (data === null) {
-      throw new XtreamError("incompatible", "Servidor incompatível com Xtream Codes/XUI.");
-    }
-
-    return data;
-  } catch (error) {
-    if (error instanceof XtreamError) {
-      throw error;
-    }
-
-    if (error instanceof TypeError) {
-      throw new XtreamError("network", MSG.network);
-    }
-
-    throw new XtreamError("network", MSG.network);
-  }
-}
-
-async function callApi(
-  server: string,
-  username: string,
-  password: string,
-  action?: string,
-  extra?: Record<string, any>,
-): Promise<any> {
+async function callApi(server: string, username: string, password: string, action?: string, extra?: Record<string, any>): Promise<any> {
   return serialized(() => callApiNow(server, username, password, action, extra));
 }
 
-export async function authenticate(
-  server: string,
-  username: string,
-  password: string,
-  onStage?: (stage: Stage, detail?: string) => void,
-): Promise<XtreamSession> {
-  const normalizedServer = normalizeServer(server);
-  onStage?.("checking", "Validando servidor...");
-  onStage?.("connecting", "Conectando ao servidor Xtream...");
+async function callApiNow(server: string, username: string, password: string, action?: string, extra?: Record<string, any>): Promise<any> {
+  let res: Response;
+  if (Platform.OS === "web") {
+    res = await fetchWithTimeout(`${BACKEND}/api/xtream/proxy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ server, username, password, action, extra }),
+    });
+    const txt = await res.text();
+    let data: any = null;
+    try { data = txt ? JSON.parse(txt) : null; } catch { data = null; }
+    if (!res.ok) {
+      const detail = data?.detail || MSG.network;
+      const kind: XtreamError["kind"] = res.status === 401 ? "auth" : /bloquead|incorreto/i.test(detail) ? "blocked" : "network";
+      throw new XtreamError(kind, detail);
+    }
+    return data;
+  }
+
+  const rawParams = [
+    `username=${encodeURIComponent(username)}`,
+    `password=${encodeURIComponent(password)}`,
+  ];
+  if (action) rawParams.push(`action=${encodeURIComponent(action)}`);
+  if (extra) {
+    Object.entries(extra).forEach(([k, v]) => {
+      if (v != null) rawParams.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+    });
+  }
+  const queryString = rawParams.join("&");
+
+  res = await fetchWithTimeout(`${server}/player_api.php?${queryString}`, {
+    headers: {
+      "User-Agent": UA,
+      Accept: "*/*",
+    },
+  });
+
+  if (res.status === 403) {
+    throw new XtreamError("blocked", `Servidor recusou a conexão (HTTP 403): ${hostOf(server)}`);
+  }
+  if (res.status === 404) {
+    throw new XtreamError("blocked", `API não encontrada (HTTP 404): ${hostOf(server)}`);
+  }
+  if (res.status >= 500) throw new XtreamError("network", MSG.network);
+  if (res.status >= 400) throw new XtreamError("auth", MSG.auth);
+
+  const txt = await res.text();
   try {
-    const data = await callApi(normalizedServer, username, password);
-    const userInfo = data?.user_info;
-    if (!userInfo || typeof userInfo !== "object") {
-      throw new XtreamError("incompatible", "Servidor incompatível com Xtream Codes/XUI.");
-    }
-
-    const auth = Number(userInfo.auth);
-    const status = String(userInfo.status || "").toLowerCase();
-    const exp = Number(userInfo.exp_date || 0);
-
-    if (auth === 0 || auth === -1 || String(userInfo.auth) === "0") {
-      throw new XtreamError("auth", MSG.auth);
-    }
-
-    if (status === "expired" || status === "banned" || status === "disabled" || status === "inactive") {
-      throw new XtreamError("expired", MSG.expired);
-    }
-
-    if (exp > 0 && exp * 1000 < Date.now()) {
-      throw new XtreamError("expired", MSG.expired);
-    }
-
-    onStage?.("validating", "Validando acesso do utilizador...");
-
-    const serverInfo = await callApi(normalizedServer, username, password, "get_server_info").catch(() => ({}));
-    const playbackBases: string[] = [];
-
-    // Search candidate URLs; keep base server plus optional https port if provided
-    playbackBases.push(normalizedServer);
-
-    const hostInfo = serverInfo || {};
-    const httpsPort = hostInfo.https_port;
-    const httpPort = hostInfo.port;
-
-    if (typeof httpsPort !== "undefined" && httpsPort !== null && String(httpsPort) !== "") {
-      const proto = normalizedServer.startsWith("https://") ? "https" : "http";
-      const host = normalizedServer.replace(/^https?:\/\//, "").split("/")[0];
-      playbackBases.push(`${proto}://${host}:${httpsPort}`);
-    }
-
-    if (typeof httpPort !== "undefined" && httpPort !== null && String(httpPort) !== "") {
-      const proto = normalizedServer.startsWith("https://") ? "https" : "http";
-      const host = normalizedServer.replace(/^https?:\/\//, "").split("/")[0];
-      playbackBases.push(`${proto}://${host}:${httpPort}`);
-    }
-
-    const session: XtreamSession = {
-      server: normalizedServer,
-      username,
-      password,
-      userInfo: userInfo as UserInfo,
-      serverInfo: (serverInfo || {}) as ServerInfo,
-      playbackBases: Array.from(new Set(playbackBases)),
-      liveFormat: "m3u8",
-      connectedAt: Date.now(),
-    };
-
-    onStage?.("done", "Conectado!");
-    return session;
-  } catch (error) {
-    if (error instanceof XtreamError) {
-      throw error;
-    }
-    throw new XtreamError("network", MSG.network);
+    return JSON.parse(txt);
+  } catch {
+    throw new XtreamError("incompatible", MSG.incompatible);
   }
 }
 
-export const xtream = {
-  async liveCategories(session: XtreamSession): Promise<Category[]> {
-    const data = await callApi(session.server, session.username, session.password, "get_live_categories");
-    return Array.isArray(data) ? data : [];
-  },
+function candidatesFor(server: string): string[] {
+  const list = [server];
+  const p = normalizeServer(DEFAULT_SERVERS.primary);
+  const b = normalizeServer(DEFAULT_SERVERS.backup);
+  if (server === p && !list.includes(b)) list.push(b);
+  else if (server === b && !list.includes(p)) list.push(p);
+  return list;
+}
 
-  async liveStreams(
+export type Stage = "checking" | "connecting" | "validating" | "loading" | "done";
+
+export async function authenticate(
+  serverInput: string,
+  username: string,
+  password: string,
+  onStage?: (s: Stage, detail?: string) => void,
+): Promise<XtreamSession> {
+  onStage?.("checking");
+  const server = normalizeServer(serverInput);
+  const candidates = candidatesFor(server);
+  let lastErr: any = null;
+  for (let i = 0; i < candidates.length; i++) {
+    const s = candidates[i];
+    onStage?.("connecting", i > 0 ? `Servidor reserva: ${hostOf(s)}` : hostOf(s));
+    try {
+      const data = await callApi(s, username, password);
+      onStage?.("validating");
+      const userInfo: UserInfo | undefined = data?.user_info;
+      const serverInfo: ServerInfo = data?.server_info || {};
+      if (!userInfo) throw new XtreamError("incompatible", MSG.incompatible);
+      if (Number(userInfo.auth) !== 1) throw new XtreamError("auth", MSG.auth);
+      const status = String(userInfo.status || "").toLowerCase();
+      const exp = userInfo.exp_date ? Number(userInfo.exp_date) : null;
+      const expired = exp != null && !Number.isNaN(exp) && exp > 0 && exp * 1000 < Date.now();
+      if ((status && status !== "active") || expired) throw new XtreamError("expired", MSG.expired);
+      const formats = (userInfo.allowed_output_formats || []).map((f) => String(f).toLowerCase());
+      const liveFormat: "m3u8" | "ts" = formats.includes("m3u8") ? "m3u8" : "ts";
+      return {
+        server: s,
+        username,
+        password,
+        userInfo,
+        serverInfo,
+        playbackBases: buildPlaybackBases(s, serverInfo),
+        liveFormat,
+        connectedAt: Date.now(),
+      };
+    } catch (e: any) {
+      lastErr = e;
+      const k = e?.kind as XtreamError["kind"] | undefined;
+      if (k === "auth" || k === "expired" || k === "incompatible") throw e;
+    }
+  }
+  throw lastErr || new XtreamError("network", MSG.network);
+}
+
+/** Uses server_info returned by the panel. Prefers HTTPS when the panel advertises https_port. */
+export function buildPlaybackBases(authServer: string, info: ServerInfo): string[] {
+  const bases: string[] = [];
+  const host = (info.url || "").trim().toLowerCase();
+  if (host && /^[a-z0-9.-]+$/.test(host)) {
+    const httpsPort = info.https_port ? String(info.https_port) : "";
+    const httpPort = info.port ? String(info.port) : "";
+    if (httpsPort) bases.push(httpsPort === "443" ? `https://${host}` : `https://${host}:${httpsPort}`);
+    if (httpPort) bases.push(httpPort === "80" ? `http://${host}` : `http://${host}:${httpPort}`);
+    if (!httpsPort && !httpPort) bases.push(`${(info.server_protocol || "http").toLowerCase()}://${host}`);
+  }
+  if (!bases.includes(authServer)) bases.push(authServer);
+  return bases;
+}
+
+export function liveUrls(s: XtreamSession, streamId: number | string, format?: "m3u8" | "ts"): string[] {
+  const fmt = format || s.liveFormat;
+  return s.playbackBases.map((b) => `${b}/live/${encodeURIComponent(s.username)}/${encodeURIComponent(s.password)}/${streamId}.${fmt}`);
+}
+
+export function movieUrls(s: XtreamSession, streamId: number | string, ext?: string): string[] {
+  return s.playbackBases.map((b) => `${b}/movie/${encodeURIComponent(s.username)}/${encodeURIComponent(s.password)}/${streamId}.${ext || "mp4"}`);
+}
+
+export function episodeUrls(s: XtreamSession, episodeId: number | string, ext?: string): string[] {
+  return s.playbackBases.map((b) => `${b}/series/${encodeURIComponent(s.username)}/${encodeURIComponent(s.password)}/${episodeId}.${ext || "mp4"}`);
+}
+
+/** Strip credentials from a URL before logging/displaying. */
+export function redactUrl(url: string): string {
+  return url.replace(/\/(live|movie|series)\/[^/]+\/[^/]+\//, "/$1/***/***/").replace(/(username|password)=[^&]*/gi, "$1=***");
+}
+
+const asList = (d: any) => (Array.isArray(d) ? d : []);
+
+export const xtream = {
+  liveCategories: async (s: XtreamSession): Promise<Category[]> =>
+    asList(await callApi(s.server, s.username, s.password, "get_live_categories")),
+
+  liveStreams: async (
     session: XtreamSession,
     category?: string,
     search?: string,
-    limit = 200,
-    offset = 0,
-  ): Promise<LiveStream[]> {
+    limit?: number,
+    offset = 0
+  ): Promise<LiveStream[]> => {
     const extra: Record<string, any> = {};
     if (category) extra.category_id = category;
-
     const data = await callApi(session.server, session.username, session.password, "get_live_streams", extra);
     if (!Array.isArray(data)) return [];
-
     let items = data as LiveStream[];
     if (search) {
       const s = search.toLowerCase();
       items = items.filter((x) => String(x.name || "").toLowerCase().includes(s));
     }
-
-    const slice = items.slice(offset, offset + limit);
-    return slice.map((x) => {
-      const streamId = x.stream_id;
-      const base = session.server;
-      const url = streamId ? `${base}/live/${session.username}/${session.password}/${streamId}.ts` : null;
-      return {
-        ...x,
-        playback_url: url,
-      };
-    });
+    const slice = limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
+    return slice.map((x) => ({
+      ...x,
+      stream_id: Number(x.stream_id),
+    }));
   },
 
-  async vodCategories(session: XtreamSession): Promise<Category[]> {
-    const data = await callApi(session.server, session.username, session.password, "get_vod_categories");
-    return Array.isArray(data) ? data : [];
-  },
+  vodCategories: async (s: XtreamSession): Promise<Category[]> =>
+    asList(await callApi(s.server, s.username, s.password, "get_vod_categories")),
 
-  async vodStreams(
+  vodStreams: async (
     session: XtreamSession,
     category?: string,
     search?: string,
-    limit = 200,
-    offset = 0,
-  ): Promise<VodStream[]> {
+    limit?: number,
+    offset = 0
+  ): Promise<VodStream[]> => {
     const extra: Record<string, any> = {};
     if (category) extra.category_id = category;
-
     const data = await callApi(session.server, session.username, session.password, "get_vod_streams", extra);
     if (!Array.isArray(data)) return [];
-
     let items = data as VodStream[];
     if (search) {
       const s = search.toLowerCase();
       items = items.filter((x) => String(x.name || "").toLowerCase().includes(s));
     }
-
-    const slice = items.slice(offset, offset + limit);
-    return slice.map((x) => {
-      const streamId = x.stream_id;
-      const ext = x.container_extension || "mp4";
-      const base = session.server;
-      const url = streamId ? `${base}/movie/${session.username}/${session.password}/${streamId}.${ext}` : null;
-      return {
-        ...x,
-        playback_url: url,
-      };
-    });
+    const slice = limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
+    return slice.map((x) => ({
+      ...x,
+      stream_id: Number(x.stream_id),
+    }));
   },
 
-  async seriesCategories(session: XtreamSession): Promise<Category[]> {
-    const data = await callApi(session.server, session.username, session.password, "get_series_categories");
-    return Array.isArray(data) ? data : [];
-  },
+  vodInfo: async (s: XtreamSession, vodId: number | string): Promise<any> =>
+    callApi(s.server, s.username, s.password, "get_vod_info", { vod_id: vodId }),
 
-  async series(
+  seriesCategories: async (s: XtreamSession): Promise<Category[]> =>
+    asList(await callApi(s.server, s.username, s.password, "get_series_categories")),
+
+  series: async (
     session: XtreamSession,
     category?: string,
     search?: string,
-    limit = 200,
-    offset = 0,
-  ): Promise<SeriesItem[]> {
+    limit?: number,
+    offset = 0
+  ): Promise<SeriesItem[]> => {
     const extra: Record<string, any> = {};
     if (category) extra.category_id = category;
-
     const data = await callApi(session.server, session.username, session.password, "get_series", extra);
     if (!Array.isArray(data)) return [];
-
     let items = data as SeriesItem[];
     if (search) {
       const s = search.toLowerCase();
       items = items.filter((x) => String(x.name || "").toLowerCase().includes(s));
     }
+    return limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
+  },
 
-    return items.slice(offset, offset + limit);
+  seriesInfo: async (s: XtreamSession, seriesId: number | string): Promise<any> =>
+    callApi(s.server, s.username, s.password, "get_series_info", { series_id: seriesId }),
+
+  shortEpg: async (s: XtreamSession, streamId: number | string, limit = 4): Promise<EpgEntry[]> => {
+    try {
+      const d = await callApi(s.server, s.username, s.password, "get_short_epg", { stream_id: streamId, limit });
+      return asList(d?.epg_listings).map((e: any) => ({
+        ...e,
+        title: decodeB64(e.title),
+        description: decodeB64(e.description),
+        start_timestamp: Number(e.start_timestamp),
+        stop_timestamp: Number(e.stop_timestamp),
+      }));
+    } catch {
+      return [];
+    }
   },
 };
 
 export default xtream;
+
+function decodeB64(v: any): string {
+  if (!v) return "";
+  try {
+    const raw = typeof atob === "function" ? atob(String(v)) : String(v);
+    try { return decodeURIComponent(escape(raw)); } catch { return raw; }
+  } catch {
+    return String(v);
+  }
+}
+
+// ---------- formatting helpers ----------
+export function fmtUnixSP(ts?: string | number | null, withTime = true): string | null {
+  if (ts == null || ts === "" || ts === "null") return null;
+  const n = Number(ts);
+  if (!n || Number.isNaN(n)) return null;
+  const d = new Date(n * 1000);
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit", month: "2-digit", year: "numeric",
+      ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
+    }).format(d);
+  } catch {
+    return d.toLocaleString("pt-BR");
+  }
+}
+
+export function fmtTimeSP(ts?: number): string {
+  if (!ts) return "";
+  try {
+    return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(new Date(ts * 1000));
+  } catch {
+    const d = new Date(ts * 1000);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+}
