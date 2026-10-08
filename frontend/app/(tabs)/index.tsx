@@ -1,109 +1,371 @@
-// Configuração das ligas monitorizadas na ESPN
-const LIGAS_ESPN = [
-  { slug: 'bra.1', nome: 'Brasileirão Série A', canal: 'Premiere' },
-  { slug: 'bra.copa_do_brasil', nome: 'Copa do Brasil', canal: 'SporTV / Premiere' },
-  { slug: 'conmebol.libertadores', nome: 'Libertadores', canal: 'ESPN / Premiere' },
-  { slug: 'conmebol.sudamericana', nome: 'Sul-Americana', canal: 'ESPN' },
-  { slug: 'uefa.champions', nome: 'Champions League', canal: 'TNT Sports' },
-  { slug: 'eng.1', nome: 'Premier League', canal: 'ESPN' },
-  { slug: 'esp.1', nome: 'La Liga', canal: 'ESPN' },
-  { slug: 'ita.1', nome: 'Serie A', canal: 'ESPN' },
-];
+import { useCallback, useMemo, useState } from "react";
+import { View, Text, StyleSheet, Pressable, useWindowDimensions, ScrollView } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect, useRouter } from "expo-router";
+import Ionicons from "@react-native-vector-icons/ionicons";
+import { LinearGradient } from "expo-linear-gradient";
+import { Logo } from "../../src/components/Logo";
+import { GoldButton } from "../../src/components/GoldButton";
+import { TrendingMarquee, MarqueeItem } from "../../src/components/TrendingMarquee";
+import { colors, radius, spacing } from "../../src/utils/theme";
+import { listLists } from "../../src/utils/api";
+import { useSession } from "../../src/store/session";
 
-// Função que obtém a data de hoje no fuso horário do Brasil (AAAAMMDD)
-function obterDataBrasilia(): string {
-  const agora = new Date();
-  const utc = agora.getTime() + agora.getTimezoneOffset() * 60000;
-  const brt = new Date(utc - 3 * 3600000);
-  const ano = brt.getFullYear();
-  const mes = String(brt.getMonth() + 1).padStart(2, '0');
-  const dia = String(brt.getDate()).padStart(2, '0');
-  return `${ano}${mes}${dia}`;
-}
+const MAIN = [
+  { key: "live", label: "TV AO VIVO", sub: "Canais em tempo real", icon: "tv", path: "/(tabs)/live", testID: "home-live" },
+  { key: "movies", label: "FILMES", sub: "Catálogo On-Demand", icon: "film", path: "/(tabs)/movies", testID: "home-movies" },
+  { key: "series", label: "SÉRIES", sub: "Temporadas completas", icon: "albums", path: "/(tabs)/series", testID: "home-series" },
+] as const;
 
-// Função principal de busca direta na API da ESPN
-async function buscarJogosESPN(): Promise<Jogo[]> {
-  const dataHoje = obterDataBrasilia();
-  let idContador = 1;
+export default function HomeTab() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const session = useSession((s) => s.session);
+  const source = useSession((s) => s.source);
+  const setSource = useSession((s) => s.setSource);
+  const catalog = useSession((s) => s.catalog);
+  const loadVod = useSession((s) => s.loadVod);
+  const [hasLists, setHasLists] = useState(false);
 
-  try {
-    const requisicoes = LIGAS_ESPN.map(async (liga) => {
-      try {
-        const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${liga.slug}/scoreboard?dates=${dataHoje}`;
-        const res = await fetch(url);
-        if (!res.ok) return [];
-        const dados = await res.json();
-        const eventos = dados.events || [];
-
-        const jogosLiga: Jogo[] = [];
-        for (const ev of eventos) {
-          const comp = ev.competitions?.[0];
-          if (!comp || !comp.competitors || comp.competitors.length < 2) continue;
-
-          let casa = comp.competitors[0]?.team?.shortDisplayName || comp.competitors[0]?.team?.name || 'Time 1';
-          let fora = comp.competitors[1]?.team?.shortDisplayName || comp.competitors[1]?.team?.name || 'Time 2';
-
-          if (comp.competitors[0]?.homeAway !== 'home') {
-            const temp = casa;
-            casa = fora;
-            fora = temp;
-          }
-
-          let horario = 'A definir';
-          if (ev.date) {
-            try {
-              const dt = new Date(ev.date);
-              horario = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
-            } catch (e) {}
-          }
-
-          const aoVivo = comp.status?.type?.state === 'in';
-
-          let canal = liga.canal;
-          if (comp.broadcasts && comp.broadcasts.length > 0 && comp.broadcasts[0].names?.length > 0) {
-            canal = comp.broadcasts[0].names.join(' / ');
-          }
-
-          const estadio = comp.venue?.fullName || '';
-
-          jogosLiga.push({
-            id: String(idContador++),
-            campeonato: liga.nome,
-            time_casa: casa,
-            time_fora: fora,
-            horario,
-            ao_vivo: aoVivo,
-            estadio,
-            canal_nome: canal,
-          });
-        }
-        return jogosLiga;
-      } catch (e) {
-        return [];
+  // Carrega listas e catálogos em background
+  useFocusEffect(
+    useCallback(() => {
+      listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
+      if (source?.kind === "xtream" && !catalog.vodLoaded) {
+        loadVod();
       }
-    });
+    }, [source?.kind, catalog.vodLoaded, loadVod])
+  );
 
-    const resultados = await Promise.all(requisicoes);
-    const todosJogos = resultados.flat();
+  const hasContent = !!session || hasLists;
 
-    if (todosJogos.length > 0) {
-      return todosJogos;
-    }
-  } catch (erro) {
-    console.error('Erro ao consultar ESPN:', erro);
-  }
+  // Filtra até 15 títulos com capas válidas para a animação flutuante
+  const marqueeItems: MarqueeItem[] = useMemo(() => {
+    if (!catalog.vod || catalog.vod.length === 0) return [];
+    return catalog.vod
+      .filter((v) => !!v.stream_icon)
+      .slice(0, 15)
+      .map((v) => ({
+        id: String(v.stream_id),
+        name: v.name,
+        poster: v.stream_icon,
+        type: "movie",
+      }));
+  }, [catalog.vod]);
 
-  // Plano de contingência caso não haja partidas oficiais no dia
-  return [
-    {
-      id: '1',
-      campeonato: 'PROGRAMAÇÃO ESPORTIVA',
-      time_casa: 'Sem grandes jogos',
-      time_fora: 'agendados para hoje',
-      horario: '--:--',
-      ao_vivo: false,
-      estadio: 'Confira a grade ao vivo',
-      canal_nome: 'Canais Esportivos',
-    },
-  ];
+  const go = async (path: string) => {
+    if (session && source?.kind !== "list") await setSource({ kind: "xtream" });
+    router.push(path as any);
+  };
+
+  const handleOpenMarqueeItem = (item: MarqueeItem) => {
+    router.push({ pathname: "/movie/[id]", params: { id: item.id } });
+  };
+
+  return (
+    <ScrollView 
+      style={styles.root} 
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + 110 }]} 
+      testID="home-screen"
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Barra Superior */}
+      <View style={styles.topBar}>
+        <Logo size={105} />
+        <Pressable 
+          testID="home-search" 
+          onPress={() => router.push({ pathname: "/(tabs)/live", params: { focusSearch: "1" } })} 
+          hitSlop={8} 
+          style={({ focused, pressed }) => [styles.iconBtn, focused && styles.focused, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="search" size={22} color={colors.text} />
+        </Pressable>
+      </View>
+
+      {hasContent ? (
+        <View style={styles.mainContainer}>
+          {/* Banner Hero */}
+          <View style={styles.heroBanner}>
+            <LinearGradient
+              colors={["#1C180E", "#151722", "#090A0E"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroGradient}
+            />
+            
+            <View style={styles.heroOverlayContent}>
+              <View style={styles.heroTag}>
+                <Ionicons name="sparkles" size={12} color={colors.gold} />
+                <Text style={styles.heroTagText}>GOLDCAST PREMIUM</Text>
+              </View>
+              
+              <Text style={styles.heroTitle}>Entretenimento Ilimitado</Text>
+              <Text style={styles.heroSubtitle}>
+                Aceda à grelha completa de canais ao vivo, filmes em alta definição e séries atualizadas.
+              </Text>
+
+              <View style={styles.heroActions}>
+                <Pressable 
+                  style={({ pressed }) => [styles.heroPrimaryBtn, pressed && { opacity: 0.85 }]} 
+                  onPress={() => go("/(tabs)/live")}
+                >
+                  <Ionicons name="play" size={16} color={colors.onGold} />
+                  <Text style={styles.heroPrimaryText}>Assistir TV</Text>
+                </Pressable>
+
+                <Pressable 
+                  style={({ pressed }) => [styles.heroSecondaryBtn, pressed && { opacity: 0.85 }]} 
+                  onPress={() => go("/(tabs)/movies")}
+                >
+                  <Ionicons name="film-outline" size={16} color={colors.text} />
+                  <Text style={styles.heroSecondaryText}>Ver Filmes</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+
+          {/* Navegação Principal */}
+          <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
+
+          <View style={styles.gridNav}>
+            {MAIN.map((m) => (
+              <Pressable
+                key={m.key}
+                testID={m.testID}
+                onPress={() => go(m.path)}
+                hasTVPreferredFocus={m.key === "live"}
+                style={({ focused, pressed }) => [
+                  styles.navCard,
+                  focused && styles.navCardFocused,
+                  pressed && { transform: [{ scale: 0.98 }], opacity: 0.9 }
+                ]}
+              >
+                <View style={styles.navCardIconBox}>
+                  <Ionicons name={m.icon as any} size={28} color={colors.gold} />
+                </View>
+                <View style={styles.navCardTextBox}>
+                  <Text style={styles.navCardTitle}>{m.label}</Text>
+                  <Text style={styles.navCardSub}>{m.sub}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Atalhos Rápidos */}
+          <View style={styles.quickActionsRow}>
+            <SmallTile testID="home-favorites" icon="star-outline" label="Favoritos" onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })} />
+            <SmallTile testID="home-account" icon="person-outline" label="Conta" onPress={() => router.push(session ? "/(tabs)/settings" : "/login")} />
+            <SmallTile testID="home-settings" icon="settings-outline" label="Ajustes" onPress={() => router.push("/(tabs)/settings")} />
+          </View>
+
+          {/* Letreiro Flutuante Animado com Capas em Movimento Contínuo */}
+          {marqueeItems.length > 0 && (
+            <TrendingMarquee 
+              items={marqueeItems} 
+              onPressItem={handleOpenMarqueeItem} 
+            />
+          )}
+        </View>
+      ) : (
+        <View style={styles.loggedOutBox}>
+          <Text style={styles.brand}>GoldCast Streaming</Text>
+          <Text style={styles.hint}>Inicie sessão com os dados fornecidos pelo seu serviço para carregar a programação.</Text>
+          <GoldButton testID="home-login" label="ENTRAR NO SERVIÇO" icon={<Ionicons name="log-in-outline" size={20} color={colors.onGold} />} onPress={() => router.push("/login")} style={{ alignSelf: "stretch", marginTop: spacing.md }} />
+          <GoldButton testID="add-list-primary" label="ADICIONAR LISTA M3U" variant="outline" icon={<Ionicons name="add-circle" size={20} color={colors.gold} />} onPress={() => router.push("/add-list")} style={{ alignSelf: "stretch" }} />
+        </View>
+      )}
+    </ScrollView>
+  );
 }
+
+function SmallTile({ icon, label, onPress, testID }: { icon: any; label: string; onPress: () => void; testID: string }) {
+  return (
+    <Pressable testID={testID} onPress={onPress} style={({ focused, pressed }) => [styles.tile, focused && styles.tileFocused, pressed && { opacity: 0.8 }]}>
+      <Ionicons name={icon} size={20} color={colors.gold} />
+      <Text style={styles.tileLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg },
+  content: { paddingHorizontal: spacing.lg },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md },
+  iconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  
+  mainContainer: { gap: spacing.lg },
+
+  heroBanner: {
+    borderRadius: 14,
+    overflow: "hidden",
+    position: "relative",
+    borderWidth: 1,
+    borderColor: "rgba(229, 169, 59, 0.25)",
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  heroGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroOverlayContent: {
+    padding: 20,
+    gap: 8,
+  },
+  heroTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(229, 169, 59, 0.15)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+  },
+  heroTagText: {
+    color: colors.gold,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  heroTitle: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    marginTop: 2,
+  },
+  heroSubtitle: {
+    color: colors.textMuted,
+    fontSize: 12.5,
+    lineHeight: 18,
+    maxWidth: "92%",
+  },
+  heroActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+  },
+  heroPrimaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.gold,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: radius.sm,
+  },
+  heroPrimaryText: {
+    color: colors.onGold,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  heroSecondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.12)",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: radius.sm,
+  },
+  heroSecondaryText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  sectionHeader: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginTop: 6,
+    marginBottom: -6,
+  },
+  gridNav: {
+    gap: 10,
+  },
+  navCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 14,
+  },
+  navCardFocused: {
+    borderColor: colors.gold,
+    borderWidth: 2,
+    backgroundColor: colors.surface2,
+    transform: [{ scale: 1.02 }],
+  },
+  navCardIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: "rgba(229, 169, 59, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  navCardTextBox: {
+    flex: 1,
+  },
+  navCardTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  navCardSub: {
+    color: colors.textMuted,
+    fontSize: 11.5,
+    marginTop: 2,
+  },
+
+  quickActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  tile: {
+    flex: 1,
+    flexDirection: "row",
+    height: 44,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  tileFocused: {
+    borderColor: colors.gold,
+    borderWidth: 2,
+  },
+  tileLabel: {
+    color: colors.text,
+    fontSize: 11.5,
+    fontWeight: "600",
+  },
+
+  loggedOutBox: {
+    width: "100%",
+    maxWidth: 420,
+    gap: spacing.md,
+    alignItems: "center",
+    alignSelf: "center",
+    marginTop: 40,
+  },
+  brand: { color: colors.gold, fontSize: 26, fontWeight: "800", letterSpacing: 0.6 },
+  hint: { color: colors.textMuted, fontSize: 14, textAlign: "center", lineHeight: 20 },
+  focused: { borderWidth: 2, borderColor: colors.gold },
+});
