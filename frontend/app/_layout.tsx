@@ -32,7 +32,7 @@ const _WARM = [
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-// TRAVA DE PARCERIA EMBUTIDA (SEM ERRO DE IMPORTAÇÃO DE ARQUIVO)
+// TRAVA DE PARCERIA EMBUTIDA
 function PartnerLock() {
   const [bloqueado, setBloqueado] = useState(false);
   const [verificandoInicial, setVerificandoInicial] = useState(true);
