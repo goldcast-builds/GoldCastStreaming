@@ -13,7 +13,7 @@ export const DEFAULT_SERVERS = {
 
 const BACKEND = process.env.EXPO_PUBLIC_BACKEND_URL;
 const TIMEOUT_MS = 25000;
-const UA = "GoldCastStreaming/1.0";
+const UA = "IPTVSmartersPro";
 
 export class XtreamError extends Error {
   kind: "network" | "auth" | "expired" | "incompatible" | "blocked";
