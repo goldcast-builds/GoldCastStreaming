@@ -1,0 +1,32 @@
+[
+  {
+    "id": "1",
+    "campeonato": "Brasileirão Série A",
+    "time_casa": "Flamengo",
+    "time_fora": "Palmeiras",
+    "horario": "21:30",
+    "ao_vivo": false,
+    "estadio": "Maracanã",
+    "canal_nome": "Premiere"
+  },
+  {
+    "id": "2",
+    "campeonato": "Champions League",
+    "time_casa": "Real Madrid",
+    "time_fora": "Manchester City",
+    "horario": "16:00",
+    "ao_vivo": true,
+    "estadio": "Santiago Bernabéu",
+    "canal_nome": "TNT"
+  },
+  {
+    "id": "3",
+    "campeonato": "Libertadores",
+    "time_casa": "São Paulo",
+    "time_fora": "River Plate",
+    "horario": "19:00",
+    "ao_vivo": false,
+    "estadio": "Morumbis",
+    "canal_nome": "ESPN"
+  }
+]
