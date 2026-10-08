@@ -11,12 +11,15 @@ import { colors, radius, spacing } from "../../src/utils/theme";
 import { listLists } from "../../src/utils/api";
 import { useSession } from "../../src/store/session";
 
-// Importa os jogos do ficheiro JSON criado com salvaguarda
-let JOGOS_DATA: any[] = [];
+// URL para carregar os jogos diretamente do repositório em tempo real
+const JOGOS_ONLINE_URL = "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/frontend/src/data/jogos.json";
+
+// Dados de reserva caso o telemóvel esteja sem ligação à rede
+let DEFAULT_JOGOS: any[] = [];
 try {
-  JOGOS_DATA = require("../../src/data/jogos.json");
+  DEFAULT_JOGOS = require("../../src/data/jogos.json");
 } catch {
-  JOGOS_DATA = [
+  DEFAULT_JOGOS = [
     {
       id: "1",
       campeonato: "Brasileirão Série A",
@@ -45,7 +48,10 @@ export default function HomeTab() {
   const loadVod = useSession((s) => s.loadVod);
   const [hasLists, setHasLists] = useState(false);
 
-  // Relógio digital em tempo real
+  // Estado dos jogos com carregamento dinâmico
+  const [jogos, setJogos] = useState<any[]>(DEFAULT_JOGOS);
+
+  // Relógio digital síncrono
   const [currentTime, setCurrentTime] = useState(() => {
     const now = new Date();
     return now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -59,6 +65,23 @@ export default function HomeTab() {
     return () => clearInterval(timer);
   }, []);
 
+  // Procura a lista atualizada de jogos online na nuvem
+  const fetchJogosOnline = useCallback(async () => {
+    try {
+      const res = await fetch(`${JOGOS_ONLINE_URL}?t=${Date.now()}`, {
+        headers: { Accept: "application/json" },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setJogos(data);
+        }
+      }
+    } catch {
+      // Mantém a lista atual em caso de falha de ligação
+    }
+  }, []);
+
   // Cálculo dos dias restantes de acesso
   const expDays = useMemo(() => {
     const exp = session?.userInfo?.exp_date;
@@ -70,19 +93,20 @@ export default function HomeTab() {
     return days > 0 ? days : 0;
   }, [session?.userInfo?.exp_date]);
 
-  // Carrega listas e catálogos em segundo plano
+  // Carregamento de dados em segundo plano
   useFocusEffect(
     useCallback(() => {
       listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
       if (source?.kind === "xtream" && !catalog.vodLoaded) {
         loadVod();
       }
-    }, [source?.kind, catalog.vodLoaded, loadVod])
+      fetchJogosOnline();
+    }, [source?.kind, catalog.vodLoaded, loadVod, fetchJogosOnline])
   );
 
   const hasContent = !!session || hasLists;
 
-  // Filtra até 15 títulos com capas válidas para a animação flutuante
+  // Letreiro de capas
   const marqueeItems: MarqueeItem[] = useMemo(() => {
     if (!catalog.vod || catalog.vod.length === 0) return [];
     return catalog.vod
@@ -96,9 +120,13 @@ export default function HomeTab() {
       }));
   }, [catalog.vod]);
 
-  const go = async (path: string) => {
+  const go = async (path: string, params?: Record<string, any>) => {
     if (session && source?.kind !== "list") await setSource({ kind: "xtream" });
-    router.push(path as any);
+    if (params) {
+      router.push({ pathname: path as any, params });
+    } else {
+      router.push(path as any);
+    }
   };
 
   const handleOpenMarqueeItem = (item: MarqueeItem) => {
@@ -112,7 +140,7 @@ export default function HomeTab() {
       testID="home-screen"
       showsVerticalScrollIndicator={false}
     >
-      {/* Barra Superior Renovada */}
+      {/* Barra Superior */}
       <View style={styles.topBar}>
         <View style={styles.topBarLeft}>
           <Logo size={88} />
@@ -146,14 +174,16 @@ export default function HomeTab() {
 
       {hasContent ? (
         <View style={styles.mainContainer}>
-          {/* Central Esportiva: Jogos de Hoje */}
+          {/* Central de Jogos do Dia */}
           <View style={styles.sportsSection}>
             <View style={styles.sportsHeaderRow}>
               <View style={styles.sportsHeaderTag}>
                 <Ionicons name="football" size={13} color={colors.gold} />
                 <Text style={styles.sportsHeaderTagText}>JOGOS DE HOJE & TRANSMISSÃO</Text>
               </View>
-              <Text style={styles.sportsCountText}>{JOGOS_DATA.length} partidas</Text>
+              <Text style={styles.sportsCountText}>
+                {jogos.length} {jogos.length === 1 ? "partida" : "partidas"}
+              </Text>
             </View>
 
             <ScrollView 
@@ -161,7 +191,7 @@ export default function HomeTab() {
               showsHorizontalScrollIndicator={false} 
               contentContainerStyle={styles.gamesScroll}
             >
-              {JOGOS_DATA.map((jogo: any) => (
+              {jogos.map((jogo: any) => (
                 <View key={jogo.id} style={styles.gameCard}>
                   <LinearGradient
                     colors={["#201B11", "#151722", "#0C0D12"]}
@@ -210,7 +240,7 @@ export default function HomeTab() {
 
                   <Pressable 
                     style={({ pressed }) => [styles.tuneBtn, pressed && { opacity: 0.85 }]}
-                    onPress={() => go("/(tabs)/live")}
+                    onPress={() => go("/(tabs)/live", { search: jogo.canal_nome || "" })}
                   >
                     <Ionicons name="play" size={13} color={colors.onGold} />
                     <Text style={styles.tuneBtnText}>SINTONIZAR CANAL</Text>
@@ -255,7 +285,7 @@ export default function HomeTab() {
             <SmallTile testID="home-settings" icon="settings-outline" label="Ajustes" onPress={() => router.push("/(tabs)/settings")} />
           </View>
 
-          {/* Letreiro Flutuante Animado com Capas em Movimento */}
+          {/* Letreiro Flutuante */}
           {marqueeItems.length > 0 && (
             <TrendingMarquee 
               items={marqueeItems} 
@@ -288,7 +318,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: spacing.lg },
   
-  // Barra Superior
   topBar: { 
     flexDirection: "row", 
     alignItems: "center", 
@@ -361,7 +390,6 @@ const styles = StyleSheet.create({
 
   mainContainer: { gap: spacing.lg },
 
-  // Secção Desportiva
   sportsSection: {
     gap: 10,
   },
