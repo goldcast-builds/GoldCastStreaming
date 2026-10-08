@@ -10,7 +10,6 @@ import { PartnerLock } from "../src/components/PartnerLock";
 
 LogBox.ignoreAllLogs(true);
 
-// Prewarm the logo icon so it's cached across screens (asset icon fix)
 const _WARM = [
   require("../assets/images/goldcast-logo.png"),
   require("../assets/images/icon.png"),
@@ -21,14 +20,12 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 export default function RootLayout() {
   useEffect(() => {
     useSession.getState().restore();
-    // Prewarm assets: force resolveAssetSource and prefetch when on web
     _WARM.forEach((a) => {
       try {
         const uri = Image.resolveAssetSource(a)?.uri;
         if (uri && Platform.OS === "web") Image.prefetch(uri);
       } catch {}
     });
-    // Hide native splash quickly; JS splash screen takes over
     const t = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 100);
     return () => clearTimeout(t);
   }, []);
@@ -61,7 +58,7 @@ export default function RootLayout() {
               />
             </Stack>
 
-            {/* Trava de Parcerias Exclusivas */}
+            {/* Trava de Parcerias */}
             <PartnerLock />
           </View>
         </BottomSheetModalProvider>
