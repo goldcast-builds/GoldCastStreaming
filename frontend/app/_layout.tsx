@@ -6,6 +6,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useEffect } from "react";
 import * as SplashScreen from "expo-splash-screen";
 import { useSession } from "../src/store/session";
+import { PartnerLock } from "../src/components/PartnerLock";
 
 LogBox.ignoreAllLogs(true);
 
@@ -59,6 +60,9 @@ export default function RootLayout() {
                 options={{ presentation: "fullScreenModal", animation: "fade" }}
               />
             </Stack>
+
+            {/* Trava de Parcerias Exclusivas */}
+            <PartnerLock />
           </View>
         </BottomSheetModalProvider>
       </GestureHandlerRootView>
