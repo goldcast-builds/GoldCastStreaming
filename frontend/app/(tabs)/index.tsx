@@ -23,10 +23,36 @@ export default function HomeTab() {
   const setSource = useSession((s) => s.setSource);
   const catalog = useSession((s) => s.catalog);
   const loadVod = useSession((s) => s.loadVod);
+  const progressMap = useSession((s) => s.ud?.progress);
+  const setQueue = useSession((s) => (s as any).setQueue);
+  const setQueueIndex = useSession((s) => s.setQueueIndex);
+
   const [hasLists, setHasLists] = useState(false);
   const [jogosChannels, setJogosChannels] = useState<LiveStream[]>([]);
   const [jogosCatId, setJogosCatId] = useState<string | null>(null);
+  const [bubbleDismissed, setBubbleDismissed] = useState(false);
+  const [bubbleOpen, setBubbleOpen] = useState(false);
+
   const blinkAnim = useRef(new Animated.Value(1)).current;
+  const bubbleAnim = useRef(new Animated.Value(0)).current;
+
+  // Localiza o último filme/série em andamento
+  const resumeItem = useMemo(() => {
+    if (!progressMap) return null;
+    const list = Object.values(progressMap).filter(
+      (p: any) => p && p.duration > 60 && p.position > 25 && p.position < p.duration - 40
+    );
+    if (!list.length) return null;
+    const latest: any = list[list.length - 1];
+    const pct = Math.min(100, Math.round((latest.position / latest.duration) * 100));
+    return { ...latest, pct };
+  }, [progressMap]);
+
+  useEffect(() => {
+    if (resumeItem && !bubbleDismissed) {
+      Animated.spring(bubbleAnim, { toValue: 1, friction: 6, tension: 40, useNativeDriver: true }).start();
+    }
+  }, [resumeItem, bubbleDismissed, bubbleAnim]);
 
   useEffect(() => {
     if (!session) return;
@@ -85,28 +111,19 @@ export default function HomeTab() {
   const statusConfig = useMemo(() => {
     if (isExpired || daysLeft <= 1) {
       return {
-        color: "#EF4444",
-        bg: "rgba(239, 68, 68, 0.16)",
-        border: "rgba(239, 68, 68, 0.6)",
-        text: isExpired ? "PLANO VENCIDO" : daysLeft === 1 ? "1 DIA RESTANTE" : "VENCE HOJE",
-        icon: "alert-circle",
+        color: "#EF4444", bg: "rgba(239, 68, 68, 0.16)", border: "rgba(239, 68, 68, 0.6)",
+        text: isExpired ? "PLANO VENCIDO" : daysLeft === 1 ? "1 DIA RESTANTE" : "VENCE HOJE", icon: "alert-circle",
       };
     }
     if (daysLeft >= 2 && daysLeft <= 5) {
       return {
-        color: "#F59E0B",
-        bg: "rgba(245, 158, 11, 0.16)",
-        border: "rgba(245, 158, 11, 0.6)",
-        text: `${daysLeft} DIAS RESTANTES`,
-        icon: "time",
+        color: "#F59E0B", bg: "rgba(245, 158, 11, 0.16)", border: "rgba(245, 158, 11, 0.6)",
+        text: `${daysLeft} DIAS RESTANTES`, icon: "time",
       };
     }
     return {
-      color: "#10B981",
-      bg: "rgba(16, 185, 129, 0.16)",
-      border: "rgba(16, 185, 129, 0.6)",
-      text: `${daysLeft} DIAS RESTANTES`,
-      icon: "checkmark-circle",
+      color: "#10B981", bg: "rgba(16, 185, 129, 0.16)", border: "rgba(16, 185, 129, 0.6)",
+      text: `${daysLeft} DIAS RESTANTES`, icon: "checkmark-circle",
     };
   }, [daysLeft, isExpired]);
 
@@ -128,108 +145,186 @@ export default function HomeTab() {
     router.push({ pathname: "/(tabs)/live", params: { cat: jogosCatId || undefined, channelId: String(channel.stream_id) } });
   };
 
+  const handleResumePlayback = () => {
+    if (!resumeItem) return;
+    if (resumeItem.item && setQueue) {
+      setQueue([resumeItem.item]);
+      setQueueIndex(0);
+      router.push("/player" as any);
+    } else if (resumeItem.item?.id) {
+      router.push({ pathname: "/movie/[id]", params: { id: resumeItem.item.id } });
+    }
+  };
+
   return (
-    <ScrollView 
-      style={styles.root} 
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + 120 }]} 
-      showsVerticalScrollIndicator={false}
-    >
-      {hasContent ? (
-        <View style={styles.mainContainer}>
-          <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
+    <View style={styles.root}>
+      <ScrollView 
+        style={styles.root} 
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + 120 }]} 
+        showsVerticalScrollIndicator={false}
+      >
+        {hasContent ? (
+          <View style={styles.mainContainer}>
+            <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
 
-          <View style={styles.gridNav}>
-            {MAIN.map((m) => (
-              <Pressable
-                key={m.key}
-                onPress={() => go(m.path)}
-                hasTVPreferredFocus={m.key === "live"}
-                style={({ focused, pressed }) => [styles.navCard, focused && styles.navCardFocused, pressed && { transform: [{ scale: 0.98 }] }]}
-              >
-                <View style={styles.navCardIconBox}>
-                  <Ionicons name={m.icon as any} size={28} color={colors.gold} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.navCardTitle}>{m.label}</Text>
-                  <Text style={styles.navCardSub}>{m.sub}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
-              </Pressable>
-            ))}
-          </View>
-
-          <View style={styles.quickRow}>
-            <SmallTile icon="star-outline" label="Favoritos" onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })} />
-            <SmallTile icon="person-outline" label="Conta" onPress={() => router.push(session ? "/(tabs)/settings" : "/login")} />
-            <SmallTile icon="settings-outline" label="Ajustes" onPress={() => router.push("/(tabs)/settings")} />
-          </View>
-
-          {jogosChannels.length > 0 && (
-            <View style={{ gap: 8 }}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.sectionTitle}>⚽ JOGOS DO DIA</Text>
-                <View style={styles.badgeLive}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.badgeLiveText}>AO VIVO</Text>
-                </View>
-              </View>
-              <JogosMarqueeReverse channels={jogosChannels} onPressChannel={handleOpenChannel} />
-            </View>
-          )}
-
-          {marqueeItems.length > 0 && (
-            <View style={{ gap: 8 }}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.sectionTitle}>🔥 NOVIDADES & DESTAQUES</Text>
-                <Text style={styles.badgeTextSmall}>EM ALTA</Text>
-              </View>
-              <TrendingMarquee items={marqueeItems} onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })} />
-            </View>
-          )}
-
-          {session && (
-            <View style={styles.planCard}>
-              <View style={styles.rowBetween}>
-                <View style={{ gap: 2 }}>
-                  <Text style={styles.planLabel}>USUÁRIO</Text>
-                  <View style={styles.rowAlign}>
-                    <Ionicons name="person-circle-outline" size={16} color={colors.gold} />
-                    <Text style={styles.planVal}>{username}</Text>
+            <View style={styles.gridNav}>
+              {MAIN.map((m) => (
+                <Pressable
+                  key={m.key}
+                  onPress={() => go(m.path)}
+                  hasTVPreferredFocus={m.key === "live"}
+                  style={({ focused, pressed }) => [styles.navCard, focused && styles.navCardFocused, pressed && { transform: [{ scale: 0.98 }] }]}
+                >
+                  <View style={styles.navCardIconBox}>
+                    <Ionicons name={m.icon as any} size={28} color={colors.gold} />
                   </View>
-                </View>
-                <View style={{ alignItems: "flex-end", gap: 2 }}>
-                  <Text style={styles.planLabel}>VENCIMENTO</Text>
-                  <View style={styles.rowAlign}>
-                    <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
-                    <Text style={styles.planVal}>{expFormatted}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={[styles.daysBadge, { backgroundColor: statusConfig.bg, borderColor: statusConfig.border }]}>
-                <Ionicons name={statusConfig.icon as any} size={18} color={statusConfig.color} />
-                <Text style={[styles.daysBadgeText, { color: statusConfig.color }]}>{statusConfig.text}</Text>
-              </View>
-
-              {isExpired && (
-                <Animated.View style={[styles.expiredBanner, { opacity: blinkAnim }]}>
-                  <Ionicons name="warning" size={20} color="#EF4444" />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.expiredTitle}>PLANO EXPIRADO!</Text>
-                    <Text style={styles.expiredSub}>Entre em contato com o vendedor para renovar seu acesso.</Text>
+                    <Text style={styles.navCardTitle}>{m.label}</Text>
+                    <Text style={styles.navCardSub}>{m.sub}</Text>
                   </View>
-                </Animated.View>
-              )}
+                  <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={styles.quickRow}>
+              <SmallTile icon="star-outline" label="Favoritos" onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })} />
+              <SmallTile icon="person-outline" label="Conta" onPress={() => router.push(session ? "/(tabs)/settings" : "/login")} />
+              <SmallTile icon="settings-outline" label="Ajustes" onPress={() => router.push("/(tabs)/settings")} />
+            </View>
+
+            {jogosChannels.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.sectionTitle}>⚽ JOGOS DO DIA</Text>
+                  <View style={styles.badgeLive}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.badgeLiveText}>AO VIVO</Text>
+                  </View>
+                </View>
+                <JogosMarqueeReverse channels={jogosChannels} onPressChannel={handleOpenChannel} />
+              </View>
+            )}
+
+            {marqueeItems.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.sectionTitle}>🔥 NOVIDADES & DESTAQUES</Text>
+                  <Text style={styles.badgeTextSmall}>EM ALTA</Text>
+                </View>
+                <TrendingMarquee items={marqueeItems} onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })} />
+              </View>
+            )}
+
+            {session && (
+              <View style={styles.planCard}>
+                <View style={styles.rowBetween}>
+                  <View style={{ gap: 2 }}>
+                    <Text style={styles.planLabel}>USUÁRIO</Text>
+                    <View style={styles.rowAlign}>
+                      <Ionicons name="person-circle-outline" size={16} color={colors.gold} />
+                      <Text style={styles.planVal}>{username}</Text>
+                    </View>
+                  </View>
+                  <View style={{ alignItems: "flex-end", gap: 2 }}>
+                    <Text style={styles.planLabel}>VENCIMENTO</Text>
+                    <View style={styles.rowAlign}>
+                      <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
+                      <Text style={styles.planVal}>{expFormatted}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={[styles.daysBadge, { backgroundColor: statusConfig.bg, borderColor: statusConfig.border }]}>
+                  <Ionicons name={statusConfig.icon as any} size={18} color={statusConfig.color} />
+                  <Text style={[styles.daysBadgeText, { color: statusConfig.color }]}>{statusConfig.text}</Text>
+                </View>
+
+                {isExpired && (
+                  <Animated.View style={[styles.expiredBanner, { opacity: blinkAnim }]}>
+                    <Ionicons name="warning" size={20} color="#EF4444" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.expiredTitle}>PLANO EXPIRADO!</Text>
+                      <Text style={styles.expiredSub}>Entre em contato com o vendedor para renovar seu acesso.</Text>
+                    </View>
+                  </Animated.View>
+                )}
+              </View>
+            )}
+          </View>
+        ) : (
+          <View style={styles.loggedOutBox}>
+            <Text style={styles.brand}>GoldCast Streaming</Text>
+            <Text style={styles.hint}>Inicie sessão para carregar a programação.</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* BALÃO FLUTUANTE ESTILO MESSENGER: CONTINUAR ASSISTINDO */}
+      {resumeItem && !bubbleDismissed && (
+        <Animated.View
+          style={[
+            styles.floatingContainer,
+            {
+              bottom: insets.bottom + 90,
+              transform: [{ scale: bubbleAnim }],
+              opacity: bubbleAnim,
+            },
+          ]}
+        >
+          {bubbleOpen && (
+            <View style={styles.bubbleCard}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.bubbleCardTag}>CONTINUAR ASSISTINDO</Text>
+                <Pressable onPress={() => setBubbleOpen(false)} hitSlop={8}>
+                  <Ionicons name="close" size={16} color={colors.textDim} />
+                </Pressable>
+              </View>
+              <Text style={styles.bubbleCardTitle} numberOfLines={1}>{resumeItem.title}</Text>
+              <View style={styles.bubbleProgressTrack}>
+                <View style={[styles.bubbleProgressFill, { width: `${resumeItem.pct}%` }]} />
+              </View>
+              <View style={styles.rowBetween}>
+                <Text style={styles.bubbleCardPct}>{resumeItem.pct}% concluído</Text>
+                <Pressable onPress={handleResumePlayback} style={styles.bubblePlayBtn}>
+                  <Ionicons name="play" size={13} color={colors.onGold} />
+                  <Text style={styles.bubblePlayBtnText}>RETOMAR</Text>
+                </Pressable>
+              </View>
             </View>
           )}
-        </View>
-      ) : (
-        <View style={styles.loggedOutBox}>
-          <Text style={styles.brand}>GoldCast Streaming</Text>
-          <Text style={styles.hint}>Inicie sessão para carregar a programação.</Text>
-        </View>
+
+          <View style={styles.bubbleRow}>
+            <Pressable onPress={() => setBubbleOpen(!bubbleOpen)} style={styles.bubbleHead}>
+              {resumeItem.logo ? (
+                <Image source={{ uri: resumeItem.logo }} style={styles.bubbleImage} resizeMode="cover" />
+              ) : (
+                <View style={[styles.bubbleImage, styles.center, { backgroundColor: "#1C180E" }]}>
+                  <Ionicons name="film" size={26} color={colors.gold} />
+                </View>
+              )}
+              <View style={styles.bubbleBadgePlay}>
+                <Ionicons name="play" size={10} color={colors.onGold} />
+              </View>
+              <View style={styles.bubbleBadgePct}>
+                <Text style={styles.bubbleBadgePctText}>{resumeItem.pct}%</Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setBubbleOpen(false);
+                setBubbleDismissed(true);
+              }}
+              style={styles.bubbleCloseBtn}
+              hitSlop={6}
+            >
+              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.7)" />
+            </Pressable>
+          </View>
+        </Animated.View>
       )}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -333,5 +428,68 @@ const styles = StyleSheet.create({
   loggedOutBox: { width: "100%", maxWidth: 420, gap: spacing.md, alignItems: "center", alignSelf: "center", marginTop: 40 },
   brand: { color: colors.gold, fontSize: 26, fontWeight: "800" },
   hint: { color: colors.textMuted, fontSize: 14, textAlign: "center" },
+
+  /* Balão Messenger Flutuante */
+  floatingContainer: { position: "absolute", right: 18, alignItems: "flex-end", zIndex: 999 },
+  bubbleRow: { flexDirection: "row", alignItems: "flex-start", gap: 4 },
+  bubbleHead: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 2.5,
+    borderColor: colors.gold,
+    backgroundColor: "#161820",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bubbleImage: { width: 56, height: 56, borderRadius: 28 },
+  bubbleBadgePlay: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#090A0E",
+  },
+  bubbleBadgePct: {
+    position: "absolute",
+    top: -4,
+    left: -4,
+    backgroundColor: "#090A0E",
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  bubbleBadgePctText: { color: colors.gold, fontSize: 8.5, fontWeight: "800" },
+  bubbleCloseBtn: { marginTop: -4, marginLeft: -4 },
+  bubbleCard: {
+    width: 220,
+    backgroundColor: "#151722",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(229,169,59,0.3)",
+    padding: 10,
+    marginBottom: 8,
+    gap: 6,
+    elevation: 8,
+  },
+  bubbleCardTag: { color: colors.gold, fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
+  bubbleCardTitle: { color: colors.text, fontSize: 12, fontWeight: "700" },
+  bubbleProgressTrack: { height: 4, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 2, overflow: "hidden" },
+  bubbleProgressFill: { height: "100%", backgroundColor: colors.gold },
+  bubbleCardPct: { color: colors.textMuted, fontSize: 10 },
+  bubblePlayBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.gold, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
+  bubblePlayBtnText: { color: colors.onGold, fontSize: 10, fontWeight: "800" },
 });
-      
