@@ -7,6 +7,7 @@ import {
   ScrollView,
   Animated,
   Easing,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -15,95 +16,7 @@ import { TrendingMarquee, MarqueeItem } from "../../src/components/TrendingMarqu
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { listLists } from "../../src/utils/api";
 import { useSession } from "../../src/store/session";
-
-interface Jogo {
-  id: string;
-  campeonato: string;
-  time_casa: string;
-  time_fora: string;
-  horario: string;
-  ao_vivo: boolean;
-  canal_nome: string;
-}
-
-const LIGAS = [
-  { slug: "bra.1", nome: "Brasileirão", canal: "Premiere" },
-  { slug: "bra.copa_do_brasil", nome: "Copa do Brasil", canal: "SporTV / Premiere" },
-  { slug: "conmebol.libertadores", nome: "Libertadores", canal: "ESPN / Premiere" },
-  { slug: "conmebol.sudamericana", nome: "Sul-Americana", canal: "ESPN" },
-  { slug: "uefa.champions", nome: "Champions League", canal: "TNT Sports" },
-  { slug: "eng.1", nome: "Premier League", canal: "ESPN" },
-  { slug: "esp.1", nome: "La Liga", canal: "ESPN" },
-  { slug: "ita.1", nome: "Serie A", canal: "ESPN" },
-];
-
-function getHoje(): string {
-  const d = new Date(Date.now() - 3 * 3600000);
-  return d.toISOString().slice(0, 10).replace(/-/g, "");
-}
-
-async function buscarJogos(): Promise<Jogo[]> {
-  const data = getHoje();
-  let count = 1;
-  try {
-    const reqs = LIGAS.map(async (l) => {
-      try {
-        const res = await fetch(
-          `https://site.api.espn.com/apis/site/v2/sports/soccer/${l.slug}/scoreboard?dates=${data}`
-        );
-        if (!res.ok) return [];
-        const json = await res.json();
-        const lista: Jogo[] = [];
-        for (const ev of json.events || []) {
-          const comp = ev.competitions?.[0];
-          if (!comp?.competitors || comp.competitors.length < 2) continue;
-          let c = comp.competitors[0]?.team?.shortDisplayName || comp.competitors[0]?.team?.name || "Time 1";
-          let f = comp.competitors[1]?.team?.shortDisplayName || comp.competitors[1]?.team?.name || "Time 2";
-          if (comp.competitors[0]?.homeAway !== "home") {
-            const t = c; c = f; f = t;
-          }
-          let hora = "A definir";
-          if (ev.date) {
-            try {
-              hora = new Date(ev.date).toLocaleTimeString("pt-BR", {
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "America/Sao_Paulo",
-              });
-            } catch {}
-          }
-          let canal = l.canal;
-          if (comp.broadcasts?.[0]?.names?.length) canal = comp.broadcasts[0].names.join(" / ");
-          lista.push({
-            id: String(count++),
-            campeonato: l.nome,
-            time_casa: c,
-            time_fora: f,
-            horario: hora,
-            ao_vivo: comp.status?.type?.state === "in",
-            canal_nome: canal,
-          });
-        }
-        return lista;
-      } catch {
-        return [];
-      }
-    });
-    const res = (await Promise.all(reqs)).flat();
-    if (res.length > 0) return res;
-  } catch {}
-  return [
-    {
-      id: "1",
-      campeonato: "FUTEBOL NA TV",
-      time_casa: "Sem grandes jogos",
-      time_fora: "agendados para hoje",
-      horario: "--:--",
-      ao_vivo: false,
-      canal_nome: "Canais Esportivos",
-    },
-  ];
-}
+import { xtream, LiveStream, Category } from "../../src/services/xtream";
 
 const MAIN = [
   { key: "live", label: "TV AO VIVO", sub: "Canais em tempo real", icon: "tv", path: "/(tabs)/live", testID: "home-live" },
@@ -120,21 +33,54 @@ export default function HomeTab() {
   const catalog = useSession((s) => s.catalog);
   const loadVod = useSession((s) => s.loadVod);
   const [hasLists, setHasLists] = useState(false);
-  const [jogos, setJogos] = useState<Jogo[]>([]);
 
+  // Canais da categoria "JOGOS DO DIA"
+  const [jogosChannels, setJogosChannels] = useState<LiveStream[]>([]);
+  const [jogosCatId, setJogosCatId] = useState<string | null>(null);
+
+  // Busca os canais da categoria JOGOS DO DIA no servidor
   useEffect(() => {
-    buscarJogos().then((j) => setJogos(j)).catch(() => {});
-  }, []);
+    if (!session) return;
+    let active = true;
+
+    async function carregarCanaisJogos() {
+      try {
+        const categories: Category[] = await xtream.liveCategories(session);
+        const catJogos = categories.find((c) =>
+          /jogos?\s*do\s*dia/i.test(c.category_name)
+        );
+
+        if (catJogos) {
+          if (active) setJogosCatId(catJogos.category_id);
+          const streams: LiveStream[] = await xtream.liveStreams(
+            session,
+            catJogos.category_id
+          );
+          if (active && streams.length > 0) {
+            setJogosChannels(streams);
+          }
+        }
+      } catch {}
+    }
+
+    carregarCanaisJogos();
+    return () => {
+      active = false;
+    };
+  }, [session]);
 
   useFocusEffect(
     useCallback(() => {
       listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
-      if (source?.kind === "xtream" && !catalog.vodLoaded) loadVod();
+      if (source?.kind === "xtream" && !catalog.vodLoaded) {
+        loadVod();
+      }
     }, [source?.kind, catalog.vodLoaded, loadVod])
   );
 
   const hasContent = !!session || hasLists;
 
+  // Filmes em destaque
   const marqueeItems: MarqueeItem[] = useMemo(() => {
     if (!catalog.vod || catalog.vod.length === 0) return [];
     return catalog.vod
@@ -151,6 +97,18 @@ export default function HomeTab() {
   const go = async (path: string) => {
     if (session && source?.kind !== "list") await setSource({ kind: "xtream" });
     router.push(path as any);
+  };
+
+  // Redireciona diretamente para o canal na categoria JOGOS DO DIA
+  const handleOpenChannel = (channel: LiveStream) => {
+    if (session && source?.kind !== "list") setSource({ kind: "xtream" });
+    router.push({
+      pathname: "/(tabs)/live",
+      params: {
+        cat: jogosCatId || undefined,
+        channelId: String(channel.stream_id),
+      },
+    });
   };
 
   return (
@@ -200,35 +158,29 @@ export default function HomeTab() {
             <SmallTile testID="home-settings" icon="settings-outline" label="Ajustes" onPress={() => router.push("/(tabs)/settings")} />
           </View>
 
-          {/* Letreiro 1: Filmes em Destaque (Da Direita para a Esquerda) */}
-          {marqueeItems.length > 0 && (
-            <View style={styles.marqueeSection}>
-              <View style={styles.marqueeHeaderRow}>
-                <Text style={styles.sectionHeader}>NOVIDADES & DESTAQUES</Text>
-                <Text style={styles.badgeTextSmall}>EM ALTA</Text>
+          {/* Letreiro 1: JOGOS DO DIA (Da Esquerda para a Direita) */}
+          {jogosChannels.length > 0 && (
+            <View style={styles.sectionBlock}>
+              <View style={styles.headerRow}>
+                <Text style={styles.sectionTitle}>⚽ JOGOS DO DIA</Text>
+                <View style={styles.badgeLive}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.badgeLiveText}>AO VIVO</Text>
+                </View>
               </View>
-              <TrendingMarquee 
-                items={marqueeItems} 
-                onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })} 
+              <JogosMarqueeReverse 
+                channels={jogosChannels} 
+                onPressChannel={handleOpenChannel} 
               />
             </View>
           )}
 
-          {/* Letreiro 2: Jogos do Dia & Canais (Da Esquerda para a Direita - Área Rosa) */}
-          {jogos.length > 0 && (
-            <View style={styles.marqueeSection}>
-              <View style={styles.marqueeHeaderRow}>
-                <Text style={styles.sectionHeader}>CANAIS & JOGOS DO DIA</Text>
-                <View style={styles.badgeLiveRow}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.badgeLiveText}>AO VIVO & HOJE</Text>
-                </View>
-              </View>
-              <SportsMarqueeReverse 
-                jogos={jogos} 
-                onPressJogo={() => go("/(tabs)/live")} 
-              />
-            </View>
+          {/* Letreiro 2: Filmes e Séries (Da Direita para a Esquerda) */}
+          {marqueeItems.length > 0 && (
+            <TrendingMarquee 
+              items={marqueeItems} 
+              onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })} 
+            />
           )}
         </View>
       ) : (
@@ -241,83 +193,84 @@ export default function HomeTab() {
   );
 }
 
-// Componente do Letreiro Esportivo Invertido (Esquerda -> Direita)
-function SportsMarqueeReverse({ jogos, onPressJogo }: { jogos: Jogo[]; onPressJogo: (j: Jogo) => void }) {
-  const CARD_WIDTH = 210;
+// Componente do Letreiro de Canais (Deslizando da Esquerda para a Direita)
+function JogosMarqueeReverse({
+  channels,
+  onPressChannel,
+}: {
+  channels: LiveStream[];
+  onPressChannel: (c: LiveStream) => void;
+}) {
+  const CARD_WIDTH = 120;
   const GAP = 12;
   const STRIDE = CARD_WIDTH + GAP;
-  const baseCount = Math.max(jogos.length, 1);
+  const baseCount = Math.max(channels.length, 1);
   const totalBaseWidth = baseCount * STRIDE;
 
   const loopItems = useMemo(() => {
-    if (!jogos.length) return [];
-    return [...jogos, ...jogos, ...jogos, ...jogos];
-  }, [jogos]);
+    if (!channels.length) return [];
+    const repeat = Math.max(4, Math.ceil(8 / channels.length));
+    return Array(repeat).fill(channels).flat();
+  }, [channels]);
 
   const anim = useRef(new Animated.Value(-totalBaseWidth)).current;
 
   useEffect(() => {
-    if (!jogos.length) return;
+    if (!channels.length) return;
     anim.setValue(-totalBaseWidth);
     const loop = Animated.loop(
       Animated.timing(anim, {
         toValue: 0,
-        duration: Math.max(totalBaseWidth * 32, 10000),
+        duration: Math.max(totalBaseWidth * 34, 9000),
         easing: Easing.linear,
         useNativeDriver: true,
       })
     );
     loop.start();
     return () => loop.stop();
-  }, [jogos, totalBaseWidth]);
+  }, [channels.length, totalBaseWidth]);
 
   return (
-    <View style={styles.sportsMarqueeContainer}>
+    <View style={styles.marqueeOuter}>
       <Animated.View
         style={[
-          styles.sportsMarqueeTrack,
+          styles.marqueeTrack,
           {
             transform: [{ translateX: anim }],
           },
         ]}
       >
-        {loopItems.map((j, idx) => (
+        {loopItems.map((ch, idx) => (
           <Pressable
-            key={`${j.id}-${idx}`}
-            onPress={() => onPressJogo(j)}
+            key={`${ch.stream_id}-${idx}`}
+            onPress={() => onPressChannel(ch)}
             style={({ pressed }) => [
-              styles.sportsCard,
-              pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] },
+              styles.channelCard,
+              pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
             ]}
           >
-            <View style={styles.sportsCardHeader}>
-              <Text style={styles.sportsCardLeague} numberOfLines={1}>
-                {j.campeonato.toUpperCase()}
-              </Text>
-              {j.ao_vivo ? (
-                <View style={styles.tagNoAr}>
-                  <Text style={styles.tagNoArText}>NO AR</Text>
-                </View>
+            <View style={styles.posterBox}>
+              {ch.stream_icon ? (
+                <Image
+                  source={{ uri: ch.stream_icon }}
+                  style={styles.channelPoster}
+                  resizeMode="cover"
+                />
               ) : (
-                <Text style={styles.sportsCardTime}>{j.horario}</Text>
+                <View style={styles.posterFallback}>
+                  <Text style={{ fontSize: 32 }}>⚽</Text>
+                </View>
               )}
+              <View style={styles.tagFhd}>
+                <Text style={styles.tagFhdText}>AO VIVO</Text>
+              </View>
             </View>
 
-            <View style={styles.sportsCardMatch}>
-              <Text style={styles.sportsCardTeam} numberOfLines={1}>
-                {j.time_casa}
+            <View style={styles.channelMeta}>
+              <Text style={styles.channelName} numberOfLines={2}>
+                {ch.name}
               </Text>
-              <Text style={styles.sportsCardVs}>VS</Text>
-              <Text style={styles.sportsCardTeam} numberOfLines={1}>
-                {j.time_fora}
-              </Text>
-            </View>
-
-            <View style={styles.sportsCardFooter}>
-              <Ionicons name="tv-outline" size={12} color={colors.gold} />
-              <Text style={styles.sportsCardChannel} numberOfLines={1}>
-                {j.canal_nome}
-              </Text>
+              <Text style={styles.channelSub}>JOGOS DO DIA</Text>
             </View>
           </Pressable>
         ))}
@@ -346,31 +299,41 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 1,
   },
-  badgeTextSmall: {
-    color: colors.gold,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.5,
+  sectionBlock: {
+    gap: 8,
+    marginTop: 2,
   },
-  badgeLiveRow: {
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    justifyContent: "space-between",
+  },
+  sectionTitle: {
+    color: colors.gold,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  badgeLive: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
     backgroundColor: "rgba(229, 169, 59, 0.15)",
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
     borderRadius: 10,
   },
   liveDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: colors.gold,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#EF4444",
   },
   badgeLiveText: {
     color: colors.gold,
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: "800",
+    letterSpacing: 0.4,
   },
 
   gridNav: { gap: 10 },
@@ -414,99 +377,71 @@ const styles = StyleSheet.create({
   tileFocused: { borderColor: colors.gold, borderWidth: 2 },
   tileLabel: { color: colors.text, fontSize: 11.5, fontWeight: "600" },
 
-  marqueeSection: {
-    gap: 8,
-    marginTop: 4,
-  },
-  marqueeHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-
-  sportsMarqueeContainer: {
+  marqueeOuter: {
     overflow: "hidden",
     marginHorizontal: -spacing.lg,
     paddingVertical: 4,
   },
-  sportsMarqueeTrack: {
+  marqueeTrack: {
     flexDirection: "row",
     paddingLeft: spacing.lg,
   },
-  sportsCard: {
-    width: 210,
+  channelCard: {
+    width: 120,
     backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.25)",
-    padding: 10,
+    borderColor: "rgba(229, 169, 59, 0.22)",
+    overflow: "hidden",
     marginRight: 12,
-    gap: 6,
   },
-  sportsCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  posterBox: {
+    width: 120,
+    height: 120,
+    backgroundColor: "#161820",
+    position: "relative",
   },
-  sportsCardLeague: {
-    color: colors.gold,
-    fontSize: 9.5,
-    fontWeight: "800",
-    letterSpacing: 0.4,
+  channelPoster: {
+    width: "100%",
+    height: "100%",
+  },
+  posterFallback: {
     flex: 1,
-    marginRight: 4,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  tagNoAr: {
-    backgroundColor: "#D32F2F",
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+  tagFhd: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    backgroundColor: "rgba(239, 68, 68, 0.9)",
+    paddingHorizontal: 5,
+    paddingVertical: 2,
     borderRadius: 4,
   },
-  tagNoArText: {
+  tagFhdText: {
     color: "#FFF",
     fontSize: 8,
     fontWeight: "900",
   },
-  sportsCardTime: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: "700",
+  channelMeta: {
+    padding: 8,
+    gap: 2,
   },
-  sportsCardMatch: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 2,
-  },
-  sportsCardTeam: {
+  channelName: {
     color: colors.text,
-    fontSize: 12,
-    fontWeight: "700",
-    flex: 1,
-  },
-  sportsCardVs: {
-    color: colors.textDim,
-    fontSize: 9.5,
-    fontWeight: "800",
-    paddingHorizontal: 4,
-  },
-  sportsCardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.06)",
-  },
-  sportsCardChannel: {
-    color: colors.textMuted,
     fontSize: 10.5,
-    flex: 1,
+    fontWeight: "700",
+    lineHeight: 14,
+  },
+  channelSub: {
+    color: colors.gold,
+    fontSize: 9,
+    fontWeight: "800",
   },
 
   loggedOutBox: { width: "100%", maxWidth: 420, gap: spacing.md, alignItems: "center", alignSelf: "center", marginTop: 40 },
   brand: { color: colors.gold, fontSize: 26, fontWeight: "800", letterSpacing: 0.6 },
   hint: { color: colors.textMuted, fontSize: 14, textAlign: "center", lineHeight: 20 },
 });
-                       
+                  
