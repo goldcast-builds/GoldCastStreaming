@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, useWindowDimensions, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
@@ -18,12 +18,11 @@ interface Jogo {
   time_fora: string;
   horario: string;
   ao_vivo: boolean;
-  estadio: string;
   canal_nome: string;
 }
 
-const LIGAS_ESPN = [
-  { slug: "bra.1", nome: "Brasileirão Série A", canal: "Premiere" },
+const LIGAS = [
+  { slug: "bra.1", nome: "Brasileirão", canal: "Premiere" },
   { slug: "bra.copa_do_brasil", nome: "Copa do Brasil", canal: "SporTV / Premiere" },
   { slug: "conmebol.libertadores", nome: "Libertadores", canal: "ESPN / Premiere" },
   { slug: "conmebol.sudamericana", nome: "Sul-Americana", canal: "ESPN" },
@@ -33,99 +32,62 @@ const LIGAS_ESPN = [
   { slug: "ita.1", nome: "Serie A", canal: "ESPN" },
 ];
 
-function obterDataBrasilia(): string {
-  const agora = new Date();
-  const utc = agora.getTime() + agora.getTimezoneOffset() * 60000;
-  const brt = new Date(utc - 3 * 3600000);
-  const ano = brt.getFullYear();
-  const mes = String(brt.getMonth() + 1).padStart(2, "0");
-  const dia = String(brt.getDate()).padStart(2, "0");
-  return `${ano}${mes}${dia}`;
+function getHoje(): string {
+  const d = new Date(Date.now() - 3 * 3600000);
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
 }
 
-async function buscarJogosESPN(): Promise<Jogo[]> {
-  const dataHoje = obterDataBrasilia();
-  let idContador = 1;
-
+async function buscarJogos(): Promise<Jogo[]> {
+  const data = getHoje();
+  let count = 1;
   try {
-    const requisicoes = LIGAS_ESPN.map(async (liga) => {
+    const reqs = LIGAS.map(async (l) => {
       try {
-        const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${liga.slug}/scoreboard?dates=${dataHoje}`;
-        const res = await fetch(url);
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${l.slug}/scoreboard?dates=${data}`);
         if (!res.ok) return [];
-        const dados = await res.json();
-        const eventos = dados.events || [];
-
-        const jogosLiga: Jogo[] = [];
-        for (const ev of eventos) {
+        const json = await res.json();
+        const lista: Jogo[] = [];
+        for (const ev of json.events || []) {
           const comp = ev.competitions?.[0];
-          if (!comp || !comp.competitors || comp.competitors.length < 2) continue;
-
-          let casa = comp.competitors[0]?.team?.shortDisplayName || comp.competitors[0]?.team?.name || "Time 1";
-          let fora = comp.competitors[1]?.team?.shortDisplayName || comp.competitors[1]?.team?.name || "Time 2";
-
+          if (!comp?.competitors || comp.competitors.length < 2) continue;
+          let c = comp.competitors[0]?.team?.shortDisplayName || comp.competitors[0]?.team?.name || "Time 1";
+          let f = comp.competitors[1]?.team?.shortDisplayName || comp.competitors[1]?.team?.name || "Time 2";
           if (comp.competitors[0]?.homeAway !== "home") {
-            const temp = casa;
-            casa = fora;
-            fora = temp;
+            const t = c; c = f; f = t;
           }
-
-          let horario = "A definir";
+          let hora = "A definir";
           if (ev.date) {
             try {
-              const dt = new Date(ev.date);
-              horario = dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
-            } catch (e) {}
+              hora = new Date(ev.date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+            } catch {}
           }
-
-          const aoVivo = comp.status?.type?.state === "in";
-
-          let canal = liga.canal;
-          if (comp.broadcasts && comp.broadcasts.length > 0 && comp.broadcasts[0].names?.length > 0) {
-            canal = comp.broadcasts[0].names.join(" / ");
-          }
-
-          const estadio = comp.venue?.fullName || "";
-
-          jogosLiga.push({
-            id: String(idContador++),
-            campeonato: liga.nome,
-            time_casa: casa,
-            time_fora: fora,
-            horario,
-            ao_vivo: aoVivo,
-            estadio,
+          let canal = l.canal;
+          if (comp.broadcasts?.[0]?.names?.length) canal = comp.broadcasts[0].names.join(" / ");
+          lista.push({
+            id: String(count++),
+            campeonato: l.nome,
+            time_casa: c,
+            time_fora: f,
+            horario: hora,
+            ao_vivo: comp.status?.type?.state === "in",
             canal_nome: canal,
           });
         }
-        return jogosLiga;
-      } catch (e) {
-        return [];
-      }
+        return lista;
+      } catch { return []; }
     });
-
-    const resultados = await Promise.all(requisicoes);
-    const todosJogos = resultados.flat();
-
-    if (todosJogos.length > 0) {
-      return todosJogos;
-    }
-  } catch (erro) {
-    console.error("Erro ao consultar ESPN:", erro);
-  }
-
-  return [
-    {
-      id: "1",
-      campeonato: "PROGRAMAÇÃO ESPORTIVA",
-      time_casa: "Sem grandes jogos",
-      time_fora: "agendados para hoje",
-      horario: "--:--",
-      ao_vivo: false,
-      estadio: "Confira a grade ao vivo",
-      canal_nome: "Canais Esportivos",
-    },
-  ];
+    const res = (await Promise.all(reqs)).flat();
+    if (res.length > 0) return res;
+  } catch {}
+  return [{
+    id: "1",
+    campeonato: "FUTEBOL NA TV",
+    time_casa: "Sem grandes jogos",
+    time_fora: "agendados para hoje",
+    horario: "--:--",
+    ao_vivo: false,
+    canal_nome: "Canais Esportivos",
+  }];
 }
 
 const MAIN = [
@@ -143,41 +105,22 @@ export default function HomeTab() {
   const catalog = useSession((s) => s.catalog);
   const loadVod = useSession((s) => s.loadVod);
   const [hasLists, setHasLists] = useState(false);
-
-  // Estados para os jogos da ESPN
   const [jogos, setJogos] = useState<Jogo[]>([]);
-  const [carregandoJogos, setCarregandoJogos] = useState(true);
+  const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
-    let montado = true;
-    buscarJogosESPN()
-      .then((lista) => {
-        if (montado) {
-          setJogos(lista);
-          setCarregandoJogos(false);
-        }
-      })
-      .catch(() => {
-        if (montado) setCarregandoJogos(false);
-      });
-    return () => {
-      montado = false;
-    };
+    buscarJogos().then((j) => { setJogos(j); setCarregando(false); }).catch(() => setCarregando(false));
   }, []);
 
-  // Carrega listas e catálogos em background
   useFocusEffect(
     useCallback(() => {
       listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
-      if (source?.kind === "xtream" && !catalog.vodLoaded) {
-        loadVod();
-      }
+      if (source?.kind === "xtream" && !catalog.vodLoaded) loadVod();
     }, [source?.kind, catalog.vodLoaded, loadVod])
   );
 
   const hasContent = !!session || hasLists;
 
-  // Filtra até 15 títulos com capas válidas para a animação flutuante
   const marqueeItems: MarqueeItem[] = useMemo(() => {
     if (!catalog.vod || catalog.vod.length === 0) return [];
     return catalog.vod
@@ -196,10 +139,6 @@ export default function HomeTab() {
     router.push(path as any);
   };
 
-  const handleOpenMarqueeItem = (item: MarqueeItem) => {
-    router.push({ pathname: "/movie/[id]", params: { id: item.id } });
-  };
-
   return (
     <ScrollView 
       style={styles.root} 
@@ -207,7 +146,6 @@ export default function HomeTab() {
       testID="home-screen"
       showsVerticalScrollIndicator={false}
     >
-      {/* Barra Superior */}
       <View style={styles.topBar}>
         <Logo size={105} />
         <Pressable 
@@ -222,7 +160,6 @@ export default function HomeTab() {
 
       {hasContent ? (
         <View style={styles.mainContainer}>
-          {/* Banner Hero */}
           <View style={styles.heroBanner}>
             <LinearGradient
               colors={["#1C180E", "#151722", "#090A0E"]}
@@ -230,18 +167,15 @@ export default function HomeTab() {
               end={{ x: 1, y: 1 }}
               style={styles.heroGradient}
             />
-            
             <View style={styles.heroOverlayContent}>
               <View style={styles.heroTag}>
                 <Ionicons name="sparkles" size={12} color={colors.gold} />
                 <Text style={styles.heroTagText}>GOLDCAST PREMIUM</Text>
               </View>
-              
               <Text style={styles.heroTitle}>Entretenimento Ilimitado</Text>
               <Text style={styles.heroSubtitle}>
                 Aceda à grelha completa de canais ao vivo, filmes em alta definição e séries atualizadas.
               </Text>
-
               <View style={styles.heroActions}>
                 <Pressable 
                   style={({ pressed }) => [styles.heroPrimaryBtn, pressed && { opacity: 0.85 }]} 
@@ -250,7 +184,6 @@ export default function HomeTab() {
                   <Ionicons name="play" size={16} color={colors.onGold} />
                   <Text style={styles.heroPrimaryText}>Assistir TV</Text>
                 </Pressable>
-
                 <Pressable 
                   style={({ pressed }) => [styles.heroSecondaryBtn, pressed && { opacity: 0.85 }]} 
                   onPress={() => go("/(tabs)/movies")}
@@ -262,7 +195,7 @@ export default function HomeTab() {
             </View>
           </View>
 
-          {/* Secção de Jogos e Programação Desportiva ESPN */}
+          {/* Programação dos Jogos do Dia */}
           <View style={styles.sportsSection}>
             <View style={styles.sportsHeaderRow}>
               <Text style={styles.sectionHeader}>JOGOS DE HOJE • ESPN</Text>
@@ -271,11 +204,10 @@ export default function HomeTab() {
                 <Text style={styles.sportsBadgeLiveText}>AO VIVO & HOJE</Text>
               </View>
             </View>
-
-            {carregandoJogos ? (
+            {carregando ? (
               <View style={styles.sportsLoadingBox}>
                 <ActivityIndicator size="small" color={colors.gold} />
-                <Text style={styles.sportsLoadingText}>A carregar programação desportiva...</Text>
+                <Text style={styles.sportsLoadingText}>Carregando jogos...</Text>
               </View>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sportsScroll}>
@@ -283,28 +215,21 @@ export default function HomeTab() {
                   <Pressable
                     key={j.id}
                     onPress={() => go("/(tabs)/live")}
-                    style={({ pressed }) => [
-                      styles.jogoCard,
-                      pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }
-                    ]}
+                    style={({ pressed }) => [styles.jogoCard, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
                   >
                     <View style={styles.jogoTop}>
                       <Text style={styles.jogoCampeonato} numberOfLines={1}>{j.campeonato}</Text>
                       {j.ao_vivo ? (
-                        <View style={styles.tagAoVivo}>
-                          <Text style={styles.tagAoVivoText}>NO AR</Text>
-                        </View>
+                        <View style={styles.tagAoVivo}><Text style={styles.tagAoVivoText}>NO AR</Text></View>
                       ) : (
                         <Text style={styles.jogoHorario}>{j.horario}</Text>
                       )}
                     </View>
-
                     <View style={styles.jogoConfronto}>
                       <Text style={styles.jogoEquipa} numberOfLines={1}>{j.time_casa}</Text>
                       <Text style={styles.jogoVersus}>VS</Text>
                       <Text style={styles.jogoEquipa} numberOfLines={1}>{j.time_fora}</Text>
                     </View>
-
                     <View style={styles.jogoRodape}>
                       <Ionicons name="tv-outline" size={12} color={colors.gold} />
                       <Text style={styles.jogoCanal} numberOfLines={1}>{j.canal_nome}</Text>
@@ -315,7 +240,6 @@ export default function HomeTab() {
             )}
           </View>
 
-          {/* Navegação Principal */}
           <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
 
           <View style={styles.gridNav}>
@@ -343,18 +267,16 @@ export default function HomeTab() {
             ))}
           </View>
 
-          {/* Atalhos Rápidos */}
           <View style={styles.quickActionsRow}>
             <SmallTile testID="home-favorites" icon="star-outline" label="Favoritos" onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })} />
             <SmallTile testID="home-account" icon="person-outline" label="Conta" onPress={() => router.push(session ? "/(tabs)/settings" : "/login")} />
             <SmallTile testID="home-settings" icon="settings-outline" label="Ajustes" onPress={() => router.push("/(tabs)/settings")} />
           </View>
 
-          {/* Letreiro Flutuante Animado com Capas em Movimento Contínuo */}
           {marqueeItems.length > 0 && (
             <TrendingMarquee 
               items={marqueeItems} 
-              onPressItem={handleOpenMarqueeItem} 
+              onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })} 
             />
           )}
         </View>
@@ -384,231 +306,57 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md },
   iconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  
   mainContainer: { gap: spacing.lg },
+  heroBanner: { borderRadius: 14, overflow: "hidden", position: "relative", borderWidth: 1, borderColor: "rgba(229, 169, 59, 0.25)", elevation: 6 },
+  heroGradient: { ...StyleSheet.absoluteFillObject },
+  heroOverlayContent: { padding: 20, gap: 8 },
+  heroTag: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: "rgba(229, 169, 59, 0.15)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill },
+  heroTagText: { color: colors.gold, fontSize: 10, fontWeight: "800", letterSpacing: 0.8 },
+  heroTitle: { color: colors.text, fontSize: 22, fontWeight: "800", letterSpacing: -0.4, marginTop: 2 },
+  heroSubtitle: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18, maxWidth: "92%" },
+  heroActions: { flexDirection: "row", gap: 10, marginTop: 10 },
+  heroPrimaryBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.gold, paddingVertical: 10, paddingHorizontal: 18, borderRadius: radius.sm },
+  heroPrimaryText: { color: colors.onGold, fontSize: 13, fontWeight: "800" },
+  heroSecondaryBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255, 255, 255, 0.08)", borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.12)", paddingVertical: 10, paddingHorizontal: 16, borderRadius: radius.sm },
+  heroSecondaryText: { color: colors.text, fontSize: 13, fontWeight: "600" },
 
-  heroBanner: {
-    borderRadius: 14,
-    overflow: "hidden",
-    position: "relative",
-    borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.25)",
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-  },
-  heroGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  heroOverlayContent: {
-    padding: 20,
-    gap: 8,
-  },
-  heroTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(229, 169, 59, 0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-  },
-  heroTagText: {
-    color: colors.gold,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-  },
-  heroTitle: {
-    color: colors.text,
-    fontSize: 22,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-    marginTop: 2,
-  },
-  heroSubtitle: {
-    color: colors.textMuted,
-    fontSize: 12.5,
-    lineHeight: 18,
-    maxWidth: "92%",
-  },
-  heroActions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 10,
-  },
-  heroPrimaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: colors.gold,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: radius.sm,
-  },
-  heroPrimaryText: {
-    color: colors.onGold,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  heroSecondaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.12)",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: radius.sm,
-  },
-  heroSecondaryText: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: "600",
-  },
+  sportsSection: { gap: 10 },
+  sportsHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sportsBadgeLive: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(229, 169, 59, 0.15)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+  sportsLiveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.gold },
+  sportsBadgeLiveText: { color: colors.gold, fontSize: 9.5, fontWeight: "800", letterSpacing: 0.5 },
+  sportsLoadingBox: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.surface, paddingVertical: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  sportsLoadingText: { color: colors.textMuted, fontSize: 12 },
+  sportsScroll: { gap: 10, paddingVertical: 2 },
+  jogoCard: { width: 220, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: "rgba(229, 169, 59, 0.22)", padding: 12, gap: 8 },
+  jogoTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  jogoCampeonato: { color: colors.gold, fontSize: 10.5, fontWeight: "800", letterSpacing: 0.4, flex: 1, marginRight: 6 },
+  tagAoVivo: { backgroundColor: "#D32F2F", paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4 },
+  tagAoVivoText: { color: "#FFF", fontSize: 8.5, fontWeight: "900" },
+  jogoHorario: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
+  jogoConfronto: { gap: 3 },
+  jogoEquipa: { color: colors.text, fontSize: 13, fontWeight: "700" },
+  jogoVersus: { color: colors.textDim, fontSize: 9.5, fontWeight: "800", marginLeft: 2 },
+  jogoRodape: { flexDirection: "row", alignItems: "center", gap: 5, paddingTop: 6, borderTopWidth: 1, borderTopColor: "rgba(255, 255, 255, 0.06)" },
+  jogoCanal: { color: colors.textMuted, fontSize: 11, flex: 1 },
 
-  /* Estilos da Programação Desportiva ESPN */
-  sportsSection: {
-    gap: 10,
-  },
-  sportsHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sportsBadgeLive: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(229, 169, 59, 0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  sportsLiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.gold,
-  },
-  sportsBadgeLiveText: {
-    color: colors.gold,
-    fontSize: 9.5,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  sportsLoadingBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: colors.surface,
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sportsLoadingText: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-  sportsScroll: {
-    gap: 10,
-    paddingVertical: 2,
-  },
-  jogoCard: {
-    width: 220,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.22)",
-    padding: 12,
-    gap: 8,
-  },
-  jogoTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  jogoCampeonato: {
-    color: colors.gold,
-    fontSize: 10.5,
-    fontWeight: "800",
-    letterSpacing: 0.4,
-    flex: 1,
-    marginRight: 6,
-  },
-  tagAoVivo: {
-    backgroundColor: "#D32F2F",
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-  },
-  tagAoVivoText: {
-    color: "#FFF",
-    fontSize: 8.5,
-    fontWeight: "900",
-  },
-  jogoHorario: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  jogoConfronto: {
-    gap: 3,
-  },
-  jogoEquipa: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  jogoVersus: {
-    color: colors.textDim,
-    fontSize: 9.5,
-    fontWeight: "800",
-    marginLeft: 2,
-  },
-  jogoRodape: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.06)",
-  },
-  jogoCanal: {
-    color: colors.textMuted,
-    fontSize: 11,
-    flex: 1,
-  },
+  sectionHeader: { color: colors.textDim, fontSize: 11, fontWeight: "800", letterSpacing: 1, marginTop: 6, marginBottom: -6 },
+  gridNav: { gap: 10 },
+  navCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, gap: 14 },
+  navCardFocused: { borderColor: colors.gold, borderWidth: 2, backgroundColor: colors.surface2 },
+  navCardIconBox: { width: 48, height: 48, borderRadius: 10, backgroundColor: "rgba(229, 169, 59, 0.12)", alignItems: "center", justifyContent: "center" },
+  navCardTextBox: { flex: 1 },
+  navCardTitle: { color: colors.text, fontSize: 15, fontWeight: "700", letterSpacing: 0.3 },
+  navCardSub: { color: colors.textMuted, fontSize: 11.5, marginTop: 2 },
 
-  sectionHeader: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1,
-    marginTop: 6,
-    marginBottom: -6,
-  },
-  gridNav: {
-    gap: 10,
-  },
-  navCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 14,
-  },
-  navCardFocused: {
-    borderColor: colors.gold,
-    borderWidth: 2,
-    backgroundColor: colors.surface2,
-    transform: [{
+  quickActionsRow: { flexDirection: "row", gap: 10, marginTop: 4 },
+  tile: { flex: 1, flexDirection: "row", height: 44, borderRadius: radius.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 6 },
+  tileFocused: { borderColor: colors.gold, borderWidth: 2 },
+  tileLabel: { color: colors.text, fontSize: 11.5, fontWeight: "600" },
+
+  loggedOutBox: { width: "100%", maxWidth: 420, gap: spacing.md, alignItems: "center", alignSelf: "center", marginTop: 40 },
+  brand: { color: colors.gold, fontSize: 26, fontWeight: "800", letterSpacing: 0.6 },
+  hint: { color: colors.textMuted, fontSize: 14, textAlign: "center", lineHeight: 20 },
+  focused: { borderWidth: 2, borderColor: colors.gold },
+});
+  
