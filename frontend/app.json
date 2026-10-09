@@ -8,7 +8,8 @@
     "scheme": "goldcast",
     "userInterfaceStyle": "dark",
     "androidNavigationBar": {
-      "visible": "sticky-immersive"
+      "visible": "sticky-immersive",
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
@@ -19,7 +20,7 @@
         }
       }
     },
-"android": {
+    "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
