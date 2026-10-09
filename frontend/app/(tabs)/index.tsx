@@ -38,6 +38,9 @@ export default function HomeTab() {
   const [jogosChannels, setJogosChannels] = useState<LiveStream[]>([]);
   const [jogosCatId, setJogosCatId] = useState<string | null>(null);
 
+  // Animação de alerta piscante para quando o plano vencer
+  const blinkAnim = useRef(new Animated.Value(1)).current;
+
   // Busca os canais da categoria JOGOS DO DIA no servidor
   useEffect(() => {
     if (!session) return;
@@ -80,6 +83,99 @@ export default function HomeTab() {
 
   const hasContent = !!session || hasLists;
 
+  // Cálculo da data de expiração e dias restantes
+  const { username, expFormatted, daysLeft, isExpired } = useMemo(() => {
+    const user = session?.userInfo?.username || session?.username || "Cliente";
+    const exp = session?.userInfo?.exp_date;
+
+    if (!exp) {
+      return { username: user, expFormatted: "Ilimitado", daysLeft: 999, isExpired: false };
+    }
+
+    const ts = Number(exp);
+    if (!ts || isNaN(ts)) {
+      return { username: user, expFormatted: "Indisponível", daysLeft: 0, isExpired: false };
+    }
+
+    const expDate = new Date(ts * 1000);
+    const expFormatted = expDate.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      timeZone: "America/Sao_Paulo",
+    });
+
+    const diffMs = expDate.getTime() - Date.now();
+    const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const isExpired = daysLeft <= 0;
+
+    return { username: user, expFormatted, daysLeft, isExpired };
+  }, [session]);
+
+  // Dispara o alerta piscante se o plano estiver vencido
+  useEffect(() => {
+    if (isExpired) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(blinkAnim, {
+            toValue: 0.25,
+            duration: 650,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.timing(blinkAnim, {
+            toValue: 1,
+            duration: 650,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    } else {
+      blinkAnim.setValue(1);
+    }
+  }, [isExpired, blinkAnim]);
+
+  // Definição das 3 faixas de cores solicitadas
+  const statusConfig = useMemo(() => {
+    if (isExpired) {
+      return {
+        color: "#EF4444", // Vermelho
+        bg: "rgba(239, 68, 68, 0.16)",
+        border: "rgba(239, 68, 68, 0.6)",
+        text: "PLANO VENCIDO",
+        badgeIcon: "alert-circle",
+      };
+    }
+    if (daysLeft <= 1) {
+      return {
+        color: "#EF4444", // Vermelho (0 a 1 dia)
+        bg: "rgba(239, 68, 68, 0.16)",
+        border: "rgba(239, 68, 68, 0.6)",
+        text: daysLeft === 1 ? "1 DIA RESTANTE" : "VENCE HOJE",
+        badgeIcon: "alert-circle",
+      };
+    }
+    if (daysLeft >= 2 && daysLeft <= 5) {
+      return {
+        color: "#F59E0B", // Amarelo (2 a 5 dias)
+        bg: "rgba(245, 158, 11, 0.16)",
+        border: "rgba(245, 158, 11, 0.6)",
+        text: `${daysLeft} DIAS RESTANTES`,
+        badgeIcon: "time",
+      };
+    }
+    return {
+      color: "#10B981", // Verde (6 a 1000 dias)
+      bg: "rgba(16, 185, 129, 0.16)",
+      border: "rgba(16, 185, 129, 0.6)",
+      text: `${daysLeft} DIAS RESTANTES`,
+      badgeIcon: "checkmark-circle",
+    };
+  }, [daysLeft, isExpired]);
+
   // Filmes em destaque
   const marqueeItems: MarqueeItem[] = useMemo(() => {
     if (!catalog.vod || catalog.vod.length === 0) return [];
@@ -99,7 +195,6 @@ export default function HomeTab() {
     router.push(path as any);
   };
 
-  // Redireciona diretamente para o canal na categoria JOGOS DO DIA
   const handleOpenChannel = (channel: LiveStream) => {
     if (session && source?.kind !== "list") setSource({ kind: "xtream" });
     router.push({
@@ -116,7 +211,7 @@ export default function HomeTab() {
       style={styles.root} 
       contentContainerStyle={[
         styles.content, 
-        { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + 110 }
+        { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + 120 }
       ]} 
       testID="home-screen"
       showsVerticalScrollIndicator={false}
@@ -177,10 +272,76 @@ export default function HomeTab() {
 
           {/* Letreiro 2: Filmes e Séries (Da Direita para a Esquerda) */}
           {marqueeItems.length > 0 && (
-            <TrendingMarquee 
-              items={marqueeItems} 
-              onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })} 
-            />
+            <View style={styles.sectionBlock}>
+              <View style={styles.headerRow}>
+                <Text style={styles.sectionTitle}>🔥 NOVIDADES & DESTAQUES</Text>
+                <Text style={styles.badgeTextSmall}>EM ALTA</Text>
+              </View>
+              <TrendingMarquee 
+                items={marqueeItems} 
+                onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })} 
+              />
+            </View>
+          )}
+
+          {/* CARD DE STATUS DA ASSINATURA & DIAS RESTANTES (Área Vermelha) */}
+          {session && (
+            <View style={styles.planCard}>
+              <View style={styles.planHeaderRow}>
+                <View style={styles.planUserCol}>
+                  <Text style={styles.planLabel}>USUÁRIO</Text>
+                  <View style={styles.planUserValRow}>
+                    <Ionicons name="person-circle-outline" size={16} color={colors.gold} />
+                    <Text style={styles.planUserName} numberOfLines={1}>
+                      {username}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.planExpCol}>
+                  <Text style={styles.planLabel}>VENCIMENTO</Text>
+                  <View style={styles.planExpValRow}>
+                    <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
+                    <Text style={styles.planExpDate}>
+                      {expFormatted}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Destaque Principal dos Dias Restantes com as 3 Cores */}
+              <View
+                style={[
+                  styles.daysBadge,
+                  {
+                    backgroundColor: statusConfig.bg,
+                    borderColor: statusConfig.border,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={statusConfig.badgeIcon as any}
+                  size={18}
+                  color={statusConfig.color}
+                />
+                <Text style={[styles.daysBadgeText, { color: statusConfig.color }]}>
+                  {statusConfig.text}
+                </Text>
+              </View>
+
+              {/* Alerta Piscante de Renovação quando o plano estiver vencido */}
+              {isExpired && (
+                <Animated.View style={[styles.expiredAlertBanner, { opacity: blinkAnim }]}>
+                  <Ionicons name="warning" size={20} color="#EF4444" />
+                  <View style={styles.expiredAlertTextBox}>
+                    <Text style={styles.expiredAlertTitle}>PLANO EXPIRADO!</Text>
+                    <Text style={styles.expiredAlertSubtitle}>
+                      Entre em contato com o vendedor para renovar o seu acesso.
+                    </Text>
+                  </View>
+                </Animated.View>
+              )}
+            </View>
           )}
         </View>
       ) : (
@@ -228,7 +389,7 @@ function JogosMarqueeReverse({
     );
     loop.start();
     return () => loop.stop();
-  }, [channels.length, totalBaseWidth]);
+  }, [channels.length, totalBaseWidth, anim]);
 
   return (
     <View style={styles.marqueeOuter}>
@@ -313,6 +474,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0.8,
+  },
+  badgeTextSmall: {
+    color: colors.gold,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
   badgeLive: {
     flexDirection: "row",
@@ -440,8 +607,52 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  loggedOutBox: { width: "100%", maxWidth: 420, gap: spacing.md, alignItems: "center", alignSelf: "center", marginTop: 40 },
-  brand: { color: colors.gold, fontSize: 26, fontWeight: "800", letterSpacing: 0.6 },
-  hint: { color: colors.textMuted, fontSize: 14, textAlign: "center", lineHeight: 20 },
-});
-                  
+  /* Card de Status da Assinatura (Área Vermelha) */
+  planCard: {
+    backgroundColor: "#111319",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    padding: 14,
+    gap: 12,
+    marginTop: 4,
+  },
+  planHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  planUserCol: {
+    gap: 4,
+  },
+  planExpCol: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  planLabel: {
+    color: colors.textDim,
+    fontSize: 9.5,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  planUserValRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  planUserName: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  planExpValRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  planExpDate: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  daysBadge: 
