@@ -1,0 +1,10 @@
+[
+  {
+    "label": "Servidor 1",
+    "url": "http://natfluxo.store:80"
+  },
+  {
+    "label": "Servidor 2",
+    "url": "http://newbrtop.online:8080"
+  }
+]
