@@ -3,7 +3,7 @@
     "name": "GoldCast Streaming",
     "slug": "goldcast-streaming",
     "version": "1.0.0",
-    "orientation": "default",
+    "orientation": "landscape",
     "icon": "./assets/images/icon.png",
     "scheme": "goldcast",
     "userInterfaceStyle": "dark",
@@ -35,6 +35,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./withTV.js",
       "expo-router",
       [
         "expo-splash-screen",
