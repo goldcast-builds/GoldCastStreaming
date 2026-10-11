@@ -17,10 +17,26 @@ const STAGE_LABEL: Record<Stage, string> = {
   done: "Conectado!",
 };
 
+// Endereço remoto do arquivo de servidores no seu GitHub
+const REMOTE_SERVERS_URL = "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/servers.json";
+
+interface ServerOption {
+  label: string;
+  url: string;
+}
+
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
+
+  // Servidores padrão de contingência
+  const defaultList: ServerOption[] = [
+    { label: SERVER_LABELS[DEFAULT_SERVERS.primary] || "Servidor 1", url: DEFAULT_SERVERS.primary },
+    { label: SERVER_LABELS[DEFAULT_SERVERS.backup] || "Servidor 2", url: DEFAULT_SERVERS.backup },
+  ];
+
+  const [serverList, setServerList] = useState<ServerOption[]>(defaultList);
   const [server, setServer] = useState(DEFAULT_SERVERS.primary);
   const [custom, setCustom] = useState(false);
   const [user, setUser] = useState("");
@@ -31,17 +47,49 @@ export default function LoginScreen() {
   const [stage, setStage] = useState<{ s: Stage; d?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
-  useEffect(() => () => { mounted.current = false; }, []);
+
+  // Busca os servidores remotamente sem cache
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch(`${REMOTE_SERVERS_URL}?t=${Date.now()}`, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0 && active) {
+            setServerList(data);
+            setServer((current) => {
+              const stillExists = data.some((s) => s.url === current);
+              return stillExists ? current : data[0].url;
+            });
+          }
+        }
+      } catch {
+        // Em caso de falha de conexão, mantém a lista padrão de reserva
+      }
+    })();
+
+    return () => {
+      active = false;
+      mounted.current = false;
+    };
+  }, []);
 
   const submit = async () => {
     setError(null);
-    if (!server.trim() || !user.trim() || !pass) { setError(custom && !server.trim() ? "Informe o endereço do servidor." : "Preencha usuário e senha."); return; }
+    if (!server.trim() || !user.trim() || !pass) {
+      setError(custom && !server.trim() ? "Informe o endereço do servidor." : "Preencha usuário e senha.");
+      return;
+    }
     setLoading(true);
     try {
       await login(server, user.trim(), pass, remember, (s, d) => mounted.current && setStage({ s, d }));
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
-      if (mounted.current) { setError(e?.message || "Falha ao conectar."); setStage(null); }
+      if (mounted.current) {
+        setError(e?.message || "Falha ao conectar.");
+        setStage(null);
+      }
     } finally {
       if (mounted.current) setLoading(false);
     }
@@ -57,32 +105,60 @@ export default function LoginScreen() {
         <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
           <Text style={styles.fieldLabel}>Servidor</Text>
           <View style={styles.serverChips}>
-            {[DEFAULT_SERVERS.primary, DEFAULT_SERVERS.backup].map((s, i) => {
-              const active = !custom && server === s;
+            {serverList.map((item, i) => {
+              const active = !custom && server === item.url;
               return (
-                <Pressable key={s} testID={`server-chip-${i + 1}`} onPress={() => { setCustom(false); setServer(s); }} style={({ focused }) => [styles.serverBtn, active && styles.serverBtnActive, focused && styles.focused]}>
+                <Pressable
+                  key={`${item.url}-${i}`}
+                  testID={`server-chip-${i + 1}`}
+                  onPress={() => {
+                    setCustom(false);
+                    setServer(item.url);
+                  }}
+                  style={({ focused }) => [styles.serverBtn, active && styles.serverBtnActive, focused && styles.focused]}
+                >
                   <Ionicons name="server-outline" size={18} color={active ? colors.onGold : colors.gold} />
-                  <Text style={[styles.serverText, active && { color: colors.onGold }]}>{SERVER_LABELS[s]}</Text>
+                  <Text style={[styles.serverText, active && { color: colors.onGold }]} numberOfLines={1}>
+                    {item.label}
+                  </Text>
                 </Pressable>
               );
             })}
           </View>
-          <Pressable testID="server-custom-toggle" onPress={() => { setCustom((v) => !v); if (!custom) setServer(""); else setServer(DEFAULT_SERVERS.primary); }} style={({ focused }) => [styles.customLink, focused && styles.focused]}>
+
+          <Pressable
+            testID="server-custom-toggle"
+            onPress={() => {
+              setCustom((v) => !v);
+              if (!custom) setServer("");
+              else setServer(serverList[0]?.url || DEFAULT_SERVERS.primary);
+            }}
+            style={({ focused }) => [styles.customLink, focused && styles.focused]}
+          >
             <Ionicons name={custom ? "chevron-up" : "chevron-down"} size={14} color={colors.textDim} />
             <Text style={styles.customText}>Outro servidor</Text>
           </Pressable>
+
           {custom && (
             <Field label="Endereço do servidor" value={server} onChangeText={setServer} placeholder="http://servidor.com:8080" autoCapitalize="none" autoCorrect={false} keyboardType="url" testID="login-server" />
           )}
+
           <Field label="Usuário" value={user} onChangeText={setUser} placeholder="usuario" autoCapitalize="none" autoCorrect={false} testID="login-user" />
           <Field
-            label="Senha" value={pass} onChangeText={setPass} placeholder="••••••••" secureTextEntry={!showPass} autoCapitalize="none" testID="login-pass"
+            label="Senha"
+            value={pass}
+            onChangeText={setPass}
+            placeholder="••••••••"
+            secureTextEntry={!showPass}
+            autoCapitalize="none"
+            testID="login-pass"
             rightIcon={
               <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={8} testID="login-toggle-pass">
                 <Ionicons name={showPass ? "eye-off" : "eye"} size={18} color={colors.textMuted} />
               </Pressable>
             }
           />
+
           <View style={styles.rememberRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.rememberTitle}>Lembrar acesso</Text>
@@ -101,6 +177,7 @@ export default function LoginScreen() {
             </View>
           </View>
         )}
+
         {error && (
           <View style={styles.errorBox} testID="login-error">
             <Ionicons name="alert-circle" size={18} color={colors.error} />
@@ -139,8 +216,8 @@ const styles = StyleSheet.create({
   fieldLabel: { color: colors.textMuted, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 },
   fieldWrap: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: spacing.md },
   input: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 14 },
-  serverChips: { flexDirection: "row", gap: spacing.sm },
-  serverBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 52, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  serverBtn: { flex: 1, minWidth: 120, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 52, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10 },
   serverBtnActive: { backgroundColor: colors.gold, borderColor: colors.gold },
   serverText: { color: colors.text, fontSize: 12, fontWeight: "700", letterSpacing: 0.4 },
   customLink: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-end", paddingVertical: 4, paddingHorizontal: 6, borderRadius: radius.sm },
