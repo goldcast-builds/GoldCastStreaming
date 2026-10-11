@@ -35,7 +35,6 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "./withTV.js",
       "expo-router",
       [
         "expo-splash-screen",
