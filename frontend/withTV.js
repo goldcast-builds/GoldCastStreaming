@@ -8,10 +8,11 @@ module.exports = function withTV(config) {
       manifest["uses-feature"] = [];
     }
 
-    // Declara ao sistema do projetor/TV que NÃO é necessário touch screen nem sensores móveis
+    // Define TUDO como falso para que tanto projetores AOSP quanto Smart TVs aceitem
     const features = [
       { "android:name": "android.hardware.touchscreen", "android:required": "false" },
-      { "android:name": "android.software.leanback", "android:required": "true" },
+      { "android:name": "android.software.leanback", "android:required": "false" },
+      { "android:name": "android.hardware.faketouch", "android:required": "false" },
       { "android:name": "android.hardware.telephony", "android:required": "false" },
       { "android:name": "android.hardware.camera", "android:required": "false" },
       { "android:name": "android.hardware.camera.autofocus", "android:required": "false" },
@@ -27,13 +28,12 @@ module.exports = function withTV(config) {
       if (!existing) {
         manifest["uses-feature"].push({ $: feat });
       } else if (existing.$) {
-        existing.$["android:required"] = feat["android:required"];
+        existing.$["android:required"] = "false";
       }
     });
 
     const app = manifest.application?.[0];
     if (app) {
-      // Usa o ícone do projeto para o banner da TV (evita erro AAPT)
       app.$["android:banner"] = "@mipmap/ic_launcher";
 
       const mainActivity = app.activity?.find(
@@ -41,7 +41,6 @@ module.exports = function withTV(config) {
       );
 
       if (mainActivity) {
-        // Trava a orientação em modo paisagem para telas de TV
         mainActivity.$["android:screenOrientation"] = "landscape";
 
         if (!mainActivity["intent-filter"]) {
