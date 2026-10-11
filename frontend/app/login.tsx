@@ -17,20 +17,37 @@ const STAGE_LABEL: Record<Stage, string> = {
   done: "Conectado!",
 };
 
-// Endereço remoto do arquivo de servidores no seu GitHub
 const REMOTE_SERVERS_URL = "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/servers.json";
+const SUPABASE_TRIAL_URL = "https://lljsnoovwwexzebzbaal.supabase.co/functions/v1/request-trial";
 
 interface ServerOption {
   label: string;
   url: string;
 }
 
+// Identificador estável do hardware para validação de teste único por aparelho
+const getDeviceHardware = (): { mac: string; key: string } => {
+  const constants = (Platform.constants || {}) as any;
+  const rawSeed = `${constants.Fingerprint || constants.Model || "GoldCastDevice"}_${Platform.OS}`;
+  
+  let hash = 0;
+  for (let i = 0; i < rawSeed.length; i++) {
+    hash = (hash << 5) - hash + rawSeed.charCodeAt(i);
+    hash |= 0;
+  }
+
+  const hex = Math.abs(hash).toString(16).padStart(12, "0").slice(-12).toUpperCase();
+  const mac = `${hex.slice(0, 2)}:${hex.slice(2, 4)}:${hex.slice(4, 6)}:${hex.slice(6, 8)}:${hex.slice(8, 10)}:${hex.slice(10, 12)}`;
+  const key = hex.slice(-6);
+
+  return { mac, key };
+};
+
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
 
-  // Servidores padrão de contingência
   const defaultList: ServerOption[] = [
     { label: SERVER_LABELS[DEFAULT_SERVERS.primary] || "Servidor 1", url: DEFAULT_SERVERS.primary },
     { label: SERVER_LABELS[DEFAULT_SERVERS.backup] || "Servidor 2", url: DEFAULT_SERVERS.backup },
@@ -44,11 +61,11 @@ export default function LoginScreen() {
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [trialLoading, setTrialLoading] = useState(false);
   const [stage, setStage] = useState<{ s: Stage; d?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
 
-  // Busca os servidores remotamente sem cache
   useEffect(() => {
     let active = true;
     (async () => {
@@ -65,7 +82,7 @@ export default function LoginScreen() {
           }
         }
       } catch {
-        // Em caso de falha de conexão, mantém a lista padrão de reserva
+        // Mantém contingência em caso de falha de conexão
       }
     })();
 
@@ -95,12 +112,60 @@ export default function LoginScreen() {
     }
   };
 
+  const handleRequestTrial = async () => {
+    setError(null);
+    setTrialLoading(true);
+    setLoading(true);
+    setStage({ s: "connecting", d: "Solicitando teste de 3 horas..." });
+
+    try {
+      const device = getDeviceHardware();
+
+      const response = await fetch(SUPABASE_TRIAL_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mac: device.mac,
+          device_key: device.key,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Não foi possível ativar o teste.");
+      }
+
+      setUser(data.username);
+      setPass(data.password);
+      const targetServer = data.serverUrl || server;
+      setServer(targetServer);
+
+      setStage({ s: "validating", d: "Acessando conteúdo liberado..." });
+      await login(targetServer, data.username, data.password, true, (s, d) => {
+        if (mounted.current) setStage({ s, d });
+      });
+
+      setTimeout(() => router.replace("/(tabs)"), 350);
+    } catch (e: any) {
+      if (mounted.current) {
+        setError(e?.message || "Falha ao obter teste gratuito.");
+        setStage(null);
+      }
+    } finally {
+      if (mounted.current) {
+        setTrialLoading(false);
+        setLoading(false);
+      }
+    }
+  };
+
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xxl }]} keyboardShouldPersistTaps="handled" testID="login-screen">
         <View style={styles.logoWrap}><Logo size={150} /></View>
         <Text style={styles.brand}>GoldCast Streaming</Text>
-        <Text style={styles.subtitle}>Entre com os dados fornecidos pelo seu serviço.</Text>
+        <Text style={styles.subtitle}>Entre com seus dados ou experimente gratuitamente.</Text>
 
         <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
           <Text style={styles.fieldLabel}>Servidor</Text>
@@ -185,7 +250,28 @@ export default function LoginScreen() {
           </View>
         )}
 
-        <GoldButton testID="login-submit" label="ENTRAR" onPress={submit} loading={loading} style={{ marginTop: spacing.xl }} />
+        <GoldButton testID="login-submit" label="ENTRAR" onPress={submit} loading={loading && !trialLoading} style={{ marginTop: spacing.xl }} />
+
+        <Pressable
+          testID="login-trial-button"
+          onPress={handleRequestTrial}
+          disabled={loading || trialLoading}
+          style={({ focused, pressed }) => [
+            styles.trialBtn,
+            focused && styles.focused,
+            pressed && { opacity: 0.8 },
+          ]}
+        >
+          {trialLoading ? (
+            <ActivityIndicator color={colors.gold} size="small" />
+          ) : (
+            <>
+              <Ionicons name="sparkles" size={18} color={colors.gold} />
+              <Text style={styles.trialBtnText}>TESTAR GRÁTIS POR 3 HORAS</Text>
+            </>
+          )}
+        </Pressable>
+
         <Pressable testID="login-m3u" onPress={() => router.push("/add-list")} style={({ focused }) => [styles.altLink, focused && styles.focused]}>
           <Ionicons name="link" size={16} color={colors.gold} />
           <Text style={styles.altText}>Usar lista M3U (URL ou arquivo)</Text>
@@ -231,6 +317,24 @@ const styles = StyleSheet.create({
   stageDetail: { color: colors.textDim, fontSize: 12, marginTop: 2 },
   errorBox: { marginTop: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, backgroundColor: "rgba(244,67,54,0.12)", borderRadius: radius.md, borderWidth: 1, borderColor: "rgba(244,67,54,0.3)" },
   errorText: { color: colors.error, flex: 1, fontSize: 13 },
+  trialBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    height: 52,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.gold,
+    backgroundColor: "rgba(218, 165, 32, 0.08)",
+    marginTop: spacing.md,
+  },
+  trialBtnText: {
+    color: colors.gold,
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+  },
   altLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.lg, padding: spacing.md, borderRadius: radius.md },
   altText: { color: colors.gold, fontSize: 14, fontWeight: "600" },
 });
