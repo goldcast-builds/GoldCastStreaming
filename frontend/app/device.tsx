@@ -12,7 +12,8 @@ export default function DeviceSelect() {
   useEffect(() => {
     let active = true;
     (async () => {
-      await setDeviceMode("mobile");
+      // Define direto o modo Smart TV / Projetor
+      await setDeviceMode("tv");
       const session = useSession.getState().session;
       const lists = await listLists().catch(() => []);
       if (!active) return;
