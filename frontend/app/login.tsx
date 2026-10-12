@@ -1,340 +1,118 @@
-import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Switch } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import Ionicons from "@react-native-vector-icons/ionicons";
-import { Logo } from "../src/components/Logo";
-import { GoldButton } from "../src/components/GoldButton";
-import { colors, radius, spacing } from "../src/utils/theme";
-import { DEFAULT_SERVERS, SERVER_LABELS, Stage } from "../src/services/xtream";
-import { useSession } from "../src/store/session";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const STAGE_LABEL: Record<Stage, string> = {
-  checking: "Verificando servidor...",
-  connecting: "Conectando...",
-  validating: "Validando acesso...",
-  loading: "Carregando conteúdo...",
-  done: "Conectado!",
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
-const REMOTE_SERVERS_URL = "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/servers.json";
-const SUPABASE_TRIAL_URL = "https://lljsnoovwwexzebzbaal.supabase.co/functions/v1/request-trial";
-
-interface ServerOption {
-  label: string;
-  url: string;
-}
-
-// Identificador estável do hardware para validação de teste único por aparelho
-const getDeviceHardware = (): { mac: string; key: string } => {
-  const constants = (Platform.constants || {}) as any;
-  const rawSeed = `${constants.Fingerprint || constants.Model || "GoldCastDevice"}_${Platform.OS}`;
-  
-  let hash = 0;
-  for (let i = 0; i < rawSeed.length; i++) {
-    hash = (hash << 5) - hash + rawSeed.charCodeAt(i);
-    hash |= 0;
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
-  const hex = Math.abs(hash).toString(16).padStart(12, "0").slice(-12).toUpperCase();
-  const mac = `${hex.slice(0, 2)}:${hex.slice(2, 4)}:${hex.slice(4, 6)}:${hex.slice(6, 8)}:${hex.slice(8, 10)}:${hex.slice(10, 12)}`;
-  const key = hex.slice(-6);
+  // Permite verificar se o endpoint está ativo ao abrir diretamente no navegador
+  if (req.method === "GET") {
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Edge Function request-trial online e operacional!",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+    );
+  }
 
-  return { mac, key };
-};
-
-export default function LoginScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const login = useSession((s) => s.login);
-
-  const defaultList: ServerOption[] = [
-    { label: SERVER_LABELS[DEFAULT_SERVERS.primary] || "Servidor 1", url: DEFAULT_SERVERS.primary },
-    { label: SERVER_LABELS[DEFAULT_SERVERS.backup] || "Servidor 2", url: DEFAULT_SERVERS.backup },
-  ];
-
-  const [serverList, setServerList] = useState<ServerOption[]>(defaultList);
-  const [server, setServer] = useState(DEFAULT_SERVERS.primary);
-  const [custom, setCustom] = useState(false);
-  const [user, setUser] = useState("");
-  const [pass, setPass] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [remember, setRemember] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [trialLoading, setTrialLoading] = useState(false);
-  const [stage, setStage] = useState<{ s: Stage; d?: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const mounted = useRef(true);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const res = await fetch(`${REMOTE_SERVERS_URL}?t=${Date.now()}`, { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0 && active) {
-            setServerList(data);
-            setServer((current) => {
-              const stillExists = data.some((s) => s.url === current);
-              return stillExists ? current : data[0].url;
-            });
-          }
-        }
-      } catch {
-        // Mantém contingência em caso de falha de conexão
-      }
-    })();
-
-    return () => {
-      active = false;
-      mounted.current = false;
-    };
-  }, []);
-
-  const submit = async () => {
-    setError(null);
-    if (!server.trim() || !user.trim() || !pass) {
-      setError(custom && !server.trim() ? "Informe o endereço do servidor." : "Preencha usuário e senha.");
-      return;
-    }
-    setLoading(true);
+  try {
+    let body: any = {};
     try {
-      await login(server, user.trim(), pass, remember, (s, d) => mounted.current && setStage({ s, d }));
-      setTimeout(() => router.replace("/(tabs)"), 350);
-    } catch (e: any) {
-      if (mounted.current) {
-        setError(e?.message || "Falha ao conectar.");
-        setStage(null);
-      }
-    } finally {
-      if (mounted.current) setLoading(false);
+      body = await req.json();
+    } catch {
+      body = {};
     }
-  };
 
-  const handleRequestTrial = async () => {
-    setError(null);
-    setTrialLoading(true);
-    setLoading(true);
-    setStage({ s: "connecting", d: "Solicitando teste de 3 horas..." });
+    const { mac, device_key } = body;
 
-    try {
-      const device = getDeviceHardware();
+    if (!mac) {
+      return new Response(
+        JSON.stringify({ success: false, message: "Endereço MAC não informado." }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
 
-      const response = await fetch(SUPABASE_TRIAL_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mac: device.mac,
-          device_key: device.key,
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // 1. Bloqueio anti-fraude: verifica se o aparelho já realizou teste
+    const { data: existingDevice } = await supabase
+      .from("devices")
+      .select("*")
+      .eq("mac", mac)
+      .maybeSingle();
+
+    if (existingDevice && existingDevice.trial_used) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "O teste gratuito de 3 horas já foi utilizado neste aparelho.",
         }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Não foi possível ativar o teste.");
-      }
-
-      setUser(data.username);
-      setPass(data.password);
-      const targetServer = data.serverUrl || server;
-      setServer(targetServer);
-
-      setStage({ s: "validating", d: "Acessando conteúdo liberado..." });
-      await login(targetServer, data.username, data.password, true, (s, d) => {
-        if (mounted.current) setStage({ s, d });
-      });
-
-      setTimeout(() => router.replace("/(tabs)"), 350);
-    } catch (e: any) {
-      if (mounted.current) {
-        setError(e?.message || "Falha ao obter teste gratuito.");
-        setStage(null);
-      }
-    } finally {
-      if (mounted.current) {
-        setTrialLoading(false);
-        setLoading(false);
-      }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 403 }
+      );
     }
-  };
 
-  return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xxl }]} keyboardShouldPersistTaps="handled" testID="login-screen">
-        <View style={styles.logoWrap}><Logo size={150} /></View>
-        <Text style={styles.brand}>GoldCast Streaming</Text>
-        <Text style={styles.subtitle}>Entre com seus dados ou experimente gratuitamente.</Text>
+    // 2. Chama a API de criação rápida (~100ms)
+    const apiUrl = "https://painel.dytop.org/dashboard/api/?fast_test=";
+    const sessionCookie = "PHPSESSID=mlt8jtrgms6u3qt8nh4h7oecf1";
 
-        <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
-          <Text style={styles.fieldLabel}>Servidor</Text>
-          <View style={styles.serverChips}>
-            {serverList.map((item, i) => {
-              const active = !custom && server === item.url;
-              return (
-                <Pressable
-                  key={`${item.url}-${i}`}
-                  testID={`server-chip-${i + 1}`}
-                  onPress={() => {
-                    setCustom(false);
-                    setServer(item.url);
-                  }}
-                  style={({ focused }) => [styles.serverBtn, active && styles.serverBtnActive, focused && styles.focused]}
-                >
-                  <Ionicons name="server-outline" size={18} color={active ? colors.onGold : colors.gold} />
-                  <Text style={[styles.serverText, active && { color: colors.onGold }]} numberOfLines={1}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+    const panelResponse = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Cookie": sessionCookie,
+        "Referer": "https://painel.dytop.org/dashboard/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:157.0) Gecko/20100101 Firefox/157.0",
+      },
+    });
 
-          <Pressable
-            testID="server-custom-toggle"
-            onPress={() => {
-              setCustom((v) => !v);
-              if (!custom) setServer("");
-              else setServer(serverList[0]?.url || DEFAULT_SERVERS.primary);
-            }}
-            style={({ focused }) => [styles.customLink, focused && styles.focused]}
-          >
-            <Ionicons name={custom ? "chevron-up" : "chevron-down"} size={14} color={colors.textDim} />
-            <Text style={styles.customText}>Outro servidor</Text>
-          </Pressable>
+    const rawData = await panelResponse.json();
+    const msgText: string = rawData?.data?.message || JSON.stringify(rawData);
 
-          {custom && (
-            <Field label="Endereço do servidor" value={server} onChangeText={setServer} placeholder="http://servidor.com:8080" autoCapitalize="none" autoCorrect={false} keyboardType="url" testID="login-server" />
-          )}
+    // 3. Extrai utilizador e senha diretamente do link M3U retornado
+    let username = "";
+    let password = "";
 
-          <Field label="Usuário" value={user} onChangeText={setUser} placeholder="usuario" autoCapitalize="none" autoCorrect={false} testID="login-user" />
-          <Field
-            label="Senha"
-            value={pass}
-            onChangeText={setPass}
-            placeholder="••••••••"
-            secureTextEntry={!showPass}
-            autoCapitalize="none"
-            testID="login-pass"
-            rightIcon={
-              <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={8} testID="login-toggle-pass">
-                <Ionicons name={showPass ? "eye-off" : "eye"} size={18} color={colors.textMuted} />
-              </Pressable>
-            }
-          />
+    const userMatch = msgText.match(/username=([^&"'\s<]+)/i) || msgText.match(/USU[ÁA]RIO\s*[:*]+\s*([a-zA-Z0-9_-]+)/i);
+    if (userMatch) username = userMatch[1].trim();
 
-          <View style={styles.rememberRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rememberTitle}>Lembrar acesso</Text>
-              <Text style={styles.rememberHint}>Credenciais guardadas no armazenamento seguro do dispositivo.</Text>
-            </View>
-            <Switch testID="login-remember" value={remember} onValueChange={setRemember} trackColor={{ true: colors.gold, false: colors.surface3 }} thumbColor={colors.text} />
-          </View>
-        </View>
+    const passMatch = msgText.match(/password=([^&"'\s<]+)/i) || msgText.match(/SENHA\s*[:*]+\s*([a-zA-Z0-9_-]+)/i);
+    if (passMatch) password = passMatch[1].trim();
 
-        {loading && stage && (
-          <View style={styles.stageBox} testID="login-stage">
-            <ActivityIndicator color={colors.gold} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.stageText}>{STAGE_LABEL[stage.s]}</Text>
-              {stage.d ? <Text style={styles.stageDetail}>{stage.d}</Text> : null}
-            </View>
-          </View>
-        )}
+    // 4. Salva a concessão no Supabase com utilizador e senha vinculados ao MAC
+    await supabase.from("devices").upsert({
+      mac: mac,
+      device_key: device_key || "000000",
+      trial_used: true,
+      assigned_user: username,
+      assigned_pass: password,
+      created_at: new Date().toISOString(),
+    });
 
-        {error && (
-          <View style={styles.errorBox} testID="login-error">
-            <Ionicons name="alert-circle" size={18} color={colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
-
-        <GoldButton testID="login-submit" label="ENTRAR" onPress={submit} loading={loading && !trialLoading} style={{ marginTop: spacing.xl }} />
-
-        <Pressable
-          testID="login-trial-button"
-          onPress={handleRequestTrial}
-          disabled={loading || trialLoading}
-          style={({ focused, pressed }) => [
-            styles.trialBtn,
-            focused && styles.focused,
-            pressed && { opacity: 0.8 },
-          ]}
-        >
-          {trialLoading ? (
-            <ActivityIndicator color={colors.gold} size="small" />
-          ) : (
-            <>
-              <Ionicons name="sparkles" size={18} color={colors.gold} />
-              <Text style={styles.trialBtnText}>TESTAR GRÁTIS POR 3 HORAS</Text>
-            </>
-          )}
-        </Pressable>
-
-        <Pressable testID="login-m3u" onPress={() => router.push("/add-list")} style={({ focused }) => [styles.altLink, focused && styles.focused]}>
-          <Ionicons name="link" size={16} color={colors.gold} />
-          <Text style={styles.altText}>Usar lista M3U (URL ou arquivo)</Text>
-        </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
-}
-
-function Field({ label, rightIcon, testID, ...props }: any) {
-  return (
-    <View>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View style={styles.fieldWrap}>
-        <TextInput testID={testID} placeholderTextColor={colors.textDim} style={styles.input} {...props} />
-        {rightIcon ? <View style={{ marginLeft: spacing.sm }}>{rightIcon}</View> : null}
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: spacing.lg },
-  logoWrap: { alignItems: "center" },
-  brand: { color: colors.gold, fontSize: 26, fontWeight: "700", textAlign: "center", letterSpacing: 0.6, marginTop: spacing.sm },
-  subtitle: { color: colors.textMuted, fontSize: 14, textAlign: "center", marginTop: spacing.xs },
-  fieldLabel: { color: colors.textMuted, fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 },
-  fieldWrap: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: spacing.md },
-  input: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 14 },
-  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  serverBtn: { flex: 1, minWidth: 120, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 52, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10 },
-  serverBtnActive: { backgroundColor: colors.gold, borderColor: colors.gold },
-  serverText: { color: colors.text, fontSize: 12, fontWeight: "700", letterSpacing: 0.4 },
-  customLink: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-end", paddingVertical: 4, paddingHorizontal: 6, borderRadius: radius.sm },
-  customText: { color: colors.textDim, fontSize: 12 },
-  focused: { borderColor: colors.gold, borderWidth: 2 },
-  rememberRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  rememberTitle: { color: colors.text, fontSize: 14, fontWeight: "600" },
-  rememberHint: { color: colors.textDim, fontSize: 11, marginTop: 2 },
-  stageBox: { marginTop: spacing.xl, flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md },
-  stageText: { color: colors.text, fontSize: 14 },
-  stageDetail: { color: colors.textDim, fontSize: 12, marginTop: 2 },
-  errorBox: { marginTop: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, backgroundColor: "rgba(244,67,54,0.12)", borderRadius: radius.md, borderWidth: 1, borderColor: "rgba(244,67,54,0.3)" },
-  errorText: { color: colors.error, flex: 1, fontSize: 13 },
-  trialBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    height: 52,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.gold,
-    backgroundColor: "rgba(218, 165, 32, 0.08)",
-    marginTop: spacing.md,
-  },
-  trialBtnText: {
-    color: colors.gold,
-    fontSize: 14,
-    fontWeight: "700",
-    letterSpacing: 0.8,
-  },
-  altLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.lg, padding: spacing.md, borderRadius: radius.md },
-  altText: { color: colors.gold, fontSize: 14, fontWeight: "600" },
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Teste de 3 horas liberado!",
+        username: username,
+        password: password,
+        serverUrl: "http://newbrtop.online:8080",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+    );
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+    );
+  }
 });
