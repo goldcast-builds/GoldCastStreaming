@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import * as Application from "expo-application";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Logo } from "../src/components/Logo";
@@ -37,8 +38,25 @@ interface ServerOption {
   url: string;
 }
 
-// Identificador único e persistente por dispositivo
+// Identificador único e persistente fixado no hardware real do aparelho (não muda ao desinstalar)
 const getDeviceHardware = async (): Promise<{ mac: string; key: string }> => {
+  try {
+    let hardwareId = "";
+
+    if (Platform.OS === "android") {
+      hardwareId = Application.getAndroidId() || "";
+    }
+
+    if (hardwareId) {
+      // Converte o Android ID em um endereço MAC determinístico (sempre o mesmo no aparelho)
+      const clean = hardwareId.padEnd(12, "0").slice(0, 12).toUpperCase();
+      const mac = clean.match(/.{1,2}/g)?.join(":") || "00:11:22:33:44:55";
+      const key = hardwareId.slice(0, 6);
+      return { mac, key };
+    }
+  } catch {}
+
+  // Fallback caso a API nativa não responda
   try {
     const savedMac = await AsyncStorage.getItem("@goldcast_device_mac");
     const savedKey = await AsyncStorage.getItem("@goldcast_device_key");
@@ -160,7 +178,6 @@ export default function LoginScreen() {
           rawMsg.toLowerCase().includes("not found");
 
         if (is404OrSync) {
-          // Intercepta o 404 e ativa a contagem regressiva amigável
           setSyncNotice(
             "Conta recém-gerada! O servidor leva cerca de 1 minuto para replicar o acesso em todos os nós. Aguarde o contador para conectar automaticamente."
           );
@@ -203,13 +220,11 @@ export default function LoginScreen() {
         throw new Error(data.message || "Não foi possível ativar o teste.");
       }
 
-      // Preenche os campos com a nova conta
       setUser(data.username);
       setPass(data.password);
       const targetServer = data.serverUrl || server;
       setServer(targetServer);
 
-      // Inicia o cronômetro para aguardar a propagação dos servidores
       setStage(null);
       setSyncNotice(
         "Conta gerada com sucesso! O painel leva cerca de 60 segundos para replicar sua linha. O acesso será iniciado automaticamente assim que zerar."
@@ -339,7 +354,6 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        {/* Notificação Dourada de Sincronização com Contador */}
         {syncNotice && (
           <View style={styles.syncBox} testID="login-sync-notice">
             <Ionicons name="hourglass-outline" size={24} color={colors.gold} />
