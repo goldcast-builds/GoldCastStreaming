@@ -27,8 +27,9 @@ LogBox.ignoreAllLogs(true);
 // Versão instalada neste APK. Suba para 2, 3, etc. a cada nova compilação
 const APP_VERSION_CODE = 1;
 
-const URL_PARCEIROS =
-  "https://gist.githubusercontent.com/anderson009470/e32d3a695c62065c1b82513edcf7dbc9/raw/parceiros.json";
+// Endpoint do Supabase para validação de licenças e códigos de parceiros
+const URL_VALIDATE_CODE =
+  "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/validate-code";
 
 const URL_VERSION =
   "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/version.json";
@@ -39,6 +40,27 @@ const _WARM = [
 ];
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Obtém ou gera o MAC persistente exclusivo do dispositivo
+const getDeviceMac = async (): Promise<string> => {
+  try {
+    const savedMac = await AsyncStorage.getItem("@goldcast_device_mac");
+    if (savedMac) return savedMac;
+  } catch {}
+
+  const randomBytes = Array.from({ length: 6 }, () =>
+    Math.floor(Math.random() * 256).toString(16).padStart(2, "0").toUpperCase()
+  );
+  const mac = randomBytes.join(":");
+  try {
+    await AsyncStorage.setItem("@goldcast_device_mac", mac);
+    await AsyncStorage.setItem(
+      "@goldcast_device_key",
+      Math.floor(100000 + Math.random() * 900000).toString()
+    );
+  } catch {}
+  return mac;
+};
 
 // SISTEMA DE ATUALIZAÇÃO AUTOMÁTICA (AUTO-UPDATE)
 function AutoUpdateModal() {
@@ -128,7 +150,7 @@ function AutoUpdateModal() {
   );
 }
 
-// TRAVA DE PARCERIA EMBUTIDA
+// TRAVA DE PARCERIA CONECTADA AO SUPABASE
 function PartnerLock() {
   const [bloqueado, setBloqueado] = useState(false);
   const [verificandoInicial, setVerificandoInicial] = useState(true);
@@ -149,26 +171,31 @@ function PartnerLock() {
         return;
       }
 
-      const res = await fetch(`${URL_PARCEIROS}?t=${Date.now()}`);
-      if (res.ok) {
-        const parceiros = await res.json();
-        const info = parceiros[codigoSalvo];
+      const mac = await getDeviceMac();
+      const res = await fetch(URL_VALIDATE_CODE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: codigoSalvo, mac }),
+      });
 
-        if (!info || !info.ativo) {
-          await AsyncStorage.removeItem("goldcast_partner_code");
-          await AsyncStorage.removeItem("goldcast_partner_name");
-          setBloqueado(true);
-          Alert.alert(
-            "Licença Suspensa",
-            "A parceria corporativa vinculada a este aplicativo foi suspensa ou desativada."
-          );
-        } else {
-          setBloqueado(false);
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        if (data.partner) {
+          await AsyncStorage.setItem("goldcast_partner_name", data.partner);
         }
-      } else {
         setBloqueado(false);
+      } else {
+        await AsyncStorage.removeItem("goldcast_partner_code");
+        await AsyncStorage.removeItem("goldcast_partner_name");
+        setBloqueado(true);
+        Alert.alert(
+          "Licença Expirada ou Bloqueada",
+          data.message || "Seu código de acesso não está mais ativo neste dispositivo."
+        );
       }
-    } catch (e) {
+    } catch {
+      // Em oscilações temporárias de rede, mantém a liberação local
       setBloqueado(false);
     } finally {
       setVerificandoInicial(false);
@@ -184,46 +211,39 @@ function PartnerLock() {
 
     setCarregando(true);
     try {
-      const res = await fetch(`${URL_PARCEIROS}?t=${Date.now()}`);
-      if (!res.ok) {
-        throw new Error("Falha ao consultar servidor");
-      }
+      const mac = await getDeviceMac();
+      const res = await fetch(URL_VALIDATE_CODE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: chave, mac }),
+      });
 
-      const parceiros = await res.json();
-      const info = parceiros[chave];
+      const data = await res.json();
 
-      if (!info) {
-        Alert.alert("Código Inválido", "Este código de parceria não foi encontrado.");
+      if (!res.ok || !data.success) {
+        Alert.alert("Acesso Negado", data.message || "Código inválido ou já utilizado.");
         setCarregando(false);
         return;
-      }
-
-      if (!info.ativo) {
-        Alert.alert("Acesso Suspenso", "Esta licença corporativa encontra-se inativa.");
-        setCarregando(false);
-        return;
-      }
-
-      if (info.validade) {
-        const dataExp = new Date(info.validade);
-        if (dataExp < new Date()) {
-          Alert.alert("Licença Expirada", "A licença desta empresa parceira expirou.");
-          setCarregando(false);
-          return;
-        }
       }
 
       await AsyncStorage.setItem("goldcast_partner_code", chave);
-      await AsyncStorage.setItem("goldcast_partner_name", info.empresa || "Parceiro Oficial");
+      await AsyncStorage.setItem(
+        "goldcast_partner_name",
+        data.partner || "Parceiro Oficial"
+      );
 
       Alert.alert(
         "Acesso Autorizado! 🎉",
-        `Bem-vindo ao GoldCast!\nParceria: ${info.empresa}`
+        `Bem-vindo ao GoldCast!\nParceria: ${data.partner || "Oficial"}`
       );
 
       setBloqueado(false);
-    } catch (err) {
-      Alert.alert("Erro de Conexão", "Não foi possível validar o código. Verifique sua conexão com a internet.");
+    } catch (err: any) {
+      reportError("partner_lock_validation", err);
+      Alert.alert(
+        "Erro de Conexão",
+        "Não foi possível validar o código. Verifique sua conexão com a internet."
+      );
     } finally {
       setCarregando(false);
     }
@@ -254,7 +274,7 @@ function PartnerLock() {
             <Text style={styles.inputIcon}>🔑</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ex: 749215"
+              placeholder="Ex: GOLD-1234-5678"
               placeholderTextColor="#666"
               value={codigo}
               onChangeText={setCodigo}
@@ -276,7 +296,7 @@ function PartnerLock() {
           </Pressable>
 
           <Text style={styles.helpText}>
-            Ainda não tem um código? Entre em contato com a empresa parceira.
+            Ainda não tem um código? Entre em contato com seu revendedor ou suporte.
           </Text>
         </View>
       </View>
@@ -286,9 +306,10 @@ function PartnerLock() {
 
 export default function RootLayout() {
   useEffect(() => {
-    // Intercetor global de erros e crashes inesperados
+    // Interceptor global de erros e crashes não tratados
     try {
-      const errorUtils = typeof ErrorUtils !== "undefined" ? ErrorUtils : (global as any).ErrorUtils;
+      const errorUtils =
+        typeof ErrorUtils !== "undefined" ? ErrorUtils : (global as any).ErrorUtils;
       if (errorUtils) {
         const defaultErrorHandler = errorUtils.getGlobalHandler();
         errorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
@@ -339,7 +360,7 @@ export default function RootLayout() {
               />
             </Stack>
 
-            {/* Trava de Parceria Corporativa */}
+            {/* Trava de Parceria Corporativa conectada ao Supabase */}
             <PartnerLock />
 
             {/* Verificador de Atualizações Automáticas */}
