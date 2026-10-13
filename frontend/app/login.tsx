@@ -45,11 +45,8 @@ const getDeviceHardware = async (): Promise<{ mac: string; key: string }> => {
     if (savedMac && savedKey) {
       return { mac: savedMac, key: savedKey };
     }
-  } catch {
-    // Continua para nova geração caso haja falha de leitura
-  }
+  } catch {}
 
-  // Gera um MAC aleatório exclusivo de 12 caracteres hexadecimais
   const randomBytes = Array.from({ length: 6 }, () =>
     Math.floor(Math.random() * 256).toString(16).padStart(2, "0").toUpperCase()
   );
@@ -59,9 +56,7 @@ const getDeviceHardware = async (): Promise<{ mac: string; key: string }> => {
   try {
     await AsyncStorage.setItem("@goldcast_device_mac", mac);
     await AsyncStorage.setItem("@goldcast_device_key", key);
-  } catch {
-    // Ignora falha de gravação local
-  }
+  } catch {}
 
   return { mac, key };
 };
@@ -87,6 +82,11 @@ export default function LoginScreen() {
   const [trialLoading, setTrialLoading] = useState(false);
   const [stage, setStage] = useState<{ s: Stage; d?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Estados do cronômetro de sincronização
+  const [countdown, setCountdown] = useState(0);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const autoSubmitAfterSync = useRef(false);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -104,9 +104,7 @@ export default function LoginScreen() {
             });
           }
         }
-      } catch {
-        // Mantém contingência em caso de falha de conexão
-      }
+      } catch {}
     })();
 
     return () => {
@@ -115,19 +113,64 @@ export default function LoginScreen() {
     };
   }, []);
 
+  // Controlador do cronômetro regressivo
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [countdown]);
+
+  // Executa login automático quando a contagem regressiva chega a zero
+  useEffect(() => {
+    if (countdown === 0 && autoSubmitAfterSync.current) {
+      autoSubmitAfterSync.current = false;
+      setSyncNotice(null);
+      submit();
+    }
+  }, [countdown]);
+
   const submit = async () => {
+    if (countdown > 0) return;
     setError(null);
+
     if (!server.trim() || !user.trim() || !pass) {
       setError(custom && !server.trim() ? "Informe o endereço do servidor." : "Preencha usuário e senha.");
       return;
     }
+
     setLoading(true);
     try {
       await login(server, user.trim(), pass, remember, (s, d) => mounted.current && setStage({ s, d }));
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha ao conectar.");
+        const rawMsg = String(e?.message || "");
+        const is404OrSync =
+          rawMsg.includes("404") ||
+          rawMsg.toLowerCase().includes("não encontrada") ||
+          rawMsg.toLowerCase().includes("not found");
+
+        if (is404OrSync) {
+          // Intercepta o 404 e ativa a contagem regressiva amigável
+          setSyncNotice(
+            "Conta recém-gerada! O servidor leva cerca de 1 minuto para replicar o acesso em todos os nós. Aguarde o contador para conectar automaticamente."
+          );
+          setError(null);
+          setCountdown(55);
+          autoSubmitAfterSync.current = true;
+        } else {
+          setError(rawMsg || "Falha ao conectar.");
+          setSyncNotice(null);
+        }
         setStage(null);
       }
     } finally {
@@ -137,6 +180,7 @@ export default function LoginScreen() {
 
   const handleRequestTrial = async () => {
     setError(null);
+    setSyncNotice(null);
     setTrialLoading(true);
     setLoading(true);
     setStage({ s: "connecting", d: "Criando seu teste de 3 horas..." });
@@ -159,42 +203,19 @@ export default function LoginScreen() {
         throw new Error(data.message || "Não foi possível ativar o teste.");
       }
 
+      // Preenche os campos com a nova conta
       setUser(data.username);
       setPass(data.password);
       const targetServer = data.serverUrl || server;
       setServer(targetServer);
 
-      // Aguarda 6 segundos para o servidor TOP UHD registrar e propagar a conta
-      setStage({ s: "validating", d: "Sincronizando conta no servidor..." });
-      await new Promise((resolve) => setTimeout(resolve, 6000));
-
-      // Tenta conectar até 4 vezes com intervalo de 4 segundos
-      let connected = false;
-      let lastError: any = null;
-
-      for (let attempt = 1; attempt <= 4; attempt++) {
-        try {
-          if (attempt > 1) {
-            setStage({ s: "validating", d: `Sincronizando conta (tentativa ${attempt}/4)...` });
-          }
-          await login(targetServer, data.username, data.password, true, (s, d) => {
-            if (mounted.current) setStage({ s, d });
-          });
-          connected = true;
-          break;
-        } catch (err) {
-          lastError = err;
-          if (attempt < 4) {
-            await new Promise((resolve) => setTimeout(resolve, 4000));
-          }
-        }
-      }
-
-      if (!connected) {
-        throw lastError || new Error("Conta criada, mas o servidor demorou a responder. Clique em ENTRAR.");
-      }
-
-      setTimeout(() => router.replace("/(tabs)"), 350);
+      // Inicia o cronômetro para aguardar a propagação dos servidores
+      setStage(null);
+      setSyncNotice(
+        "Conta gerada com sucesso! O painel leva cerca de 60 segundos para replicar sua linha. O acesso será iniciado automaticamente assim que zerar."
+      );
+      setCountdown(60);
+      autoSubmitAfterSync.current = true;
     } catch (e: any) {
       if (mounted.current) {
         setError(e?.message || "Falha ao obter teste gratuito.");
@@ -318,6 +339,19 @@ export default function LoginScreen() {
           </View>
         </View>
 
+        {/* Notificação Dourada de Sincronização com Contador */}
+        {syncNotice && (
+          <View style={styles.syncBox} testID="login-sync-notice">
+            <Ionicons name="hourglass-outline" size={24} color={colors.gold} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.syncTitle}>
+                {countdown > 0 ? `Sincronizando com o servidor (${countdown}s)` : "Sincronizando..."}
+              </Text>
+              <Text style={styles.syncText}>{syncNotice}</Text>
+            </View>
+          </View>
+        )}
+
         {loading && stage && (
           <View style={styles.stageBox} testID="login-stage">
             <ActivityIndicator color={colors.gold} />
@@ -328,7 +362,7 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {error && (
+        {error && !syncNotice && (
           <View style={styles.errorBox} testID="login-error">
             <Ionicons name="alert-circle" size={18} color={colors.error} />
             <Text style={styles.errorText}>{error}</Text>
@@ -337,18 +371,19 @@ export default function LoginScreen() {
 
         <GoldButton
           testID="login-submit"
-          label="ENTRAR"
+          label={countdown > 0 ? `AGUARDE (${countdown}s)` : "ENTRAR"}
           onPress={submit}
-          loading={loading && !trialLoading}
-          style={{ marginTop: spacing.xl }}
+          loading={loading && !trialLoading && countdown === 0}
+          style={[styles.submitBtn, countdown > 0 && styles.disabledBtn]}
         />
 
         <Pressable
           testID="login-trial-button"
           onPress={handleRequestTrial}
-          disabled={loading || trialLoading}
+          disabled={loading || trialLoading || countdown > 0}
           style={({ focused, pressed }) => [
             styles.trialBtn,
+            (loading || trialLoading || countdown > 0) && styles.disabledBtn,
             focused && styles.focused,
             pressed && { opacity: 0.8 },
           ]}
@@ -458,6 +493,28 @@ const styles = StyleSheet.create({
   },
   rememberTitle: { color: colors.text, fontSize: 14, fontWeight: "600" },
   rememberHint: { color: colors.textDim, fontSize: 11, marginTop: 2 },
+  syncBox: {
+    marginTop: spacing.lg,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: "rgba(229, 169, 59, 0.12)",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(229, 169, 59, 0.35)",
+  },
+  syncTitle: {
+    color: colors.gold,
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  syncText: {
+    color: "#E2E5EE",
+    fontSize: 12,
+    lineHeight: 18,
+  },
   stageBox: {
     marginTop: spacing.xl,
     flexDirection: "row",
@@ -481,6 +538,12 @@ const styles = StyleSheet.create({
     borderColor: "rgba(244,67,54,0.3)",
   },
   errorText: { color: colors.error, flex: 1, fontSize: 13 },
+  submitBtn: {
+    marginTop: spacing.xl,
+  },
+  disabledBtn: {
+    opacity: 0.6,
+  },
   trialBtn: {
     flexDirection: "row",
     alignItems: "center",
