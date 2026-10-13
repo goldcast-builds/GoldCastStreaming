@@ -122,11 +122,25 @@ function LiveContent() {
   }, [rows, listMode, selectedCat, favs, recents]);
 
   const open = useCallback((index: number) => {
+    const item = visibleRows[index];
     const items: PlayItem[] = visibleRows.map((r) => ({
       kind: "live", id: r.id, title: r.name, subtitle: r.category, logo: r.logo, urls: r.urls, streamId: r.streamId, epgChannelId: r.epgId, raw: r.raw,
     }));
     setQueue(items, index);
-    router.push("/player");
+    
+    // Envia os parâmetros diretos e redundantes para o Just Player
+    router.push({
+      pathname: "/player",
+      params: {
+        url: item?.urls?.[0] || "",
+        streamUrl: item?.urls?.[0] || "",
+        title: item?.name || "Transmissão GoldCast",
+        name: item?.name || "",
+        id: item?.id || "",
+        stream_id: String(item?.streamId || item?.id || ""),
+        type: "live",
+      },
+    });
   }, [visibleRows, setQueue, router]);
 
   const loading = listMode ? listLoading : loadingLive && !catalog.liveLoaded;
