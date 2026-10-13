@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Logo } from "../src/components/Logo";
 import { GoldButton } from "../src/components/GoldButton";
@@ -36,19 +37,31 @@ interface ServerOption {
   url: string;
 }
 
-const getDeviceHardware = (): { mac: string; key: string } => {
-  const constants = (Platform.constants || {}) as any;
-  const rawSeed = `${constants.Fingerprint || constants.Model || "GoldCastDevice"}_${Platform.OS}`;
-
-  let hash = 0;
-  for (let i = 0; i < rawSeed.length; i++) {
-    hash = (hash << 5) - hash + rawSeed.charCodeAt(i);
-    hash |= 0;
+// Identificador único e persistente por dispositivo
+const getDeviceHardware = async (): Promise<{ mac: string; key: string }> => {
+  try {
+    const savedMac = await AsyncStorage.getItem("@goldcast_device_mac");
+    const savedKey = await AsyncStorage.getItem("@goldcast_device_key");
+    if (savedMac && savedKey) {
+      return { mac: savedMac, key: savedKey };
+    }
+  } catch {
+    // Continua para nova geração caso haja falha de leitura
   }
 
-  const hex = Math.abs(hash).toString(16).padStart(12, "0").slice(-12).toUpperCase();
-  const mac = `${hex.slice(0, 2)}:${hex.slice(2, 4)}:${hex.slice(4, 6)}:${hex.slice(6, 8)}:${hex.slice(8, 10)}:${hex.slice(10, 12)}`;
-  const key = hex.slice(-6);
+  // Gera um MAC aleatório exclusivo de 12 caracteres hexadecimais
+  const randomBytes = Array.from({ length: 6 }, () =>
+    Math.floor(Math.random() * 256).toString(16).padStart(2, "0").toUpperCase()
+  );
+  const mac = randomBytes.join(":");
+  const key = Math.floor(100000 + Math.random() * 900000).toString();
+
+  try {
+    await AsyncStorage.setItem("@goldcast_device_mac", mac);
+    await AsyncStorage.setItem("@goldcast_device_key", key);
+  } catch {
+    // Ignora falha de gravação local
+  }
 
   return { mac, key };
 };
@@ -129,7 +142,7 @@ export default function LoginScreen() {
     setStage({ s: "connecting", d: "Criando seu teste de 3 horas..." });
 
     try {
-      const device = getDeviceHardware();
+      const device = await getDeviceHardware();
 
       const response = await fetch(SUPABASE_TRIAL_URL, {
         method: "POST",
@@ -155,7 +168,7 @@ export default function LoginScreen() {
       setStage({ s: "validating", d: "Sincronizando conta no servidor..." });
       await new Promise((resolve) => setTimeout(resolve, 6000));
 
-      // Tenta conectar até 4 vezes caso o servidor demore a responder
+      // Tenta conectar até 4 vezes com intervalo de 4 segundos
       let connected = false;
       let lastError: any = null;
 
