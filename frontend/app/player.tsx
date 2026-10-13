@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Platform,
   NativeModules,
-  Linking,
   StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,12 +23,10 @@ export default function PlayerScreen() {
   const insets = useSafeAreaInsets();
   const rawParams = useLocalSearchParams<Record<string, any>>();
 
-  // Obtém a sessão e a fila de reprodução ativa
   const queue = useSession((s: any) => s.queue || []) as PlayItem[];
   const queueIndex = useSession((s: any) => s.queueIndex ?? s.currentIndex ?? s.index ?? 0);
   const session = useSession((s: any) => s.session || s);
 
-  // Item ativo na fila de reprodução do GoldCast
   const activePlayItem = useMemo(() => {
     if (Array.isArray(queue) && queue.length > 0 && queueIndex >= 0 && queueIndex < queue.length) {
       return queue[queueIndex];
@@ -37,7 +34,6 @@ export default function PlayerScreen() {
     return null;
   }, [queue, queueIndex]);
 
-  // Identifica o título da transmissão
   const title = useMemo(() => {
     return (
       rawParams.title ||
@@ -48,65 +44,77 @@ export default function PlayerScreen() {
     );
   }, [rawParams, activePlayItem]);
 
-  // Identifica ou reconstrói a URL do stream
   const streamUrl = useMemo(() => {
-    // 1. Tenta a URL direta da fila ativa (useSession)
+    let rawUrl = "";
+
+    // 1. URL da fila de reprodução ativa
     if (activePlayItem?.urls && activePlayItem.urls.length > 0) {
       const firstUrl = activePlayItem.urls[0];
-      if (firstUrl && typeof firstUrl === "string" && firstUrl.startsWith("http")) {
-        return firstUrl;
+      if (firstUrl && typeof firstUrl === "string" && (firstUrl.startsWith("http://") || firstUrl.startsWith("https://"))) {
+        rawUrl = firstUrl;
       }
     }
 
-    // 2. Tenta parâmetros passados diretamente na rota
-    const directUrl =
-      rawParams.url ||
-      rawParams.streamUrl ||
-      rawParams.stream_url ||
-      rawParams.uri ||
-      rawParams.videoUrl ||
-      rawParams.link;
+    // 2. Parâmetros passados diretamente na navegação
+    if (!rawUrl) {
+      const directUrl =
+        rawParams.url ||
+        rawParams.streamUrl ||
+        rawParams.stream_url ||
+        rawParams.uri ||
+        rawParams.videoUrl ||
+        rawParams.link;
 
-    if (directUrl && typeof directUrl === "string" && directUrl.startsWith("http")) {
-      return directUrl;
-    }
-
-    // 3. Fallback: reconstrói com credenciais Xtream se houver streamId
-    const streamId =
-      rawParams.stream_id ||
-      rawParams.streamId ||
-      rawParams.id ||
-      activePlayItem?.streamId ||
-      activePlayItem?.id;
-
-    const streamType = (
-      rawParams.type ||
-      rawParams.stream_type ||
-      activePlayItem?.kind ||
-      "live"
-    ).toLowerCase();
-
-    const server = session?.server || session?.url || "";
-    const username = session?.user || session?.username || session?.userInfo?.username || "";
-    const password = session?.pass || session?.password || session?.userInfo?.password || "";
-
-    if (streamId && server && username && password) {
-      const cleanServer = server.replace(/\/+$/, "");
-      let typeFolder = "live";
-      let extension = "ts";
-
-      if (streamType.includes("movie") || streamType.includes("vod")) {
-        typeFolder = "movie";
-        extension = "mp4";
-      } else if (streamType.includes("series")) {
-        typeFolder = "series";
-        extension = "mp4";
+      if (directUrl && typeof directUrl === "string" && (directUrl.startsWith("http://") || directUrl.startsWith("https://"))) {
+        rawUrl = directUrl;
       }
-
-      return `${cleanServer}/${typeFolder}/${username}/${password}/${streamId}.${extension}`;
     }
 
-    return "";
+    // 3. Reconstrução com credenciais Xtream se houver ID
+    if (!rawUrl) {
+      const streamId =
+        rawParams.stream_id ||
+        rawParams.streamId ||
+        rawParams.id ||
+        activePlayItem?.streamId ||
+        activePlayItem?.id;
+
+      const streamType = (
+        rawParams.type ||
+        rawParams.stream_type ||
+        activePlayItem?.kind ||
+        "live"
+      ).toLowerCase();
+
+      const server = session?.server || session?.url || "";
+      const username = session?.user || session?.username || session?.userInfo?.username || "";
+      const password = session?.pass || session?.password || session?.userInfo?.password || "";
+
+      if (streamId && server && username && password) {
+        const cleanServer = server.replace(/\/+$/, "");
+        let typeFolder = "live";
+        let extension = "ts";
+
+        if (streamType.includes("movie") || streamType.includes("vod")) {
+          typeFolder = "movie";
+          extension = "mp4";
+        } else if (streamType.includes("series")) {
+          typeFolder = "series";
+          extension = "mp4";
+        }
+
+        rawUrl = `${cleanServer}/${typeFolder}/${username}/${password}/${streamId}.${extension}`;
+      }
+    }
+
+    if (!rawUrl) return "";
+
+    // Força HTTP em fluxos IPTV para impedir o bloqueio de SSL (ERR_CERT_AUTHORITY_INVALID)
+    if (rawUrl.toLowerCase().startsWith("https://")) {
+      rawUrl = "http://" + rawUrl.substring(8);
+    }
+
+    return rawUrl;
   }, [rawParams, activePlayItem, session]);
 
   const [launching, setLaunching] = useState(false);
@@ -123,40 +131,49 @@ export default function PlayerScreen() {
     setErrorMsg(null);
 
     try {
-      // 1. Tenta acionar o módulo nativo compilado (JustPlayerModule)
+      // 1. Módulo nativo compilado (JustPlayerModule ou JustPlayer)
+      const JustPlayerModule =
+        NativeModules.JustPlayer ||
+        NativeModules.JustPlayerModule ||
+        NativeModules.GoldCastPlayer;
+
       if (
         Platform.OS === "android" &&
-        NativeModules.JustPlayer &&
-        typeof NativeModules.JustPlayer.play === "function"
+        JustPlayerModule &&
+        (typeof JustPlayerModule.play === "function" || typeof JustPlayerModule.playVideo === "function")
       ) {
-        NativeModules.JustPlayer.play(streamUrl, title);
+        if (typeof JustPlayerModule.play === "function") {
+          JustPlayerModule.play(streamUrl, title);
+        } else {
+          JustPlayerModule.playVideo(streamUrl, title);
+        }
         setLaunching(false);
         return;
       }
 
-      // 2. Fallback via Intent Launcher do Android
-      try {
-        const IntentLauncher = require("expo-intent-launcher");
-        if (IntentLauncher && IntentLauncher.startActivityAsync) {
-          await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
-            data: streamUrl,
-            type: "video/*",
-            extra: {
-              title: title,
-            },
-          });
-          setLaunching(false);
-          return;
-        }
-      } catch {}
-
-      // 3. Fallback via Linking do sistema
-      const canOpen = await Linking.canOpenURL(streamUrl);
-      if (canOpen) {
-        await Linking.openURL(streamUrl);
-      } else {
-        throw new Error("Não foi possível iniciar o reprodutor nativo.");
+      // 2. Disparo de Intent de vídeo no Android (abre players de vídeo instalados sem recorrer ao Chrome)
+      if (Platform.OS === "android") {
+        try {
+          const IntentLauncher = require("expo-intent-launcher");
+          if (IntentLauncher && IntentLauncher.startActivityAsync) {
+            await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+              data: streamUrl,
+              type: "video/*",
+              flags: 1,
+              extra: {
+                title: title,
+                "android.intent.extra.TITLE": title,
+              },
+            });
+            setLaunching(false);
+            return;
+          }
+        } catch {}
       }
+
+      throw new Error(
+        "Módulo nativo Just Player não encontrado no pacote atual. Instale o Just Player ou VLC no dispositivo para receber o stream."
+      );
     } catch (err: any) {
       const msg = err?.message || "Falha ao abrir o reprodutor.";
       setErrorMsg(msg);
