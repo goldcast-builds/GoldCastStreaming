@@ -1,0 +1,7 @@
+{
+  "versionCode": 2,
+  "versionName": "1.1.0",
+  "apkUrl": "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/goldcast.apk",
+  "changelog": "Player mais rápido, carregamento instantâneo e canais em mosaico.",
+  "forceUpdate": false
+}
