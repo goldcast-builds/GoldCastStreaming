@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, AppState, Platform, useWindowDimensions, StatusBar, PanResponder, Modal } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  FlatList,
+  AppState,
+  Platform,
+  useWindowDimensions,
+  StatusBar,
+  PanResponder,
+  Modal,
+} from "react-native";
 import { useEventListener } from "expo";
 import { VideoView, useVideoPlayer, VideoSource } from "expo-video";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -21,9 +34,18 @@ const AUDIO_PRESETS = [
   { id: "bass", label: "Reforço Graves", icon: "hardware-chip-outline" },
 ];
 const SLEEP_OPTS = [0, 15, 30, 45, 60];
-const UA = "GoldCastStreaming/1.0", isWeb = Platform.OS === "web";
+
+// Assinatura padrão aceita de primeira por todos os balanceadores Xtream Codes
+const UA = "IPTVSmartersPlayer";
+const isWeb = Platform.OS === "web";
+
 const STATE_LABEL: Record<string, string> = {
-  connecting: "Conectando...", loading: "Carregando...", buffering: "Buffering...", playing: "Reproduzindo", paused: "Pausado", error: "Falha na reprodução.",
+  connecting: "Conectando...",
+  loading: "Carregando...",
+  buffering: "Buffering...",
+  playing: "Reproduzindo",
+  paused: "Pausado",
+  error: "Falha na reprodução.",
 };
 
 function fmt(sec: number) {
@@ -31,6 +53,7 @@ function fmt(sec: number) {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
   return (h ? `${h}:` : "") + `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
+
 function getClock() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -92,29 +115,81 @@ export default function PlayerScreen() {
   stateRef.current = { volume, brightness, time, isLive, locked, controls, queueLen: queue.length, muted };
 
   const currentUri = useCallback((it: PlayItem | undefined) => (it?.urls.length ? it.urls[urlIndex.current % it.urls.length] : null), []);
+
   const makeSource = useCallback((it: PlayItem | undefined): VideoSource => {
     const uri = currentUri(it);
-    return uri ? { uri, headers: { "User-Agent": UA }, metadata: { title: it!.title, artist: it!.subtitle } } : null;
+    return uri
+      ? {
+          uri,
+          headers: {
+            "User-Agent": UA,
+            Accept: "*/*",
+            Connection: "keep-alive",
+          },
+          metadata: { title: it!.title, artist: it!.subtitle },
+        }
+      : null;
   }, [currentUri]);
 
+  // Configuração ExoPlayer com buffer otimizado estilo Just Player
   const player = useVideoPlayer(isWeb ? null : makeSource(item), (p) => {
     p.timeUpdateEventInterval = 1;
     p.staysActiveInBackground = true;
     p.showNowPlayingNotification = true;
+    try {
+      (p as any).bufferOptions = {
+        preferredForwardBufferDuration: isLive ? 2 : 8,
+        minBufferForPlayback: 0.5,
+      };
+    } catch {}
     if (prefs.autoplay) p.play();
   });
 
-  useEventListener(player, "statusChange", ({ status: s, error }) => { if (!isWeb) { setStatus(s === "idle" ? "loading" : (s as EngineStatus)); setErrMsg(error?.message); } });
-  useEventListener(player, "playingChange", ({ isPlaying: p }) => { if (!isWeb) setIsPlaying(p); });
-  useEventListener(player, "timeUpdate", ({ currentTime }) => { if (!isWeb) setTime({ cur: currentTime, dur: player.duration || 0 }); });
-  useEventListener(player, "availableAudioTracksChange", ({ availableAudioTracks }) => setAudioTracks((availableAudioTracks || []).map((t, i) => ({ id: t.id || String(i), label: t.label || t.name || t.language || `Faixa ${i + 1}`, language: t.language }))));
+  useEventListener(player, "statusChange", ({ status: s, error }) => {
+    if (!isWeb) {
+      setStatus(s === "idle" ? "loading" : (s as EngineStatus));
+      setErrMsg(error?.message);
+    }
+  });
+
+  useEventListener(player, "playingChange", ({ isPlaying: p }) => {
+    if (!isWeb) setIsPlaying(p);
+  });
+
+  useEventListener(player, "timeUpdate", ({ currentTime }) => {
+    if (!isWeb) setTime({ cur: currentTime, dur: player.duration || 0 });
+  });
+
+  useEventListener(player, "availableAudioTracksChange", ({ availableAudioTracks }) =>
+    setAudioTracks(
+      (availableAudioTracks || []).map((t, i) => ({
+        id: t.id || String(i),
+        label: t.label || t.name || t.language || `Faixa ${i + 1}`,
+        language: t.language,
+      }))
+    )
+  );
 
   const engine = useMemo(() => ({
     load: (it: PlayItem | undefined) => {
-      const uri = currentUri(it);
-      if (!uri) return;
-      if (isWeb) webRef.current?.load(uri);
-      else player.replaceAsync(makeSource(it)).then(() => player.play()).catch(() => {});
+      const src = makeSource(it);
+      if (!src) return;
+      if (isWeb) {
+        const uri = currentUri(it);
+        if (uri) webRef.current?.load(uri);
+      } else {
+        player
+          .replaceAsync(src)
+          .then(() => {
+            if (prefs.autoplay) player.play();
+          })
+          .catch(() => {
+            if (it && it.urls.length > 1) {
+              urlIndex.current += 1;
+              player.replaceAsync(makeSource(it)).then(() => player.play()).catch(() => {});
+            }
+          });
+      }
     },
     play: () => (isWeb ? webRef.current?.play() : player.play()),
     pause: () => (isWeb ? webRef.current?.pause() : player.pause()),
@@ -123,8 +198,11 @@ export default function PlayerScreen() {
     setVolume: (v: number) => { if (isWeb) webRef.current?.setVolume(v); else player.volume = v; },
     setMuted: (m: boolean) => { if (isWeb) webRef.current?.setMuted(m); else player.muted = m; },
     setRate: (r: number) => { if (isWeb) webRef.current?.setRate(r); else player.playbackRate = r; },
-    setAudio: (id: string | null) => { if (isWeb) webRef.current?.setAudioTrack(id); else player.audioTrack = player.availableAudioTracks.find((t, i) => (t.id || String(i)) === id) || null; },
-  }), [player, makeSource, currentUri]);
+    setAudio: (id: string | null) => {
+      if (isWeb) webRef.current?.setAudioTrack(id);
+      else player.audioTrack = player.availableAudioTracks.find((t, i) => (t.id || String(i)) === id) || null;
+    },
+  }), [player, makeSource, currentUri, prefs.autoplay]);
 
   useEffect(() => {
     if (sleepMin <= 0) { setSleepSec(0); return; }
@@ -144,35 +222,40 @@ export default function PlayerScreen() {
       if (prefs.autoReconnect && attempt < MAX_RETRIES) {
         setUi("connecting");
         clearTimeout(retryTimer.current);
+        // Na primeira tentativa, reconecta imediatamente (250ms) sem travar a tela
+        const retryDelay = attempt === 0 ? 250 : 1200;
         retryTimer.current = setTimeout(() => {
           urlIndex.current += 1;
           setAttempt((a) => a + 1);
           engine.load(item);
-        }, 1500);
-      } else { setUi("error"); setFatal(true); }
+        }, retryDelay);
+      } else {
+        setUi("error");
+        setFatal(true);
+      }
       return;
     }
     if (status === "loading") setUi((u) => (u === "playing" || u === "paused" ? "buffering" : "loading"));
     else if (status === "readyToPlay") setUi(isPlaying ? "playing" : "paused");
-  }, [status, isPlaying, attempt, item?.id]);
+  }, [status, isPlaying, attempt, item?.id, prefs.autoReconnect, engine, item]);
 
   useEffect(() => {
     if (isLive || !item?.progressKey || time.dur <= 0 || Date.now() - lastSaved.current < 5000) return;
     lastSaved.current = Date.now();
     saveProgress(item.progressKey, { position: time.cur, duration: time.dur, title: item.title, logo: item.logo, item });
-  }, [time.cur]);
+  }, [time.cur, isLive, item, time.dur, saveProgress]);
 
   useEffect(() => {
     if (!item || isLive || status !== "readyToPlay" || resumedRef.current === item.id) return;
     resumedRef.current = item.id;
     const p = item.progressKey ? progressMap[item.progressKey] : undefined;
     if (p && p.duration > 0 && p.position > 10 && p.position < p.duration - 15) engine.seekTo(p.position);
-  }, [status, item?.id]);
+  }, [status, item, isLive, progressMap, engine]);
 
   useEffect(() => {
     if (!item) return;
     addRecent(item.kind, item.raw ?? { id: item.id, name: item.title, stream_icon: item.logo });
-  }, [item?.id]);
+  }, [item, addRecent]);
 
   const loadIndex = useCallback((idx: number) => {
     if (!queue.length) return;
@@ -180,8 +263,12 @@ export default function PlayerScreen() {
     const it = queue[n];
     setQueueIndex(n);
     urlIndex.current = 0;
-    setAttempt(0); setFatal(false); setUi("connecting"); setPanel(null);
-    lastSaved.current = 0; resumedRef.current = null;
+    setAttempt(0);
+    setFatal(false);
+    setUi("connecting");
+    setPanel(null);
+    lastSaved.current = 0;
+    resumedRef.current = null;
     setFlash({ side: idx > queueIndex ? "right" : "left", label: it.title });
     setTimeout(() => setFlash(null), 900);
     engine.load(it);
@@ -195,15 +282,25 @@ export default function PlayerScreen() {
     return () => sub.remove();
   }, [engine, fatal, audioOnly]);
 
-  useEffect(() => { const t = setInterval(() => setClock(getClock()), 15000); return () => clearInterval(t); }, []);
-  useEffect(() => { if (!isWeb) Brightness.getBrightnessAsync().then((b) => setBrightness(b)).catch(() => {}); }, []);
+  useEffect(() => {
+    const t = setInterval(() => setClock(getClock()), 15000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (!isWeb) Brightness.getBrightnessAsync().then((b) => setBrightness(b)).catch(() => {});
+  }, []);
 
   const bump = useCallback(() => {
     setControls(true);
     clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => setControls(false), TIMEOUT);
   }, []);
-  useEffect(() => { bump(); return () => clearTimeout(hideTimer.current); }, [bump]);
+
+  useEffect(() => {
+    bump();
+    return () => clearTimeout(hideTimer.current);
+  }, [bump]);
 
   const toggleFullscreen = useCallback(async () => {
     const next = !fullscreen;
@@ -216,17 +313,27 @@ export default function PlayerScreen() {
 
   const goBack = useCallback(() => {
     try { engine.pause(); } catch {}
-    if (router.canGoBack()) router.back(); else router.replace("/(tabs)");
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)");
   }, [engine, router]);
 
   const applyVolume = useCallback((v: number) => {
     v = Math.min(1, Math.max(0, v));
     setVolume(v);
     engine.setVolume(v);
-    if (v > 0 && stateRef.current.muted) { setMuted(false); engine.setMuted(false); }
+    if (v > 0 && stateRef.current.muted) {
+      setMuted(false);
+      engine.setMuted(false);
+    }
   }, [engine]);
 
-  const toggleMute = () => { const m = !muted; setMuted(m); engine.setMuted(m); bump(); };
+  const toggleMute = () => {
+    const m = !muted;
+    setMuted(m);
+    engine.setMuted(m);
+    bump();
+  };
+
   const applyBrightness = (b: number) => {
     b = Math.min(1, Math.max(0.05, b));
     setBrightness(b);
