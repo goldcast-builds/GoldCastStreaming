@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Image,
   Platform,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -22,8 +23,14 @@ import { useSession } from "../src/store/session";
 
 LogBox.ignoreAllLogs(true);
 
+// Versão instalada neste APK. Suba para 2, 3, etc. a cada nova compilação
+const APP_VERSION_CODE = 1;
+
 const URL_PARCEIROS =
   "https://gist.githubusercontent.com/anderson009470/e32d3a695c62065c1b82513edcf7dbc9/raw/parceiros.json";
+
+const URL_VERSION =
+  "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/version.json";
 
 const _WARM = [
   require("../assets/images/goldcast-logo.png"),
@@ -31,6 +38,94 @@ const _WARM = [
 ];
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// SISTEMA DE ATUALIZAÇÃO AUTOMÁTICA (AUTO-UPDATE)
+function AutoUpdateModal() {
+  const [updateInfo, setUpdateInfo] = useState<{
+    versionCode: number;
+    versionName: string;
+    apkUrl: string;
+    changelog: string;
+    forceUpdate?: boolean;
+  } | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    checarAtualizacao();
+  }, []);
+
+  const checarAtualizacao = async () => {
+    try {
+      const res = await fetch(`${URL_VERSION}?t=${Date.now()}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.versionCode > APP_VERSION_CODE && data.apkUrl) {
+        setUpdateInfo(data);
+        setVisible(true);
+      }
+    } catch {
+      // Ignora falhas silenciosamente caso esteja sem internet
+    }
+  };
+
+  if (!visible || !updateInfo) return null;
+
+  const handleUpdate = async () => {
+    try {
+      await Linking.openURL(updateInfo.apkUrl);
+    } catch {
+      Alert.alert("Erro", "Não foi possível abrir o link de download do aplicativo.");
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="fade" transparent={true}>
+      <View style={styles.updateOverlay}>
+        <View style={styles.card}>
+          <View style={styles.iconCircle}>
+            <Text style={styles.iconEmoji}>🚀</Text>
+          </View>
+
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>
+              {updateInfo.forceUpdate ? "ATUALIZAÇÃO OBRIGATÓRIA" : "NOVA VERSÃO DISPONÍVEL"}
+            </Text>
+          </View>
+
+          <Text style={styles.title}>
+            GoldCast v{updateInfo.versionName || updateInfo.versionCode}
+          </Text>
+          <Text style={styles.subtitle}>
+            Uma nova versão com melhorias de velocidade e estabilidade está disponível.
+          </Text>
+
+          {updateInfo.changelog ? (
+            <View style={styles.changelogBox}>
+              <Text style={styles.changelogTitle}>Novidades:</Text>
+              <Text style={styles.changelogText}>{updateInfo.changelog}</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]}
+            onPress={handleUpdate}
+          >
+            <Text style={styles.btnText}>ATUALIZAR AGORA</Text>
+          </Pressable>
+
+          {!updateInfo.forceUpdate && (
+            <Pressable
+              style={({ pressed }) => [styles.dismissBtn, pressed && { opacity: 0.7 }]}
+              onPress={() => setVisible(false)}
+            >
+              <Text style={styles.dismissBtnText}>Lembrar mais tarde</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 // TRAVA DE PARCERIA EMBUTIDA
 function PartnerLock() {
@@ -231,6 +326,9 @@ export default function RootLayout() {
 
             {/* Trava de Parceria Corporativa */}
             <PartnerLock />
+
+            {/* Verificador de Atualizações Automáticas */}
+            <AutoUpdateModal />
           </View>
         </BottomSheetModalProvider>
       </GestureHandlerRootView>
@@ -246,16 +344,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
   },
+  updateOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
   card: {
     width: "100%",
     maxWidth: 380,
     alignItems: "center",
     backgroundColor: "#111318",
-    paddingVertical: 36,
-    paddingHorizontal: 24,
+    paddingVertical: 32,
+    paddingHorizontal: 22,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.2)",
+    borderColor: "rgba(229, 169, 59, 0.25)",
   },
   iconCircle: {
     width: 76,
@@ -297,6 +402,27 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 19,
   },
+  changelogBox: {
+    width: "100%",
+    backgroundColor: "#181B22",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: "#282C35",
+  },
+  changelogTitle: {
+    color: "#E5A93B",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 4,
+    textTransform: "uppercase",
+  },
+  changelogText: {
+    color: "#C2C6D1",
+    fontSize: 12,
+    lineHeight: 17,
+  },
   inputBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -329,13 +455,22 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 12,
     width: "100%",
-    marginTop: 14,
+    marginTop: 18,
   },
   btnText: {
     color: "#000",
     fontSize: 14,
     fontWeight: "800",
     letterSpacing: 0.5,
+  },
+  dismissBtn: {
+    paddingVertical: 12,
+    marginTop: 6,
+  },
+  dismissBtnText: {
+    color: "#8E929C",
+    fontSize: 12,
+    fontWeight: "600",
   },
   helpText: {
     color: "#555A65",
