@@ -20,6 +20,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useState, useEffect } from "react";
 import * as SplashScreen from "expo-splash-screen";
 import { useSession } from "../src/store/session";
+import { reportError } from "../src/utils/logger";
 
 LogBox.ignoreAllLogs(true);
 
@@ -285,6 +286,20 @@ function PartnerLock() {
 
 export default function RootLayout() {
   useEffect(() => {
+    // Intercetor global de erros e crashes inesperados
+    try {
+      const errorUtils = typeof ErrorUtils !== "undefined" ? ErrorUtils : (global as any).ErrorUtils;
+      if (errorUtils) {
+        const defaultErrorHandler = errorUtils.getGlobalHandler();
+        errorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
+          reportError("global_crash", error, `Fatal: ${isFatal}`);
+          if (defaultErrorHandler) {
+            defaultErrorHandler(error, isFatal);
+          }
+        });
+      }
+    } catch {}
+
     useSession.getState().restore();
     _WARM.forEach((a) => {
       try {
