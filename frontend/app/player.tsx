@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -17,23 +17,97 @@ import { Logo } from "../src/components/Logo";
 import { GoldButton } from "../src/components/GoldButton";
 import { colors, radius, spacing } from "../src/utils/theme";
 import { reportError } from "../src/utils/logger";
-
-interface PlayerParams {
-  url?: string;
-  streamUrl?: string;
-  uri?: string;
-  title?: string;
-  name?: string;
-  type?: string;
-}
+import { useSession, PlayItem } from "../src/store/session";
 
 export default function PlayerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<PlayerParams>();
+  const rawParams = useLocalSearchParams<Record<string, any>>();
 
-  const streamUrl = params.url || params.streamUrl || params.uri || "";
-  const title = params.title || params.name || "Transmissão GoldCast";
+  // Obtém a sessão e a fila de reprodução ativa
+  const queue = useSession((s: any) => s.queue || []) as PlayItem[];
+  const queueIndex = useSession((s: any) => s.queueIndex ?? s.currentIndex ?? s.index ?? 0);
+  const session = useSession((s: any) => s.session || s);
+
+  // Item ativo na fila de reprodução do GoldCast
+  const activePlayItem = useMemo(() => {
+    if (Array.isArray(queue) && queue.length > 0 && queueIndex >= 0 && queueIndex < queue.length) {
+      return queue[queueIndex];
+    }
+    return null;
+  }, [queue, queueIndex]);
+
+  // Identifica o título da transmissão
+  const title = useMemo(() => {
+    return (
+      rawParams.title ||
+      rawParams.name ||
+      rawParams.stream_name ||
+      activePlayItem?.title ||
+      "Transmissão GoldCast"
+    );
+  }, [rawParams, activePlayItem]);
+
+  // Identifica ou reconstrói a URL do stream
+  const streamUrl = useMemo(() => {
+    // 1. Tenta a URL direta da fila ativa (useSession)
+    if (activePlayItem?.urls && activePlayItem.urls.length > 0) {
+      const firstUrl = activePlayItem.urls[0];
+      if (firstUrl && typeof firstUrl === "string" && firstUrl.startsWith("http")) {
+        return firstUrl;
+      }
+    }
+
+    // 2. Tenta parâmetros passados diretamente na rota
+    const directUrl =
+      rawParams.url ||
+      rawParams.streamUrl ||
+      rawParams.stream_url ||
+      rawParams.uri ||
+      rawParams.videoUrl ||
+      rawParams.link;
+
+    if (directUrl && typeof directUrl === "string" && directUrl.startsWith("http")) {
+      return directUrl;
+    }
+
+    // 3. Fallback: reconstrói com credenciais Xtream se houver streamId
+    const streamId =
+      rawParams.stream_id ||
+      rawParams.streamId ||
+      rawParams.id ||
+      activePlayItem?.streamId ||
+      activePlayItem?.id;
+
+    const streamType = (
+      rawParams.type ||
+      rawParams.stream_type ||
+      activePlayItem?.kind ||
+      "live"
+    ).toLowerCase();
+
+    const server = session?.server || session?.url || "";
+    const username = session?.user || session?.username || session?.userInfo?.username || "";
+    const password = session?.pass || session?.password || session?.userInfo?.password || "";
+
+    if (streamId && server && username && password) {
+      const cleanServer = server.replace(/\/+$/, "");
+      let typeFolder = "live";
+      let extension = "ts";
+
+      if (streamType.includes("movie") || streamType.includes("vod")) {
+        typeFolder = "movie";
+        extension = "mp4";
+      } else if (streamType.includes("series")) {
+        typeFolder = "series";
+        extension = "mp4";
+      }
+
+      return `${cleanServer}/${typeFolder}/${username}/${password}/${streamId}.${extension}`;
+    }
+
+    return "";
+  }, [rawParams, activePlayItem, session]);
 
   const [launching, setLaunching] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -41,7 +115,7 @@ export default function PlayerScreen() {
 
   const abrirNoJustPlayer = useCallback(async () => {
     if (!streamUrl) {
-      setErrorMsg("Nenhum endereço de vídeo foi fornecido para reprodução.");
+      setErrorMsg("Nenhum endereço de vídeo foi detectado na fila de reprodução.");
       return;
     }
 
@@ -81,7 +155,7 @@ export default function PlayerScreen() {
       if (canOpen) {
         await Linking.openURL(streamUrl);
       } else {
-        throw new Error("Não foi possível iniciar a reprodução no reprodutor nativo.");
+        throw new Error("Não foi possível iniciar o reprodutor nativo.");
       }
     } catch (err: any) {
       const msg = err?.message || "Falha ao abrir o reprodutor.";
@@ -106,7 +180,6 @@ export default function PlayerScreen() {
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar barStyle="light-content" backgroundColor="#07080A" hidden={false} />
 
-      {/* Botão de navegação para retornar */}
       <View style={styles.header}>
         <Pressable
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
