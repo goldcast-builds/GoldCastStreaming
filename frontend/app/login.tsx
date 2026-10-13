@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import * as Application from "expo-application";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Logo } from "../src/components/Logo";
@@ -38,25 +37,8 @@ interface ServerOption {
   url: string;
 }
 
-// Identificador único e persistente fixado no hardware real do aparelho (não muda ao desinstalar)
+// Identificador único por instalação com persistência local
 const getDeviceHardware = async (): Promise<{ mac: string; key: string }> => {
-  try {
-    let hardwareId = "";
-
-    if (Platform.OS === "android") {
-      hardwareId = Application.getAndroidId() || "";
-    }
-
-    if (hardwareId) {
-      // Converte o Android ID em um endereço MAC determinístico (sempre o mesmo no aparelho)
-      const clean = hardwareId.padEnd(12, "0").slice(0, 12).toUpperCase();
-      const mac = clean.match(/.{1,2}/g)?.join(":") || "00:11:22:33:44:55";
-      const key = hardwareId.slice(0, 6);
-      return { mac, key };
-    }
-  } catch {}
-
-  // Fallback caso a API nativa não responda
   try {
     const savedMac = await AsyncStorage.getItem("@goldcast_device_mac");
     const savedKey = await AsyncStorage.getItem("@goldcast_device_key");
@@ -101,7 +83,7 @@ export default function LoginScreen() {
   const [stage, setStage] = useState<{ s: Stage; d?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Estados do cronômetro de sincronização
+  // Estados do cronómetro de sincronização
   const [countdown, setCountdown] = useState(0);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const autoSubmitAfterSync = useRef(false);
@@ -131,7 +113,7 @@ export default function LoginScreen() {
     };
   }, []);
 
-  // Controlador do cronômetro regressivo
+  // Controlador da contagem decrescente
   useEffect(() => {
     if (countdown <= 0) return;
     const interval = setInterval(() => {
@@ -147,7 +129,7 @@ export default function LoginScreen() {
     return () => clearInterval(interval);
   }, [countdown]);
 
-  // Executa login automático quando a contagem regressiva chega a zero
+  // Executa login automático quando a contagem regressiva atinge zero
   useEffect(() => {
     if (countdown === 0 && autoSubmitAfterSync.current) {
       autoSubmitAfterSync.current = false;
@@ -161,7 +143,7 @@ export default function LoginScreen() {
     setError(null);
 
     if (!server.trim() || !user.trim() || !pass) {
-      setError(custom && !server.trim() ? "Informe o endereço do servidor." : "Preencha usuário e senha.");
+      setError(custom && !server.trim() ? "Informe o endereço do servidor." : "Preencha utilizador e palavra-passe.");
       return;
     }
 
@@ -258,7 +240,7 @@ export default function LoginScreen() {
           <Logo size={150} />
         </View>
         <Text style={styles.brand}>GoldCast Streaming</Text>
-        <Text style={styles.subtitle}>Entre com seus dados ou experimente gratuitamente.</Text>
+        <Text style={styles.subtitle}>Entre com os seus dados ou experimente gratuitamente.</Text>
 
         <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
           <Text style={styles.fieldLabel}>Servidor</Text>
@@ -315,17 +297,17 @@ export default function LoginScreen() {
           )}
 
           <Field
-            label="Usuário"
+            label="Utilizador"
             value={user}
             onChangeText={setUser}
-            placeholder="usuario"
+            placeholder="utilizador"
             autoCapitalize="none"
             autoCorrect={false}
             testID="login-user"
           />
 
           <Field
-            label="Senha"
+            label="Palavra-passe"
             value={pass}
             onChangeText={setPass}
             placeholder="••••••••"
