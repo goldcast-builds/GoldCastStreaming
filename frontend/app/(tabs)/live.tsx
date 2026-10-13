@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, ActivityIndicator, TextInput, Modal } from "react-native";
+import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, ActivityIndicator, TextInput, Modal, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,6 +26,7 @@ export default function LiveTab() {
 function LiveContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ cat?: string; focusSearch?: string }>();
   const searchRef = useRef<TextInput>(null);
   const session = useSession((s) => s.session);
@@ -46,6 +47,13 @@ function LiveContent() {
   const [selectedCat, setSelectedCat] = useState(CAT_ALL);
   const [search, setSearch] = useState("");
   const q = useDebounce(search.trim().toLowerCase(), 300);
+
+  // Colunas responsivas: 3 no celular vertical, 4 a 6 em TV ou horizontal
+  const numCols = useMemo(() => {
+    if (width >= 900) return 6;
+    if (width >= 600) return 4;
+    return 3;
+  }, [width]);
 
   // M3U list mode (backend)
   const listMode = source?.kind === "list" ? source.listId : null;
@@ -106,7 +114,6 @@ function LiveContent() {
     }));
   }, [listMode, listItems, session, catalog.live, selectedCat, q, favs, recents, catName, liveFormat]);
 
-  // In list (M3U) mode favorites/recents are filtered client-side too
   const visibleRows = useMemo(() => {
     if (!listMode) return rows;
     if (selectedCat === CAT_FAV) return rows.filter((r) => favs.includes(r.id));
@@ -144,7 +151,7 @@ function LiveContent() {
       </View>
 
       <View style={styles.chipsWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.md }}>
           {cats.map((c) => {
             const active = selectedCat === String(c.category_id);
             return (
@@ -171,15 +178,16 @@ function LiveContent() {
         </View>
       ) : (
         <FlatList
+          key={`grid-${numCols}`}
           data={visibleRows}
           keyExtractor={(r) => r.id}
-          numColumns={2}
-          columnWrapperStyle={{ gap: spacing.md, paddingHorizontal: spacing.lg }}
-          contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.md, paddingBottom: 100 }}
+          numColumns={numCols}
+          columnWrapperStyle={{ gap: 8, paddingHorizontal: spacing.md }}
+          contentContainerStyle={{ gap: 8, paddingVertical: spacing.sm, paddingBottom: 100 }}
           renderItem={({ item, index }) => <ChannelCard row={item} fav={favs.includes(item.id)} onPress={() => open(index)} onFav={() => toggleFav("live", item.id)} />}
           removeClippedSubviews
-          initialNumToRender={12}
-          maxToRenderPerBatch={12}
+          initialNumToRender={18}
+          maxToRenderPerBatch={18}
           windowSize={7}
           keyboardShouldPersistTaps="handled"
         />
@@ -210,19 +218,18 @@ function LiveContent() {
 
 const ChannelCard = memo(function ChannelCard({ row, fav, onPress, onFav }: { row: Row; fav: boolean; onPress: () => void; onFav: () => void }) {
   return (
-    <Pressable testID={`channel-${row.id}`} onPress={onPress} onLongPress={onFav} style={({ focused, pressed }) => [styles.channel, focused && styles.channelFocused, pressed && { opacity: 0.85 }]}>
+    <Pressable testID={`channel-${row.id}`} onPress={onPress} onLongPress={onFav} style={({ focused, pressed }) => [styles.channel, focused && styles.channelFocused, pressed && { opacity: 0.82 }]}>
       <View style={styles.logoBox}>
         {row.logo ? (
-          <Image source={{ uri: row.logo }} style={{ width: "100%", height: "100%" }} contentFit="contain" recyclingKey={row.id} cachePolicy="memory-disk" transition={150} />
+          <Image source={{ uri: row.logo }} style={{ width: "85%", height: "85%" }} contentFit="contain" recyclingKey={row.id} cachePolicy="memory-disk" transition={120} />
         ) : (
-          <Ionicons name="tv" size={28} color={colors.textDim} />
+          <Ionicons name="tv" size={24} color={colors.textDim} />
         )}
-        <Pressable testID={`fav-${row.id}`} onPress={onFav} hitSlop={8} style={styles.favBtn}>
-          <Ionicons name={fav ? "star" : "star-outline"} size={16} color={fav ? colors.gold : colors.textMuted} />
+        <Pressable testID={`fav-${row.id}`} onPress={onFav} hitSlop={6} style={styles.favBtn}>
+          <Ionicons name={fav ? "star" : "star-outline"} size={12} color={fav ? colors.gold : colors.textMuted} />
         </Pressable>
       </View>
-      <Text style={styles.channelName} numberOfLines={2}>{row.name}</Text>
-      {!!row.category && <Text style={styles.channelCat} numberOfLines={1}>{row.category}</Text>}
+      <Text style={styles.channelName} numberOfLines={1}>{row.name}</Text>
     </Pressable>
   );
 });
@@ -230,30 +237,29 @@ const ChannelCard = memo(function ChannelCard({ row, fav, onPress, onFav }: { ro
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm, padding: spacing.xl },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
-  h1: { color: colors.text, fontSize: 22, fontWeight: "700" },
-  switchBtn: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 10, height: 34, maxWidth: 190 },
-  switchLabel: { color: colors.gold, fontSize: 12, fontWeight: "600" },
-  searchWrap: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginHorizontal: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginBottom: spacing.sm },
-  search: { flex: 1, color: colors.text, paddingVertical: 10, fontSize: 14 },
-  chipsWrap: { height: 52, justifyContent: "center" },
-  chip: { height: 36, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, alignItems: "center", justifyContent: "center", flexShrink: 0, maxWidth: 220 },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.md, marginBottom: spacing.xs },
+  h1: { color: colors.text, fontSize: 20, fontWeight: "700" },
+  switchBtn: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 9, height: 30, maxWidth: 180 },
+  switchLabel: { color: colors.gold, fontSize: 11, fontWeight: "600" },
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginHorizontal: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginBottom: spacing.xs },
+  search: { flex: 1, color: colors.text, paddingVertical: 8, fontSize: 13 },
+  chipsWrap: { height: 46, justifyContent: "center" },
+  chip: { height: 32, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   chipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
-  chipText: { color: colors.textMuted, fontSize: 13, fontWeight: "600" },
+  chipText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
   focused: { borderColor: colors.gold, borderWidth: 2 },
-  channel: { flex: 1, backgroundColor: colors.surface2, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: spacing.md, alignItems: "center", gap: 6, minHeight: 140 },
+  channel: { flex: 1, backgroundColor: colors.surface2, borderRadius: radius.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: 6, alignItems: "center", gap: 4 },
   channelFocused: { borderColor: colors.gold, borderWidth: 2, transform: [{ scale: 1.03 }] },
-  logoBox: { width: "100%", aspectRatio: 16 / 9, borderRadius: radius.sm, backgroundColor: "#000", alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  favBtn: { position: "absolute", top: 4, right: 4, width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
-  channelName: { color: colors.text, fontSize: 13, fontWeight: "600", textAlign: "center" },
-  channelCat: { color: colors.textDim, fontSize: 11, textAlign: "center" },
+  logoBox: { width: "100%", aspectRatio: 1, borderRadius: radius.xs, backgroundColor: "#0c0d14", alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  favBtn: { position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: 10, backgroundColor: "rgba(0,0,0,0.65)", alignItems: "center", justifyContent: "center" },
+  channelName: { color: colors.text, fontSize: 11, fontWeight: "600", textAlign: "center", width: "100%", marginTop: 2 },
   emptyText: { color: colors.textMuted, fontSize: 13, textAlign: "center" },
-  retryBtn: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 18, height: 40, justifyContent: "center" },
-  retryText: { color: colors.gold, fontWeight: "700", fontSize: 12 },
+  retryBtn: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 16, height: 36, justifyContent: "center" },
+  retryText: { color: colors.gold, fontWeight: "700", fontSize: 11 },
   modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center", padding: spacing.xl },
   modalCard: { width: "100%", maxWidth: 420, backgroundColor: colors.surface2, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: spacing.md, gap: 4 },
-  modalTitle: { color: colors.gold, fontSize: 15, fontWeight: "700", marginBottom: spacing.sm, marginLeft: spacing.xs },
+  modalTitle: { color: colors.gold, fontSize: 14, fontWeight: "700", marginBottom: spacing.xs, marginLeft: spacing.xs },
   modalRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: radius.md },
   modalRowActive: { backgroundColor: "rgba(212,175,55,0.12)" },
-  modalRowText: { color: colors.text, fontSize: 14, flex: 1 },
+  modalRowText: { color: colors.text, fontSize: 13, flex: 1 },
 });
