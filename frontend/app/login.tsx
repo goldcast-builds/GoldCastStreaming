@@ -16,18 +16,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Logo } from "../src/components/Logo";
-import { GoldButton } from "../src/components/GoldButton";
-import { colors, radius, spacing } from "../src/utils/theme";
-import { DEFAULT_SERVERS, SERVER_LABELS, Stage } from "../src/services/xtream";
+import { colors } from "../src/utils/theme";
 import { useSession } from "../src/store/session";
-
-const STAGE_LABEL: Record<Stage, string> = {
-  checking: "A verificar...",
-  connecting: "A ligar ao servidor...",
-  validating: "A validar credenciais...",
-  loading: "A carregar canais e filmes...",
-  done: "Ligação estabelecida!",
-};
 
 const REMOTE_SERVERS_URL =
   "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/servers.json";
@@ -46,32 +36,30 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
 
-  // Etapa: "license" (E-mail + Código de Acesso) | "credentials" (Servidor, Utilizador e Palavra-passe)
-  const [step, setStep] = useState<"license" | "credentials">("license");
+  // Controla se exibe a Etapa 1 (Licença) ou Etapa 2 (Dados IPTV)
+  const [step, setStep] = useState<"license" | "iptv">("license");
 
-  // Campos da Licença
+  // Campos da Etapa 1
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
 
-  // Campos IPTV
-  const defaultList: ServerOption[] = [
-    { label: SERVER_LABELS[DEFAULT_SERVERS.primary] || "Servidor 1", url: DEFAULT_SERVERS.primary },
-    { label: SERVER_LABELS[DEFAULT_SERVERS.backup] || "Servidor 2", url: DEFAULT_SERVERS.backup },
-  ];
-  const [serverList, setServerList] = useState<ServerOption[]>(defaultList);
-  const [server, setServer] = useState(DEFAULT_SERVERS.primary);
+  // Campos da Etapa 2
+  const [serverList, setServerList] = useState<ServerOption[]>([
+    { label: "Servidor Principal", url: "http://vip.topuhd.top" },
+  ]);
+  const [server, setServer] = useState("http://vip.topuhd.top");
   const [customServer, setCustomServer] = useState(false);
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(true);
 
-  // Estados de controlo
+  // Estados gerais
   const [loading, setLoading] = useState(false);
-  const [stage, setStage] = useState<{ s: Stage; d?: string } | null>(null);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Modal do Teste Grátis
+  // Modal Teste Grátis
   const [trialModal, setTrialModal] = useState(false);
   const [trialEmail, setTrialEmail] = useState("");
   const [trialLoading, setTrialLoading] = useState(false);
@@ -81,8 +69,8 @@ export default function LoginScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const [savedLicense, savedEmail, savedCode] = await Promise.all([
-          AsyncStorage.getItem("@goldcast_licensed"),
+        const [savedLicensed, savedEmail, savedCode] = await Promise.all([
+          AsyncStorage.getItem("@goldcast_app_licensed"),
           AsyncStorage.getItem("@goldcast_saved_email"),
           AsyncStorage.getItem("@goldcast_saved_code"),
         ]);
@@ -90,11 +78,12 @@ export default function LoginScreen() {
         if (savedEmail) setEmail(savedEmail);
         if (savedCode) setCode(savedCode);
 
-        // Se a licença já tiver sido ativada, avança para as credenciais IPTV
-        if (savedLicense === "true") {
-          setStep("credentials");
+        // Se o aplicativo já foi validado neste celular, vai direto para a tela de login IPTV
+        if (savedLicensed === "true") {
+          setStep("iptv");
         }
 
+        // Tenta carregar lista remota de servidores
         const res = await fetch(`${REMOTE_SERVERS_URL}?t=${Date.now()}`, { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
@@ -111,23 +100,23 @@ export default function LoginScreen() {
     };
   }, []);
 
-  // 1. Validação da Licença
+  // 1. Validação da Licença (E-mail + Código de Acesso)
   const handleValidateLicense = async () => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanCode = code.trim().toUpperCase();
 
     setError(null);
     if (!cleanEmail || !cleanEmail.includes("@")) {
-      setError("Indique um endereço de e-mail válido.");
+      setError("Informe um endereço de e-mail válido.");
       return;
     }
     if (!cleanCode) {
-      setError("Insira o seu código de acesso.");
+      setError("Informe o seu código de acesso.");
       return;
     }
 
     setLoading(true);
-    setStage({ s: "checking", d: "A validar código com o servidor..." });
+    setStatusMsg("A validar código no servidor...");
 
     try {
       const res = await fetch(VALIDATE_CODE_URL, {
@@ -141,24 +130,26 @@ export default function LoginScreen() {
         throw new Error(data.message || "Código ou e-mail inválido.");
       }
 
-      await AsyncStorage.setItem("@goldcast_licensed", "true");
+      // Licença aprovada: salva no aparelho
+      await AsyncStorage.setItem("@goldcast_app_licensed", "true");
       await AsyncStorage.setItem("@goldcast_saved_email", cleanEmail);
       await AsyncStorage.setItem("@goldcast_saved_code", cleanCode);
 
-      setStep("credentials");
+      // Avança diretamente para os campos de Servidor, Usuário e Senha!
+      setStep("iptv");
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha na validação do código.");
+        setError(e?.message || "Falha na validação do código de acesso.");
       }
     } finally {
       if (mounted.current) {
         setLoading(false);
-        setStage(null);
+        setStatusMsg(null);
       }
     }
   };
 
-  // 2. Ligação IPTV
+  // 2. Conexão IPTV Permanente (Servidor, Usuário e Senha)
   const handleConnectIPTV = async () => {
     setError(null);
     if (!server.trim() || !user.trim() || !pass) {
@@ -167,25 +158,27 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
+    setStatusMsg("A ligar ao servidor IPTV...");
+
     try {
       await login(server.trim(), user.trim(), pass, remember, (s, d) => {
-        if (mounted.current) setStage({ s, d });
+        if (mounted.current) setStatusMsg(d || "A carregar...");
       });
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha ao ligar ao servidor IPTV.");
-        setStage(null);
+        setError(e?.message || "Falha ao ligar ao servidor IPTV. Verifique os dados.");
+        setStatusMsg(null);
       }
     } finally {
       if (mounted.current) setLoading(false);
     }
   };
 
-  // 3. Teste Gratuito de 3 Horas
-  const handleRequestTrial = async () => {
+  // 3. Gerador do Teste Grátis de 3 Horas
+  const handleGenerateTrial = async () => {
     if (!trialEmail.trim() || !trialEmail.includes("@")) {
-      setError("Indique um e-mail válido para receber o teste.");
+      setError("Digite um e-mail válido para o teste.");
       return;
     }
 
@@ -205,19 +198,24 @@ export default function LoginScreen() {
       }
 
       setTrialModal(false);
+      setStep("iptv");
 
-      setServer(data.serverUrl || server);
+      // Preenche os dados gerados pelo painel e entra
+      const targetServer = data.serverUrl || server;
+      setServer(targetServer);
       setUser(data.username);
       setPass(data.password);
 
-      await login(data.serverUrl || server, data.username, data.password, true, (s, d) => {
-        if (mounted.current) setStage({ s, d });
+      setLoading(true);
+      await login(targetServer, data.username, data.password, true, (s, d) => {
+        if (mounted.current) setStatusMsg(d || "A carregar...");
       });
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       setError(e?.message || "Erro ao solicitar teste gratuito.");
     } finally {
       setTrialLoading(false);
+      setLoading(false);
     }
   };
 
@@ -226,7 +224,7 @@ export default function LoginScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl },
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 30 },
         ]}
         keyboardShouldPersistTaps="handled"
       >
@@ -235,145 +233,152 @@ export default function LoginScreen() {
         </View>
         <Text style={styles.brand}>GoldCast Streaming</Text>
 
-        {/* FASE 1: VALIDAÇÃO DA LICENÇA */}
+        {/* ================= ETAPA 1: E-MAIL E CÓDIGO ================= */}
         {step === "license" ? (
-          <View style={{ gap: spacing.md, marginTop: spacing.md }}>
+          <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
-              Introduza o seu e-mail e código de acesso para desbloquear a aplicação.
+              Digite seu e-mail e código de acesso para desbloquear o aplicativo.
             </Text>
 
-            <View>
-              <Text style={styles.fieldLabel}>O SEU E-MAIL</Text>
-              <View style={styles.fieldWrap}>
-                <Text style={styles.fieldEmoji}>✉️</Text>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>SEU E-MAIL</Text>
+              <View style={styles.inputBox}>
+                <Text style={styles.inputEmoji}>✉️</Text>
                 <TextInput
                   placeholder="exemplo@gmail.com"
-                  placeholderTextColor={colors.textDim}
+                  placeholderTextColor="#666"
                   value={email}
                   onChangeText={setEmail}
                   autoCapitalize="none"
                   keyboardType="email-address"
-                  style={styles.input}
+                  style={styles.textInput}
                 />
               </View>
             </View>
 
-            <View>
+            <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>CÓDIGO DE ACESSO</Text>
-              <View style={styles.fieldWrap}>
-                <Text style={styles.fieldEmoji}>🔑</Text>
+              <View style={styles.inputBox}>
+                <Text style={styles.inputEmoji}>🔑</Text>
                 <TextInput
                   placeholder="Ex: GOLD-VIP-365D"
-                  placeholderTextColor={colors.textDim}
+                  placeholderTextColor="#666"
                   value={code}
                   onChangeText={(t) => setCode(t.toUpperCase())}
                   autoCapitalize="characters"
-                  style={styles.input}
+                  style={styles.textInput}
                 />
               </View>
-              <Text style={styles.hintText}>O código ficará associado ao seu e-mail de acesso.</Text>
+              <Text style={styles.hintText}>O código ficará vinculado ao seu e-mail de acesso.</Text>
             </View>
 
-            <GoldButton
-              label="VALIDAR E CONTINUAR"
+            <Pressable
+              style={[styles.btnGold, loading && { opacity: 0.7 }]}
               onPress={handleValidateLicense}
-              loading={loading}
-              style={{ marginTop: spacing.md }}
-            />
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#000" />
+              ) : (
+                <Text style={styles.btnGoldText}>VALIDAR E CONTINUAR</Text>
+              )}
+            </Pressable>
 
             <Pressable
               onPress={() => {
                 setTrialEmail(email);
                 setTrialModal(true);
               }}
-              style={styles.trialBtn}
+              style={styles.btnOutline}
             >
-              <Text style={styles.trialBtnText}>✨ SOLICITAR TESTE GRÁTIS (3 HORAS)</Text>
+              <Text style={styles.btnOutlineText}>✨ SOLICITAR TESTE GRÁTIS (3 HORAS)</Text>
             </Pressable>
           </View>
         ) : (
-          /* FASE 2: DADOS DE LIGAÇÃO IPTV */
-          <View style={{ gap: spacing.md, marginTop: spacing.md }}>
+          /* ================= ETAPA 2: SERVIDOR, USUÁRIO E SENHA ================= */
+          <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
-              Introduza os dados da sua linha IPTV para carregar as transmissões.
+              Insira os dados da sua linha IPTV para carregar as transmissões.
             </Text>
 
-            <Text style={styles.fieldLabel}>SERVIDOR</Text>
-            <View style={styles.serverChips}>
-              {serverList.map((item, i) => {
-                const active = !customServer && server === item.url;
-                return (
-                  <Pressable
-                    key={`${item.url}-${i}`}
-                    onPress={() => {
-                      setCustomServer(false);
-                      setServer(item.url);
-                    }}
-                    style={[styles.serverBtn, active && styles.serverBtnActive]}
-                  >
-                    <Text style={{ fontSize: 14 }}>📺</Text>
-                    <Text style={[styles.serverText, active && { color: "#000" }]} numberOfLines={1}>
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>SERVIDOR</Text>
+              <View style={styles.serverChips}>
+                {serverList.map((item, i) => {
+                  const active = !customServer && server === item.url;
+                  return (
+                    <Pressable
+                      key={`${item.url}-${i}`}
+                      onPress={() => {
+                        setCustomServer(false);
+                        setServer(item.url);
+                      }}
+                      style={[styles.serverChip, active && styles.serverChipActive]}
+                    >
+                      <Text style={{ fontSize: 13 }}>📺</Text>
+                      <Text style={[styles.serverChipText, active && { color: "#000" }]} numberOfLines={1}>
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Pressable
+                onPress={() => {
+                  setCustomServer((v) => !v);
+                  if (!customServer) setServer("");
+                  else setServer(serverList[0]?.url || "http://vip.topuhd.top");
+                }}
+                style={styles.customLink}
+              >
+                <Text style={styles.customLinkText}>
+                  {customServer ? "▲ Usar lista de servidores" : "▼ Inserir outro servidor"}
+                </Text>
+              </Pressable>
+
+              {customServer && (
+                <View style={[styles.inputBox, { marginTop: 8 }]}>
+                  <TextInput
+                    placeholder="http://seuservidor.com:8080"
+                    placeholderTextColor="#666"
+                    value={server}
+                    onChangeText={setServer}
+                    autoCapitalize="none"
+                    keyboardType="url"
+                    style={styles.textInput}
+                  />
+                </View>
+              )}
             </View>
 
-            <Pressable
-              onPress={() => {
-                setCustomServer((v) => !v);
-                if (!customServer) setServer("");
-                else setServer(serverList[0]?.url || DEFAULT_SERVERS.primary);
-              }}
-              style={styles.customLink}
-            >
-              <Text style={styles.customText}>
-                {customServer ? "▲ Usar lista de servidores" : "▼ Inserir outro servidor"}
-              </Text>
-            </Pressable>
-
-            {customServer && (
-              <View style={styles.fieldWrap}>
-                <TextInput
-                  placeholder="http://seuservidor.com:8080"
-                  placeholderTextColor={colors.textDim}
-                  value={server}
-                  onChangeText={setServer}
-                  autoCapitalize="none"
-                  keyboardType="url"
-                  style={styles.input}
-                />
-              </View>
-            )}
-
-            <View>
+            <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>UTILIZADOR</Text>
-              <View style={styles.fieldWrap}>
-                <Text style={styles.fieldEmoji}>👤</Text>
+              <View style={styles.inputBox}>
+                <Text style={styles.inputEmoji}>👤</Text>
                 <TextInput
-                  placeholder="Nome de utilizador IPTV"
-                  placeholderTextColor={colors.textDim}
+                  placeholder="Nome de usuário IPTV"
+                  placeholderTextColor="#666"
                   value={user}
                   onChangeText={setUser}
                   autoCapitalize="none"
-                  style={styles.input}
+                  style={styles.textInput}
                 />
               </View>
             </View>
 
-            <View>
+            <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
-              <View style={styles.fieldWrap}>
-                <Text style={styles.fieldEmoji}>🔒</Text>
+              <View style={styles.inputBox}>
+                <Text style={styles.inputEmoji}>🔒</Text>
                 <TextInput
-                  placeholder="A sua palavra-passe IPTV"
-                  placeholderTextColor={colors.textDim}
+                  placeholder="Sua senha IPTV"
+                  placeholderTextColor="#666"
                   value={pass}
                   onChangeText={setPass}
                   secureTextEntry={!showPass}
                   autoCapitalize="none"
-                  style={styles.input}
+                  style={styles.textInput}
                 />
                 <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={8}>
                   <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
@@ -386,40 +391,44 @@ export default function LoginScreen() {
               <Switch
                 value={remember}
                 onValueChange={setRemember}
-                trackColor={{ true: colors.gold, false: colors.surface3 }}
-                thumbColor={colors.text}
+                trackColor={{ true: colors.gold, false: "#222" }}
+                thumbColor="#FFF"
               />
             </View>
 
-            <GoldButton
-              label="ENTRAR NA APLICAÇÃO"
+            <Pressable
+              style={[styles.btnGold, loading && { opacity: 0.7 }]}
               onPress={handleConnectIPTV}
-              loading={loading}
-              style={{ marginTop: spacing.sm }}
-            />
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#000" />
+              ) : (
+                <Text style={styles.btnGoldText}>ENTRAR NO APLICATIVO</Text>
+              )}
+            </Pressable>
 
             <Pressable
               onPress={() => setStep("license")}
-              style={{ alignSelf: "center", marginTop: spacing.xs, padding: 8 }}
+              style={{ alignSelf: "center", marginTop: 6, padding: 8 }}
             >
               <Text style={{ color: colors.gold, fontSize: 12 }}>← Alterar código de acesso / e-mail</Text>
             </Pressable>
           </View>
         )}
 
-        {loading && stage && (
-          <View style={styles.stageBox}>
-            <ActivityIndicator color={colors.gold} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.stageText}>{STAGE_LABEL[stage.s]}</Text>
-              {stage.d ? <Text style={styles.stageDetail}>{stage.d}</Text> : null}
-            </View>
+        {/* Feedback visual durante requisições */}
+        {loading && statusMsg && (
+          <View style={styles.statusBox}>
+            <ActivityIndicator color={colors.gold} size="small" />
+            <Text style={styles.statusText}>{statusMsg}</Text>
           </View>
         )}
 
+        {/* Erros em destaque */}
         {error && (
           <View style={styles.errorBox}>
-            <Text style={{ color: colors.error, fontSize: 13, marginRight: 6 }}>⚠️</Text>
+            <Text style={{ color: "#F44336", fontSize: 14, marginRight: 6 }}>⚠️</Text>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
@@ -434,26 +443,36 @@ export default function LoginScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Teste Grátis de 3 Horas</Text>
-            <Text style={styles.modalDesc}>Indique o seu e-mail para receber um teste instantâneo.</Text>
+            <Text style={styles.modalDesc}>Informe o seu e-mail para receber um teste instantâneo.</Text>
 
-            <View style={[styles.fieldWrap, { marginBottom: spacing.lg }]}>
-              <Text style={styles.fieldEmoji}>✉️</Text>
+            <View style={[styles.inputBox, { marginBottom: 16 }]}>
+              <Text style={styles.inputEmoji}>✉️</Text>
               <TextInput
-                placeholder="O seu melhor e-mail"
-                placeholderTextColor={colors.textDim}
+                placeholder="Seu melhor e-mail"
+                placeholderTextColor="#666"
                 value={trialEmail}
                 onChangeText={setTrialEmail}
                 autoCapitalize="none"
                 keyboardType="email-address"
-                style={styles.input}
+                style={styles.textInput}
               />
             </View>
 
-            <GoldButton label="GERAR TESTE AGORA" onPress={handleRequestTrial} loading={trialLoading} />
+            <Pressable
+              style={[styles.btnGold, trialLoading && { opacity: 0.7 }]}
+              onPress={handleGenerateTrial}
+              disabled={trialLoading}
+            >
+              {trialLoading ? (
+                <ActivityIndicator color="#000" />
+              ) : (
+                <Text style={styles.btnGoldText}>GERAR TESTE AGORA</Text>
+              )}
+            </Pressable>
 
             <Pressable
               onPress={() => setTrialModal(false)}
-              style={{ marginTop: 12, alignSelf: "center", padding: 6 }}
+              style={{ marginTop: 14, alignSelf: "center", padding: 6 }}
             >
               <Text style={{ color: "#8E929C", fontSize: 13 }}>Cancelar</Text>
             </Pressable>
@@ -465,49 +484,49 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: spacing.lg },
+  root: { flex: 1, backgroundColor: "#07080A" },
+  content: { paddingHorizontal: 20 },
   logoWrap: { alignItems: "center" },
   brand: {
     color: colors.gold,
     fontSize: 24,
     fontWeight: "700",
     textAlign: "center",
-    letterSpacing: 0.6,
-    marginTop: spacing.xs,
-    marginBottom: spacing.xs,
+    letterSpacing: 0.5,
+    marginTop: 6,
+    marginBottom: 4,
   },
   subtitle: {
-    color: colors.textMuted,
+    color: "#8E929C",
     fontSize: 13,
     textAlign: "center",
-    marginBottom: spacing.md,
+    marginBottom: 16,
     lineHeight: 18,
   },
+  formWrap: { gap: 14, marginTop: 8 },
+  fieldGroup: { width: "100%" },
   fieldLabel: {
-    color: colors.textMuted,
+    color: "#8E929C",
     fontSize: 11,
     marginBottom: 6,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
-  fieldWrap: {
+  inputBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
+    backgroundColor: "#16181E",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    paddingHorizontal: 14,
+    height: 52,
   },
-  fieldEmoji: {
-    fontSize: 16,
-    marginRight: 10,
-  },
-  input: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 12 },
-  hintText: { color: colors.textDim, fontSize: 11, marginTop: 4 },
-  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  serverBtn: {
+  inputEmoji: { fontSize: 16, marginRight: 10 },
+  textInput: { flex: 1, color: "#FFF", fontSize: 15 },
+  hintText: { color: "#666", fontSize: 11, marginTop: 4 },
+  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  serverChip: {
     flex: 1,
     minWidth: 110,
     flexDirection: "row",
@@ -515,73 +534,86 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     height: 46,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    borderRadius: 10,
+    backgroundColor: "#16181E",
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "rgba(255, 255, 255, 0.1)",
     paddingHorizontal: 8,
   },
-  serverBtnActive: { backgroundColor: colors.gold, borderColor: colors.gold },
-  serverText: { color: colors.text, fontSize: 12, fontWeight: "700" },
+  serverChipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
+  serverChipText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
   customLink: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-end",
-    paddingVertical: 2,
+    paddingVertical: 4,
   },
-  customText: { color: colors.textDim, fontSize: 11 },
+  customLinkText: { color: "#8E929C", fontSize: 11 },
   rememberRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
+    backgroundColor: "#16181E",
+    borderRadius: 12,
+    padding: 14,
   },
-  rememberTitle: { color: colors.text, fontSize: 13, fontWeight: "600" },
-  stageBox: {
-    marginTop: spacing.md,
-    flexDirection: "row",
+  rememberTitle: { color: "#FFF", fontSize: 13, fontWeight: "600" },
+  btnGold: {
+    backgroundColor: colors.gold,
+    height: 52,
+    borderRadius: 12,
     alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    justifyContent: "center",
+    marginTop: 6,
   },
-  stageText: { color: colors.text, fontSize: 13, fontWeight: "600" },
-  stageDetail: { color: colors.textDim, fontSize: 11, marginTop: 2 },
-  errorBox: {
-    marginTop: spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.md,
-    backgroundColor: "rgba(244,67,54,0.12)",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: "rgba(244,67,54,0.3)",
+  btnGoldText: {
+    color: "#000",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
-  errorText: { color: colors.error, flex: 1, fontSize: 12 },
-  trialBtn: {
+  btnOutline: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     height: 48,
-    borderRadius: radius.md,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.gold,
     backgroundColor: "rgba(218, 165, 32, 0.08)",
   },
-  trialBtnText: {
+  btnOutlineText: {
     color: colors.gold,
     fontSize: 12,
     fontWeight: "700",
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
   },
+  statusBox: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 14,
+    backgroundColor: "#16181E",
+    borderRadius: 12,
+  },
+  statusText: { color: "#FFF", fontSize: 13, fontWeight: "600" },
+  errorBox: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    backgroundColor: "rgba(244,67,54,0.12)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(244,67,54,0.3)",
+  },
+  errorText: { color: "#F44336", flex: 1, fontSize: 12 },
   altLink: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: spacing.md,
-    padding: spacing.sm,
+    marginTop: 16,
+    padding: 8,
   },
   altText: { color: colors.gold, fontSize: 13, fontWeight: "600" },
   modalOverlay: {
@@ -589,17 +621,17 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     alignItems: "center",
-    padding: spacing.lg,
+    padding: 20,
   },
   modalCard: {
     backgroundColor: "#111318",
     width: "100%",
     maxWidth: 380,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
+    borderRadius: 20,
+    padding: 22,
     borderWidth: 1,
     borderColor: "rgba(229, 169, 59, 0.3)",
   },
   modalTitle: { color: "#FFF", fontSize: 18, fontWeight: "700", marginBottom: 6 },
-  modalDesc: { color: "#8E929C", fontSize: 12, lineHeight: 18, marginBottom: spacing.lg },
+  modalDesc: { color: "#8E929C", fontSize: 12, lineHeight: 18, marginBottom: 16 },
 });
