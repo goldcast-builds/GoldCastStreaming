@@ -9,21 +9,12 @@ import { Category, getLiveCategories, getLiveStreams, IPTVList, listLists } from
 import { useDebounce } from "../../src/utils/hooks";
 import { PlayItem, useSession } from "../../src/store/session";
 import { liveUrls } from "../../src/services/xtream";
-import { AccessGate } from "../../src/components/AccessGate";
 
 const CAT_ALL = "__all", CAT_FAV = "__fav", CAT_RECENT = "__recent";
 
 type Row = { id: string; name: string; logo?: string; category: string; urls: string[]; streamId?: number | string; epgId?: string | null; raw: any };
 
 export default function LiveTab() {
-  return (
-    <AccessGate>
-      <LiveContent />
-    </AccessGate>
-  );
-}
-
-function LiveContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -48,14 +39,12 @@ function LiveContent() {
   const [search, setSearch] = useState("");
   const q = useDebounce(search.trim().toLowerCase(), 300);
 
-  // Colunas responsivas: 3 no celular vertical, 4 a 6 em TV ou horizontal
   const numCols = useMemo(() => {
     if (width >= 900) return 6;
     if (width >= 600) return 4;
     return 3;
   }, [width]);
 
-  // M3U list mode (backend)
   const listMode = source?.kind === "list" ? source.listId : null;
   const [listCats, setListCats] = useState<Category[]>([]);
   const [listItems, setListItems] = useState<any[]>([]);
@@ -128,7 +117,7 @@ function LiveContent() {
     }));
     setQueue(items, index);
     
-    // Envia os parâmetros diretos e redundantes para o Just Player
+    // Parâmetros preservados exatamente como estavam para o Just Player
     router.push({
       pathname: "/player",
       params: {
