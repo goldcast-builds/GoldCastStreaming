@@ -36,9 +36,7 @@ jobs:
 
       - name: Injetar módulo nativo Just Player e dependências Media3
         run: |
-          echo "===> A injetar ficheiros de android-custom no projeto Android..."
-
-          # 1. Copiar ficheiros Java/Kotlin para a estrutura de pacotes correta
+          echo "===> A copiar ficheiros de android-custom..."
           if [ -d "android-custom" ]; then
             for f in $(find android-custom -name "*.java" -o -name "*.kt"); do
               PKG=$(grep -E "^package [a-zA-Z0-9_.]+" "$f" | head -n 1 | sed 's/package //; s/;//' | tr -d '\r\n ')
@@ -57,29 +55,37 @@ jobs:
             fi
           fi
 
-          # 2. Localizar MainApplication (Kotlin ou Java)
-          MAIN_APP=$(find frontend/android/app/src/main/java -name "MainApplication.*" | head -n 1)
-          echo "MainApplication detetado em: $MAIN_APP"
-
-          # 3. Registar o Package no MainApplication
-          PKG_FILE=$(find android-custom -name "*Package.java" -o -name "*Package.kt" 2>/dev/null | head -n 1)
-          if [ -n "$PKG_FILE" ]; then
-            PKG_CLASS=$(basename "$PKG_FILE" | cut -d. -f1)
-            PKG_NAME=$(grep -E "^package [a-zA-Z0-9_.]+" "$PKG_FILE" | head -n 1 | sed 's/package //; s/;//' | tr -d '\r\n ')
+          # Registar no MainApplication com Node.js de forma segura (sem mexer nos imports do topo)
+          node -e '
+            const fs = require("fs");
+            const { execSync } = require("child_process");
             
-            if [ -f "$MAIN_APP" ] && ! grep -q "$PKG_CLASS" "$MAIN_APP"; then
-              if [[ "$MAIN_APP" == *.kt ]]; then
-                [ -n "$PKG_NAME" ] && sed -i "1s|^|import $PKG_NAME.$PKG_CLASS\n|" "$MAIN_APP"
-                sed -i "/PackageList(this).packages/a \            add($PKG_CLASS())" "$MAIN_APP" 2>/dev/null || sed -i "/packages/a \            add($PKG_CLASS())" "$MAIN_APP" || true
-              else
-                [ -n "$PKG_NAME" ] && sed -i "1s|^|import $PKG_NAME.$PKG_CLASS;\n|" "$MAIN_APP"
-                sed -i "/new PackageList(this)/a \      packages.add(new $PKG_CLASS());" "$MAIN_APP" 2>/dev/null || sed -i "/getPackages()/a \      packages.add(new $PKG_CLASS());" "$MAIN_APP" || true
-              fi
-              echo "Package $PKG_CLASS registado no MainApplication."
-            fi
-          fi
+            try {
+              const mainAppPath = execSync("find frontend/android/app/src/main/java -name \"MainApplication.*\"")
+                .toString().trim().split("\n")[0];
+              
+              if (mainAppPath && fs.existsSync(mainAppPath)) {
+                console.log("A processar ficheiro:", mainAppPath);
+                let content = fs.readFileSync(mainAppPath, "utf8");
+                
+                if (!content.includes("JustPlayerPackage")) {
+                  if (content.includes(".apply {")) {
+                    content = content.replace(".apply {", ".apply {\n              add(com.goldcast.player.JustPlayerPackage())");
+                  } else if (content.includes("PackageList(this).packages")) {
+                    content = content.replace(/(val packages = PackageList\(this\)\.packages.*)/, "$1\n          packages.add(com.goldcast.player.JustPlayerPackage())");
+                  } else if (content.includes("new PackageList(this)")) {
+                    content = content.replace(/new PackageList\(this\).*/, "$&\n      packages.add(new com.goldcast.player.JustPlayerPackage());");
+                  }
+                  fs.writeFileSync(mainAppPath, content, "utf8");
+                  console.log("JustPlayerPackage registado com sucesso!");
+                }
+              }
+            } catch (err) {
+              console.error("Falha na injeção do MainApplication:", err);
+            }
+          '
 
-          # 4. Registar Activities do player no AndroidManifest.xml
+          # Registar Activities no AndroidManifest.xml
           MANIFEST="frontend/android/app/src/main/AndroidManifest.xml"
           for act in $(find android-custom -name "*Activity.java" -o -name "*Activity.kt" 2>/dev/null); do
             ACT_NAME=$(basename "$act" | cut -d. -f1)
@@ -90,7 +96,7 @@ jobs:
             fi
           done
 
-          # 5. Adicionar dependências Media3 ao app/build.gradle
+          # Adicionar dependências Media3 ao app/build.gradle
           BUILD_GRADLE="frontend/android/app/build.gradle"
           if [ -f "$BUILD_GRADLE" ] && ! grep -q "media3-exoplayer" "$BUILD_GRADLE"; then
             sed -i '/dependencies {/a \    implementation "androidx.media3:media3-exoplayer:1.2.1"\n    implementation "androidx.media3:media3-ui:1.2.1"\n    implementation "androidx.media3:media3-exoplayer-hls:1.2.1"\n    implementation "androidx.media3:media3-exoplayer-dash:1.2.1"' "$BUILD_GRADLE"
