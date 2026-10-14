@@ -7,6 +7,8 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
@@ -41,8 +43,21 @@ public class JustPlayerActivity extends AppCompatActivity {
     private PlayerView playerView;
     private LinearLayout topBar;
 
+    private String progressKey;
+    private String streamType = "vod";
+    private long startPosition = 0;
+
     private int currentResizeModeIndex = 0;
     private int selectedSpeedIndex = 2; // 1.0x (Normal)
+
+    private final Handler progressHandler = new Handler(Looper.getMainLooper());
+    private final Runnable progressRunnable = new Runnable() {
+        @Override
+        public void run() {
+            reportProgress();
+            progressHandler.postDelayed(this, 3000);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,15 +67,17 @@ public class JustPlayerActivity extends AppCompatActivity {
 
         String url = getIntent().getStringExtra("url");
         String title = getIntent().getStringExtra("title");
+        startPosition = getIntent().getLongExtra("startPosition", 0);
+        progressKey = getIntent().getStringExtra("progressKey");
+        streamType = getIntent().getStringExtra("streamType");
+
         if (title == null || title.trim().isEmpty()) {
             title = "GoldCast Streaming";
         }
 
-        // Layout raiz
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(0xFF000000);
 
-        // Reprodutor Media3
         playerView = new PlayerView(this);
         playerView.setLayoutParams(new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -72,14 +89,12 @@ public class JustPlayerActivity extends AppCompatActivity {
 
         root.addView(playerView);
 
-        // Barra de Opções Superior (Voltar, Título, Áudio, Legenda, Velocidade, Proporção)
         topBar = buildTopBar(title);
         root.addView(topBar);
 
         setContentView(root);
         hideSystemUI();
 
-        // Sincroniza a barra de opções com o aparecimento/desaparecimento dos controles
         playerView.setControllerVisibilityListener(new PlayerView.ControllerVisibilityListener() {
             @Override
             public void onVisibilityChanged(int visibility) {
@@ -107,7 +122,6 @@ public class JustPlayerActivity extends AppCompatActivity {
         barParams.gravity = Gravity.TOP;
         bar.setLayoutParams(barParams);
 
-        // Fundo com degradê escuro para facilitar a leitura sobre o vídeo
         GradientDrawable barBg = new GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{0xDD000000, 0x55000000, 0x00000000}
@@ -122,6 +136,20 @@ public class JustPlayerActivity extends AppCompatActivity {
             }
         });
         bar.addView(btnBack);
+
+        // Botão Recomeçar (Aparece apenas quando o vídeo foi continuado)
+        if (startPosition > 5000) {
+            TextView btnRestart = createPillButton("Recomeçar", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (player != null) {
+                        player.seekTo(0);
+                        Toast.makeText(JustPlayerActivity.this, "Reproduzindo do início", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+            bar.addView(btnRestart);
+        }
 
         // Título da Transmissão
         TextView tvTitle = new TextView(this);
@@ -221,6 +249,31 @@ public class JustPlayerActivity extends AppCompatActivity {
         btn.setOnClickListener(listener);
 
         return btn;
+    }
+
+    private void reportProgress() {
+        if (player == null) return;
+        if (streamType != null && streamType.equalsIgnoreCase("live")) return;
+        if (player.isCurrentMediaItemLive() || player.isCurrentMediaItemDynamic()) return;
+
+        long pos = player.getCurrentPosition();
+        long dur = player.getDuration();
+
+        if (dur > 0 && pos > 0 && progressKey != null && !progressKey.isEmpty()) {
+            JustPlayerModule.sendProgressEvent(progressKey, pos, dur, streamType);
+        }
+    }
+
+    private String formatMs(long ms) {
+        long totalSec = Math.max(0, ms / 1000);
+        long hours = totalSec / 3600;
+        long mins = (totalSec % 3600) / 60;
+        long secs = totalSec % 60;
+        if (hours > 0) {
+            return String.format("%02d:%02d:%02d", hours, mins, secs);
+        } else {
+            return String.format("%02d:%02d", mins, secs);
+        }
     }
 
     private void showAudioDialog() {
@@ -429,7 +482,14 @@ public class JustPlayerActivity extends AppCompatActivity {
             playerView.setPlayer(player);
 
             MediaItem mediaItem = MediaItem.fromUri(Uri.parse(url));
-            player.setMediaItem(mediaItem);
+
+            if (startPosition > 5000) {
+                player.setMediaItem(mediaItem, startPosition);
+                Toast.makeText(this, "Continuando de " + formatMs(startPosition), Toast.LENGTH_SHORT).show();
+            } else {
+                player.setMediaItem(mediaItem);
+            }
+
             player.prepare();
             player.setPlayWhenReady(true);
         } catch (Exception e) {
@@ -476,17 +536,22 @@ public class JustPlayerActivity extends AppCompatActivity {
         super.onResume();
         hideSystemUI();
         if (player != null) player.setPlayWhenReady(true);
+        progressHandler.post(progressRunnable);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        progressHandler.removeCallbacks(progressRunnable);
+        reportProgress();
         if (player != null) player.setPlayWhenReady(false);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        progressHandler.removeCallbacks(progressRunnable);
+        reportProgress();
         if (player != null) {
             player.release();
             player = null;
