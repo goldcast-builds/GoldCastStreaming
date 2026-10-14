@@ -34,6 +34,69 @@ jobs:
           cd frontend
           npx expo prebuild --platform android --no-install
 
+      - name: Injetar módulo nativo Just Player e dependências Media3
+        run: |
+          echo "===> A injetar ficheiros de android-custom no projeto Android..."
+
+          # 1. Copiar ficheiros Java/Kotlin para a estrutura de pacotes correta
+          if [ -d "android-custom" ]; then
+            for f in $(find android-custom -name "*.java" -o -name "*.kt"); do
+              PKG=$(grep -E "^package [a-zA-Z0-9_.]+" "$f" | head -n 1 | sed 's/package //; s/;//' | tr -d '\r\n ')
+              if [ -n "$PKG" ]; then
+                TARGET_DIR="frontend/android/app/src/main/java/$(echo "$PKG" | tr '.' '/')"
+              else
+                TARGET_DIR="frontend/android/app/src/main/java/com/goldcast/player"
+              fi
+              mkdir -p "$TARGET_DIR"
+              cp "$f" "$TARGET_DIR/"
+              echo "Copiado: $f -> $TARGET_DIR/"
+            done
+
+            if [ -d "android-custom/res" ]; then
+              cp -rn android-custom/res/* frontend/android/app/src/main/res/ 2>/dev/null || true
+            fi
+          fi
+
+          # 2. Localizar MainApplication (Kotlin ou Java)
+          MAIN_APP=$(find frontend/android/app/src/main/java -name "MainApplication.*" | head -n 1)
+          echo "MainApplication detetado em: $MAIN_APP"
+
+          # 3. Registar o Package no MainApplication
+          PKG_FILE=$(find android-custom -name "*Package.java" -o -name "*Package.kt" 2>/dev/null | head -n 1)
+          if [ -n "$PKG_FILE" ]; then
+            PKG_CLASS=$(basename "$PKG_FILE" | cut -d. -f1)
+            PKG_NAME=$(grep -E "^package [a-zA-Z0-9_.]+" "$PKG_FILE" | head -n 1 | sed 's/package //; s/;//' | tr -d '\r\n ')
+            
+            if [ -f "$MAIN_APP" ] && ! grep -q "$PKG_CLASS" "$MAIN_APP"; then
+              if [[ "$MAIN_APP" == *.kt ]]; then
+                [ -n "$PKG_NAME" ] && sed -i "1s|^|import $PKG_NAME.$PKG_CLASS\n|" "$MAIN_APP"
+                sed -i "/PackageList(this).packages/a \            add($PKG_CLASS())" "$MAIN_APP" 2>/dev/null || sed -i "/packages/a \            add($PKG_CLASS())" "$MAIN_APP" || true
+              else
+                [ -n "$PKG_NAME" ] && sed -i "1s|^|import $PKG_NAME.$PKG_CLASS;\n|" "$MAIN_APP"
+                sed -i "/new PackageList(this)/a \      packages.add(new $PKG_CLASS());" "$MAIN_APP" 2>/dev/null || sed -i "/getPackages()/a \      packages.add(new $PKG_CLASS());" "$MAIN_APP" || true
+              fi
+              echo "Package $PKG_CLASS registado no MainApplication."
+            fi
+          fi
+
+          # 4. Registar Activities do player no AndroidManifest.xml
+          MANIFEST="frontend/android/app/src/main/AndroidManifest.xml"
+          for act in $(find android-custom -name "*Activity.java" -o -name "*Activity.kt" 2>/dev/null); do
+            ACT_NAME=$(basename "$act" | cut -d. -f1)
+            if ! grep -q "$ACT_NAME" "$MANIFEST"; then
+              ACT_PKG=$(grep -E "^package [a-zA-Z0-9_.]+" "$act" | head -n 1 | sed 's/package //; s/;//' | tr -d '\r\n ')
+              sed -i "/<\/application>/i \        <activity android:name=\"$ACT_PKG.$ACT_NAME\" android:configChanges=\"keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode\" android:screenOrientation=\"sensorLandscape\" android:launchMode=\"singleTask\" android:theme=\"@style/Theme.AppCompat.NoActionBar\" android:exported=\"false\" \/>" "$MANIFEST"
+              echo "Activity $ACT_NAME registada no AndroidManifest."
+            fi
+          done
+
+          # 5. Adicionar dependências Media3 ao app/build.gradle
+          BUILD_GRADLE="frontend/android/app/build.gradle"
+          if [ -f "$BUILD_GRADLE" ] && ! grep -q "media3-exoplayer" "$BUILD_GRADLE"; then
+            sed -i '/dependencies {/a \    implementation "androidx.media3:media3-exoplayer:1.2.1"\n    implementation "androidx.media3:media3-ui:1.2.1"\n    implementation "androidx.media3:media3-exoplayer-hls:1.2.1"\n    implementation "androidx.media3:media3-exoplayer-dash:1.2.1"' "$BUILD_GRADLE"
+            echo "Dependências Media3 adicionadas ao build.gradle."
+          fi
+
       - name: Forçar permissão de HTTP no AndroidManifest
         run: |
           sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' frontend/android/app/src/main/AndroidManifest.xml
