@@ -1,19 +1,10 @@
 import { useCallback, useMemo } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
-import { AccessGate } from "../../src/components/AccessGate";
 import { CatalogGrid, GridItem } from "../../src/components/CatalogGrid";
 import { useSession } from "../../src/store/session";
 import { NoVod } from "../../src/components/NoVod";
 
 export default function MoviesTab() {
-  return (
-    <AccessGate>
-      <MoviesContent />
-    </AccessGate>
-  );
-}
-
-function MoviesContent() {
   const router = useRouter();
   const source = useSession((s) => s.source);
   const catalog = useSession((s) => s.catalog);
