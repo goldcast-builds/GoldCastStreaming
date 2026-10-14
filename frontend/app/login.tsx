@@ -22,11 +22,11 @@ import { DEFAULT_SERVERS, SERVER_LABELS, Stage } from "../src/services/xtream";
 import { useSession } from "../src/store/session";
 
 const STAGE_LABEL: Record<Stage, string> = {
-  checking: "Verificando...",
-  connecting: "Conectando ao servidor...",
-  validating: "Validando credenciais...",
-  loading: "Carregando canais e filmes...",
-  done: "Conectado!",
+  checking: "A verificar...",
+  connecting: "A ligar ao servidor...",
+  validating: "A validar credenciais...",
+  loading: "A carregar canais e filmes...",
+  done: "Ligação estabelecida!",
 };
 
 const REMOTE_SERVERS_URL =
@@ -46,14 +46,14 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
 
-  // Etapa 1: "license" (E-mail + Código) | Etapa 2: "credentials" (Servidor, Usuário, Senha)
+  // Etapa: "license" (E-mail + Código de Acesso) | "credentials" (Servidor, Utilizador e Palavra-passe)
   const [step, setStep] = useState<"license" | "credentials">("license");
 
-  // Dados da Etapa 1 (Licença)
+  // Campos da Licença
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
 
-  // Dados da Etapa 2 (IPTV)
+  // Campos IPTV
   const defaultList: ServerOption[] = [
     { label: SERVER_LABELS[DEFAULT_SERVERS.primary] || "Servidor 1", url: DEFAULT_SERVERS.primary },
     { label: SERVER_LABELS[DEFAULT_SERVERS.backup] || "Servidor 2", url: DEFAULT_SERVERS.backup },
@@ -66,12 +66,12 @@ export default function LoginScreen() {
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(true);
 
-  // Estados gerais
+  // Estados de controlo
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState<{ s: Stage; d?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Modal de Teste Grátis
+  // Modal do Teste Grátis
   const [trialModal, setTrialModal] = useState(false);
   const [trialEmail, setTrialEmail] = useState("");
   const [trialLoading, setTrialLoading] = useState(false);
@@ -90,12 +90,11 @@ export default function LoginScreen() {
         if (savedEmail) setEmail(savedEmail);
         if (savedCode) setCode(savedCode);
 
-        // Se o aplicativo já foi ativado anteriormente, abre direto na tela de login IPTV
+        // Se a licença já tiver sido ativada, avança para as credenciais IPTV
         if (savedLicense === "true") {
           setStep("credentials");
         }
 
-        // Carrega servidores remotos
         const res = await fetch(`${REMOTE_SERVERS_URL}?t=${Date.now()}`, { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
@@ -112,23 +111,23 @@ export default function LoginScreen() {
     };
   }, []);
 
-  // 1. Validação da Licença (E-mail + Código de Acesso)
+  // 1. Validação da Licença
   const handleValidateLicense = async () => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanCode = code.trim().toUpperCase();
 
     setError(null);
     if (!cleanEmail || !cleanEmail.includes("@")) {
-      setError("Por favor, digite um e-mail válido.");
+      setError("Indique um endereço de e-mail válido.");
       return;
     }
     if (!cleanCode) {
-      setError("Por favor, informe seu código de acesso.");
+      setError("Insira o seu código de acesso.");
       return;
     }
 
     setLoading(true);
-    setStage({ s: "checking", d: "Validando seu código de acesso..." });
+    setStage({ s: "checking", d: "A validar código com o servidor..." });
 
     try {
       const res = await fetch(VALIDATE_CODE_URL, {
@@ -142,12 +141,10 @@ export default function LoginScreen() {
         throw new Error(data.message || "Código ou e-mail inválido.");
       }
 
-      // Salva localmente que o app foi ativado
       await AsyncStorage.setItem("@goldcast_licensed", "true");
       await AsyncStorage.setItem("@goldcast_saved_email", cleanEmail);
       await AsyncStorage.setItem("@goldcast_saved_code", cleanCode);
 
-      // Avança imediatamente para a Etapa 2 (Login IPTV)
       setStep("credentials");
     } catch (e: any) {
       if (mounted.current) {
@@ -161,11 +158,11 @@ export default function LoginScreen() {
     }
   };
 
-  // 2. Conexão IPTV com Servidor, Usuário e Senha
+  // 2. Ligação IPTV
   const handleConnectIPTV = async () => {
     setError(null);
     if (!server.trim() || !user.trim() || !pass) {
-      setError("Preencha o servidor, usuário e senha da sua linha IPTV.");
+      setError("Preencha o servidor, o utilizador e a palavra-passe.");
       return;
     }
 
@@ -177,7 +174,7 @@ export default function LoginScreen() {
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha ao conectar com o servidor IPTV.");
+        setError(e?.message || "Falha ao ligar ao servidor IPTV.");
         setStage(null);
       }
     } finally {
@@ -185,10 +182,10 @@ export default function LoginScreen() {
     }
   };
 
-  // 3. Teste Grátis de 3 Horas
+  // 3. Teste Gratuito de 3 Horas
   const handleRequestTrial = async () => {
     if (!trialEmail.trim() || !trialEmail.includes("@")) {
-      setError("Digite um e-mail válido para o teste.");
+      setError("Indique um e-mail válido para receber o teste.");
       return;
     }
 
@@ -204,12 +201,11 @@ export default function LoginScreen() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.message || "Não foi possível gerar teste.");
+        throw new Error(data.message || "Não foi possível gerar o teste.");
       }
 
       setTrialModal(false);
 
-      // Preenche os dados gerados e conecta direto
       setServer(data.serverUrl || server);
       setUser(data.username);
       setPass(data.password);
@@ -239,15 +235,15 @@ export default function LoginScreen() {
         </View>
         <Text style={styles.brand}>GoldCast Streaming</Text>
 
-        {/* ================= ETAPA 1: E-MAIL E CÓDIGO DE ACESSO ================= */}
+        {/* FASE 1: VALIDAÇÃO DA LICENÇA */}
         {step === "license" ? (
           <View style={{ gap: spacing.md, marginTop: spacing.md }}>
             <Text style={styles.subtitle}>
-              Digite seu e-mail e código de acesso para desbloquear o aplicativo.
+              Introduza o seu e-mail e código de acesso para desbloquear a aplicação.
             </Text>
 
             <View>
-              <Text style={styles.fieldLabel}>SEU E-MAIL</Text>
+              <Text style={styles.fieldLabel}>O SEU E-MAIL</Text>
               <View style={styles.fieldWrap}>
                 <Text style={styles.fieldEmoji}>✉️</Text>
                 <TextInput
@@ -275,7 +271,7 @@ export default function LoginScreen() {
                   style={styles.input}
                 />
               </View>
-              <Text style={styles.hintText}>O código ficará vinculado ao seu e-mail de acesso.</Text>
+              <Text style={styles.hintText}>O código ficará associado ao seu e-mail de acesso.</Text>
             </View>
 
             <GoldButton
@@ -296,10 +292,10 @@ export default function LoginScreen() {
             </Pressable>
           </View>
         ) : (
-          /* ================= ETAPA 2: SERVIDOR, USUÁRIO E SENHA ================= */
+          /* FASE 2: DADOS DE LIGAÇÃO IPTV */
           <View style={{ gap: spacing.md, marginTop: spacing.md }}>
             <Text style={styles.subtitle}>
-              Insira os dados da sua linha IPTV para carregar as transmissões.
+              Introduza os dados da sua linha IPTV para carregar as transmissões.
             </Text>
 
             <Text style={styles.fieldLabel}>SERVIDOR</Text>
@@ -352,11 +348,11 @@ export default function LoginScreen() {
             )}
 
             <View>
-              <Text style={styles.fieldLabel}>USUÁRIO</Text>
+              <Text style={styles.fieldLabel}>UTILIZADOR</Text>
               <View style={styles.fieldWrap}>
                 <Text style={styles.fieldEmoji}>👤</Text>
                 <TextInput
-                  placeholder="Nome de usuário IPTV"
+                  placeholder="Nome de utilizador IPTV"
                   placeholderTextColor={colors.textDim}
                   value={user}
                   onChangeText={setUser}
@@ -367,11 +363,11 @@ export default function LoginScreen() {
             </View>
 
             <View>
-              <Text style={styles.fieldLabel}>SENHA</Text>
+              <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
               <View style={styles.fieldWrap}>
                 <Text style={styles.fieldEmoji}>🔒</Text>
                 <TextInput
-                  placeholder="Sua senha IPTV"
+                  placeholder="A sua palavra-passe IPTV"
                   placeholderTextColor={colors.textDim}
                   value={pass}
                   onChangeText={setPass}
@@ -396,7 +392,7 @@ export default function LoginScreen() {
             </View>
 
             <GoldButton
-              label="ENTRAR NO APLICATIVO"
+              label="ENTRAR NA APLICAÇÃO"
               onPress={handleConnectIPTV}
               loading={loading}
               style={{ marginTop: spacing.sm }}
@@ -411,7 +407,6 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* Feedback visual durante o carregamento */}
         {loading && stage && (
           <View style={styles.stageBox}>
             <ActivityIndicator color={colors.gold} />
@@ -422,7 +417,6 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* Mensagens de erro */}
         {error && (
           <View style={styles.errorBox}>
             <Text style={{ color: colors.error, fontSize: 13, marginRight: 6 }}>⚠️</Text>
@@ -435,17 +429,17 @@ export default function LoginScreen() {
         </Pressable>
       </ScrollView>
 
-      {/* Modal de Teste Grátis */}
+      {/* Modal de Teste Gratuito */}
       <Modal visible={trialModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Teste Grátis de 3 Horas</Text>
-            <Text style={styles.modalDesc}>Informe o seu e-mail para receber um teste instantâneo.</Text>
+            <Text style={styles.modalDesc}>Indique o seu e-mail para receber um teste instantâneo.</Text>
 
             <View style={[styles.fieldWrap, { marginBottom: spacing.lg }]}>
               <Text style={styles.fieldEmoji}>✉️</Text>
               <TextInput
-                placeholder="Seu melhor e-mail"
+                placeholder="O seu melhor e-mail"
                 placeholderTextColor={colors.textDim}
                 value={trialEmail}
                 onChangeText={setTrialEmail}
