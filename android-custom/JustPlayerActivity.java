@@ -23,13 +23,12 @@ public class JustPlayerActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Mantém a tela ligada durante a reprodução
+        // Mantém o ecrã ligado durante a reprodução
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        hideSystemUI();
 
         String url = getIntent().getStringExtra("url");
 
-        // Cria a interface em tela cheia programaticamente
+        // Criação da interface em tela cheia programaticamente
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(0xFF000000);
 
@@ -42,7 +41,12 @@ public class JustPlayerActivity extends AppCompatActivity {
         playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS);
 
         root.addView(playerView);
+
+        // O setContentView é chamado ANTES de esconder as barras de sistema
         setContentView(root);
+
+        // Ativa tela cheia após a montagem da janela
+        hideSystemUI();
 
         if (url != null && !url.isEmpty()) {
             initPlayer(url);
@@ -50,42 +54,60 @@ public class JustPlayerActivity extends AppCompatActivity {
     }
 
     private void initPlayer(String url) {
-        DefaultHttpDataSource.Factory httpDataSourceFactory = new DefaultHttpDataSource.Factory()
-                .setUserAgent("GoldCastStreaming/1.0 (Android; Media3)")
-                .setConnectTimeoutMs(15000)
-                .setReadTimeoutMs(15000)
-                .setAllowCrossProtocolRedirects(true);
+        try {
+            DefaultHttpDataSource.Factory httpDataSourceFactory = new DefaultHttpDataSource.Factory()
+                    .setUserAgent("GoldCastStreaming/1.0 (Android; Media3)")
+                    .setConnectTimeoutMs(15000)
+                    .setReadTimeoutMs(15000)
+                    .setAllowCrossProtocolRedirects(true);
 
-        DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(httpDataSourceFactory);
+            DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(httpDataSourceFactory);
 
-        player = new ExoPlayer.Builder(this)
-                .setMediaSourceFactory(mediaSourceFactory)
-                .build();
+            player = new ExoPlayer.Builder(this)
+                    .setMediaSourceFactory(mediaSourceFactory)
+                    .build();
 
-        playerView.setPlayer(player);
+            playerView.setPlayer(player);
 
-        MediaItem mediaItem = MediaItem.fromUri(Uri.parse(url));
-        player.setMediaItem(mediaItem);
-        player.prepare();
-        player.setPlayWhenReady(true);
+            MediaItem mediaItem = MediaItem.fromUri(Uri.parse(url));
+            player.setMediaItem(mediaItem);
+            player.prepare();
+            player.setPlayWhenReady(true);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void hideSystemUI() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            WindowInsetsController controller = getWindow().getInsetsController();
-            if (controller != null) {
-                controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-                controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        try {
+            final View decorView = getWindow().getDecorView();
+            if (decorView == null) return;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                WindowInsetsController controller = decorView.getWindowInsetsController();
+                if (controller != null) {
+                    controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                    controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
+            } else {
+                decorView.setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                );
             }
-        } else {
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    | View.SYSTEM_UI_FLAG_FULLSCREEN
-            );
+        } catch (Exception ignored) {
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            hideSystemUI();
         }
     }
 
