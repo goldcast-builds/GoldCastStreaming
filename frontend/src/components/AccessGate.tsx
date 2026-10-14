@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from "@react-native-vector-icons/ionicons";
@@ -23,11 +24,23 @@ interface AccessGateProps {
 const VALIDATE_CODE_URL = "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/validate-code";
 
 export default function AccessGate({ children }: AccessGateProps) {
+  // Etapa atual: 'email_code' (Ecrã 2) ou 'server_login' (Ecrã de Servidor/Utilizador/Senha)
+  const [step, setStep] = useState<"email_code" | "server_login">("email_code");
+
+  // Dados da Etapa 1
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+
+  // Dados da Etapa 2 (Servidor / Xtream)
+  const [serverUrl, setServerUrl] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  // Estados de controlo
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const login = useSession((s) => s.login);
 
@@ -41,47 +54,46 @@ export default function AccessGate({ children }: AccessGateProps) {
       const savedCode = await AsyncStorage.getItem("@goldcast_saved_code");
       const savedUnlocked = await AsyncStorage.getItem("@goldcast_gate_unlocked");
 
+      const savedServer = await AsyncStorage.getItem("@goldcast_server_url");
+      const savedUser = await AsyncStorage.getItem("@goldcast_username");
+      const savedPass = await AsyncStorage.getItem("@goldcast_password");
+
       if (savedEmail) setEmail(savedEmail);
       if (savedCode) setCode(savedCode);
+      if (savedServer) setServerUrl(savedServer);
+      if (savedUser) setUsername(savedUser);
+      if (savedPass) setPassword(savedPass);
 
-      if (savedEmail && savedCode && savedUnlocked === "true") {
-        setIsUnlocked(true);
-        setChecking(false);
-
-        // Validação silenciosa em segundo plano
-        fetch(VALIDATE_CODE_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: savedEmail, code: savedCode }),
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            if (!data.success) {
-              AsyncStorage.removeItem("@goldcast_gate_unlocked");
-              setIsUnlocked(false);
-            }
-          })
-          .catch(() => {});
-        return;
+      // Se já possui acesso validado e credenciais guardadas, tenta autenticar diretamente
+      if (savedUnlocked === "true" && savedServer && savedUser && savedPass) {
+        try {
+          await login(savedServer, savedUser, savedPass, true);
+          setIsUnlocked(true);
+        } catch {
+          // Se o servidor falhar ao iniciar, vai para a tela de servidor para permitir ajustes
+          setStep("server_login");
+        }
       }
     } catch (e) {
-      // Ignora falhas de leitura local
+      // Ignora falhas de leitura inicial
     } finally {
       setChecking(false);
     }
   };
 
-  const handleUnlock = async () => {
+  // Processa o envio da Etapa 1 (E-mail e Código de Acesso)
+  const handleValidateEmailAndCode = async () => {
+    setErrorMessage("");
     const cleanEmail = email.trim().toLowerCase();
     const cleanCode = code.trim().toUpperCase();
 
     if (!cleanEmail || !cleanEmail.includes("@")) {
-      Alert.alert("E-mail Obrigatório", "Por favor, indique um endereço de e-mail válido.");
+      setErrorMessage("Por favor, introduza um endereço de e-mail válido.");
       return;
     }
 
     if (!cleanCode) {
-      Alert.alert("Código Obrigatório", "Por favor, insira o seu código de liberação.");
+      setErrorMessage("Por favor, insira o seu código de acesso.");
       return;
     }
 
@@ -97,31 +109,83 @@ export default function AccessGate({ children }: AccessGateProps) {
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-      if (!res.ok || !data.success) {
-        Alert.alert("Acesso Negado", data.message || "Código ou e-mail inválido.");
+      if (!res.ok || data.success === false) {
+        setErrorMessage(data.message || "Código ou e-mail inválido. Verifique os dados.");
         setLoading(false);
         return;
       }
 
-      // Guarda os dados validados no dispositivo
+      // Guarda os dados de licença validados
       await AsyncStorage.setItem("@goldcast_saved_email", cleanEmail);
       await AsyncStorage.setItem("@goldcast_saved_code", cleanCode);
       await AsyncStorage.setItem("@goldcast_gate_unlocked", "true");
 
-      // Liga diretamente à linha Xtream se retornada pela Edge Function
+      // Se a sua API já devolver o servidor e as credenciais automaticamente:
       if (data.serverUrl && data.username && data.password) {
         try {
           await login(data.serverUrl, data.username, data.password, true);
-        } catch {
-          // Mantém desbloqueado mesmo em caso de instabilidade momentânea
+          await AsyncStorage.setItem("@goldcast_server_url", data.serverUrl);
+          await AsyncStorage.setItem("@goldcast_username", data.username);
+          await AsyncStorage.setItem("@goldcast_password", data.password);
+          setIsUnlocked(true);
+          return;
+        } catch (loginErr) {
+          // Se falhar a conexão ao stream, preenche os campos e avança para a etapa manual
+          setServerUrl(data.serverUrl);
+          setUsername(data.username);
+          setPassword(data.password);
+          setErrorMessage("Falha na conexão. Verifique sua internet ou o servidor.");
+          setStep("server_login");
+          return;
         }
       }
 
+      // Cenário C: Avança para a tela de introdução de Servidor, Utilizador e Senha
+      setStep("server_login");
+    } catch (err: any) {
+      // Se não conseguir validar online mas o formato for válido, permite configurar o servidor
+      setErrorMessage("Não foi possível validar o código com o servidor de ativação.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Processa o envio da Etapa 2 (Servidor, Utilizador e Palavra-passe)
+  const handleServerLogin = async () => {
+    setErrorMessage("");
+
+    let cleanServer = serverUrl.trim();
+    const cleanUser = username.trim();
+    const cleanPass = password.trim();
+
+    if (!cleanServer || !cleanUser || !cleanPass) {
+      setErrorMessage("Preencha todos os campos do servidor.");
+      return;
+    }
+
+    if (!cleanServer.startsWith("http://") && !cleanServer.startsWith("https://")) {
+      cleanServer = `http://${cleanServer}`;
+    }
+    if (cleanServer.endsWith("/")) {
+      cleanServer = cleanServer.slice(0, -1);
+    }
+
+    setLoading(true);
+
+    try {
+      await login(cleanServer, cleanUser, cleanPass, true);
+
+      // Guarda credenciais validadas com sucesso
+      await AsyncStorage.setItem("@goldcast_server_url", cleanServer);
+      await AsyncStorage.setItem("@goldcast_username", cleanUser);
+      await AsyncStorage.setItem("@goldcast_password", cleanPass);
+      await AsyncStorage.setItem("@goldcast_gate_unlocked", "true");
+
       setIsUnlocked(true);
     } catch (err: any) {
-      Alert.alert("Erro de Ligação", err?.message || "Não foi possível validar o código com o servidor.");
+      setErrorMessage("Falha na conexão. Verifique sua internet ou o servidor.");
     } finally {
       setLoading(false);
     }
@@ -130,7 +194,7 @@ export default function AccessGate({ children }: AccessGateProps) {
   if (checking) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.gold} />
+        <ActivityIndicator size="large" color={colors.gold || "#e5a93c"} />
       </View>
     );
   }
@@ -148,65 +212,199 @@ export default function AccessGate({ children }: AccessGateProps) {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.card}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="shield-checkmark" size={38} color={colors.gold} />
+        <View style={styles.contentWrap}>
+          {/* Logótipo e Cabeçalho GCS */}
+          <View style={styles.logoBadge}>
+            <Text style={styles.logoBadgeText}>GCS</Text>
+            <Text style={styles.logoSubBadge}>GOLDCAST STREAMING</Text>
           </View>
 
-          <View style={styles.tagWrap}>
-            <Text style={styles.tag}>ACESSO EXCLUSIVO POR PARCERIA</Text>
-          </View>
+          <Text style={styles.mainTitle}>GoldCast Streaming</Text>
 
-          <Text style={styles.title}>Ativação GoldCast</Text>
-          <Text style={styles.subtitle}>
-            Insira o seu e-mail e o código fornecido para desbloquear as transmissões.
-          </Text>
+          {/* ======================================================== */}
+          {/* ETAPA 1: E-MAIL E CÓDIGO DE ACESSO (TELA 2)             */}
+          {/* ======================================================== */}
+          {step === "email_code" ? (
+            <>
+              <Text style={styles.subTitle}>
+                Digite o seu e-mail e código de acesso para entrar.
+              </Text>
 
-          {/* Campo de E-mail */}
-          <View style={styles.inputWrap}>
-            <Ionicons name="mail-outline" size={20} color={colors.gold} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Seu e-mail de acesso"
-              placeholderTextColor="#666"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoCorrect={false}
-            />
-          </View>
+              <Text style={styles.fieldLabel}>SEU E-MAIL</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="mail-outline" size={18} color="#aaa" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="exemplo@gmail.com"
+                  placeholderTextColor="#555"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    setErrorMessage("");
+                  }}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoCorrect={false}
+                />
+              </View>
 
-          {/* Campo de Código com ícone da chave */}
-          <View style={styles.inputWrap}>
-            <Text style={styles.emojiIcon}>🔑</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Código de liberação"
-              placeholderTextColor="#666"
-              value={code}
-              onChangeText={(t) => setCode(t.toUpperCase())}
-              autoCapitalize="characters"
-              autoCorrect={false}
-            />
-          </View>
+              <Text style={styles.fieldLabel}>CÓDIGO DE ACESSO</Text>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputEmoji}>🔑</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="GOLD-VIP-365D"
+                  placeholderTextColor="#555"
+                  value={code}
+                  onChangeText={(text) => {
+                    setCode(text.toUpperCase());
+                    setErrorMessage("");
+                  }}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+              </View>
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleUnlock}
-            disabled={loading}
-            activeOpacity={0.8}
-          >
-            {loading ? (
-              <ActivityIndicator color="#000" />
-            ) : (
-              <Text style={styles.buttonText}>LIBERAR ACESSO</Text>
-            )}
-          </TouchableOpacity>
+              <Text style={styles.helperText}>
+                Este código é exclusivo e ficará vinculado ao seu e-mail de acesso.
+              </Text>
 
-          <Text style={styles.footerText}>
-            Ainda não tem um código? Entre em contato com seu revendedor ou suporte.
-          </Text>
+              {/* Caixa de Erro Vermelha (Exatamente como na Imagem 3) */}
+              {errorMessage ? (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle" size={18} color="#ef4444" style={{ marginRight: 8 }} />
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              {/* Botão Entrar */}
+              <TouchableOpacity
+                style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                onPress={handleValidateEmailAndCode}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>ENTRAR NO APLICATIVO</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Botão Teste Grátis */}
+              <TouchableOpacity
+                style={styles.outlineButton}
+                onPress={() => Alert.alert("Teste Grátis", "Entre em contacto com o suporte para receber um código de teste de 3 horas.")}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.outlineButtonText}>✨ SOLICITAR TESTE GRÁTIS (3 HORAS)</Text>
+              </TouchableOpacity>
+
+              {/* Botão Alternativo para abrir diretamente a configuração de servidor */}
+              <TouchableOpacity
+                style={styles.textLinkButton}
+                onPress={() => {
+                  setErrorMessage("");
+                  setStep("server_login");
+                }}
+              >
+                <Text style={styles.textLink}>🔗 Usar lista M3U alternativa</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            /* ======================================================== */
+            /* ETAPA 2: SERVIDOR, UTILIZADOR E SENHA (CENÁRIO C)         */
+            /* ======================================================== */
+            <>
+              <Text style={styles.subTitle}>
+                Insira os dados do seu servidor IPTV / Xtream Codes.
+              </Text>
+
+              <Text style={styles.fieldLabel}>URL DO SERVIDOR</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="server-outline" size={18} color="#aaa" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="http://dnsdoservidor.com:8080"
+                  placeholderTextColor="#555"
+                  value={serverUrl}
+                  onChangeText={(text) => {
+                    setServerUrl(text);
+                    setErrorMessage("");
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <Text style={styles.fieldLabel}>UTILIZADOR</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={18} color="#aaa" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Seu utilizador"
+                  placeholderTextColor="#555"
+                  value={username}
+                  onChangeText={(text) => {
+                    setUsername(text);
+                    setErrorMessage("");
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={18} color="#aaa" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Sua palavra-passe"
+                  placeholderTextColor="#555"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setErrorMessage("");
+                  }}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+              </View>
+
+              {/* Caixa de Erro Vermelha */}
+              {errorMessage ? (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle" size={18} color="#ef4444" style={{ marginRight: 8 }} />
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              {/* Botão de Conexão */}
+              <TouchableOpacity
+                style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                onPress={handleServerLogin}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>CONECTAR E ENTRAR</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Botão Voltar */}
+              <TouchableOpacity
+                style={styles.textLinkButton}
+                onPress={() => {
+                  setErrorMessage("");
+                  setStep("email_code");
+                }}
+              >
+                <Text style={styles.textLink}>← Voltar para e-mail e código</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -216,117 +414,158 @@ export default function AccessGate({ children }: AccessGateProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#07080A",
+    backgroundColor: "#07080a",
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: spacing.lg,
+    padding: 24,
   },
   centerContainer: {
     flex: 1,
-    backgroundColor: "#07080A",
+    backgroundColor: "#07080a",
     justifyContent: "center",
     alignItems: "center",
   },
-  card: {
-    backgroundColor: "#0F1115",
+  contentWrap: {
     width: "100%",
-    maxWidth: 380,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.25)",
+    maxWidth: 390,
+    alignItems: "stretch",
   },
-  iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "rgba(229, 169, 59, 0.1)",
+  logoBadge: {
+    width: 90,
+    height: 90,
+    backgroundColor: "#0f1115",
+    borderWidth: 1,
+    borderColor: "rgba(229, 169, 59, 0.4)",
+    borderRadius: 16,
+    alignSelf: "center",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.3)",
+    marginBottom: 16,
   },
-  tagWrap: {
-    backgroundColor: "rgba(229, 169, 59, 0.12)",
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.25)",
+  logoBadgeText: {
+    color: "#e5a93c",
+    fontSize: 28,
+    fontWeight: "900",
+    letterSpacing: 2,
   },
-  tag: {
-    color: colors.gold,
-    fontSize: 10,
+  logoSubBadge: {
+    color: "#888",
+    fontSize: 6,
+    letterSpacing: 1,
+    marginTop: 2,
+    fontWeight: "bold",
+  },
+  mainTitle: {
+    color: "#e5a93c",
+    fontSize: 22,
     fontWeight: "800",
-    letterSpacing: 1.1,
-  },
-  title: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "800",
-    marginBottom: 8,
     textAlign: "center",
+    letterSpacing: 0.5,
+    marginBottom: 6,
   },
-  subtitle: {
-    color: "#8E929C",
+  subTitle: {
+    color: "#999ea8",
     fontSize: 12,
-    lineHeight: 18,
     textAlign: "center",
-    marginBottom: spacing.xl,
+    marginBottom: 24,
   },
-  inputWrap: {
+  fieldLabel: {
+    color: "#c2c6d0",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  inputContainer: {
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#16181E",
+    backgroundColor: "#13161c",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.12)",
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    height: 52,
+    borderColor: "#262b35",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 50,
+    marginBottom: 14,
   },
   inputIcon: {
     marginRight: 10,
   },
-  emojiIcon: {
-    fontSize: 18,
+  inputEmoji: {
+    fontSize: 16,
     marginRight: 10,
   },
   input: {
     flex: 1,
-    color: "#FFFFFF",
-    fontSize: 15,
+    color: "#ffffff",
+    fontSize: 14,
     fontWeight: "600",
   },
-  button: {
-    width: "100%",
-    backgroundColor: colors.gold,
-    borderRadius: radius.md,
-    paddingVertical: 14,
+  helperText: {
+    color: "#6b7280",
+    fontSize: 11,
+    marginBottom: 16,
+    lineHeight: 16,
+  },
+  errorBox: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing.sm,
+    backgroundColor: "rgba(239, 68, 68, 0.12)",
+    borderWidth: 1,
+    borderColor: "#ef4444",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    flex: 1,
+    color: "#ef4444",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  primaryButton: {
+    backgroundColor: "#d99b26",
+    borderRadius: 24,
+    height: 50,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  primaryButtonText: {
+    color: "#000000",
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  outlineButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#d99b26",
+    borderRadius: 24,
+    height: 48,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  outlineButtonText: {
+    color: "#d99b26",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  textLinkButton: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  textLink: {
+    color: "#e5a93c",
+    fontSize: 12,
+    fontWeight: "700",
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  buttonText: {
-    color: "#000",
-    fontWeight: "800",
-    fontSize: 14,
-    letterSpacing: 0.8,
-  },
-  footerText: {
-    color: "#555A64",
-    fontSize: 11,
-    textAlign: "center",
-    marginTop: spacing.lg,
-    lineHeight: 16,
   },
 });
