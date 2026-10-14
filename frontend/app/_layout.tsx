@@ -32,7 +32,7 @@ const _WARM = [
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-// SISTEMA DE ATUALIZAÇÃO AUTOMÁTICA (AUTO-UPDATE)
+// SISTEMA DE ATUALIZAÇÃO AUTOMÁTICA
 function AutoUpdateModal() {
   const [updateInfo, setUpdateInfo] = useState<{
     versionCode: number;
@@ -65,7 +65,7 @@ function AutoUpdateModal() {
     try {
       await Linking.openURL(updateInfo.apkUrl);
     } catch {
-      Alert.alert("Erro", "Não foi possível abrir a ligação de transferência.");
+      Alert.alert("Erro", "Não foi possível abrir o link de download.");
     }
   };
 
@@ -87,7 +87,7 @@ function AutoUpdateModal() {
             GoldCast v{updateInfo.versionName || updateInfo.versionCode}
           </Text>
           <Text style={styles.subtitle}>
-            Uma nova versão com melhorias de desempenho e estabilidade está disponível.
+            Uma nova versão com melhorias de velocidade e estabilidade está disponível.
           </Text>
 
           {updateInfo.changelog ? (
@@ -173,7 +173,6 @@ export default function RootLayout() {
               />
             </Stack>
 
-            {/* Verificador de Atualizações Automáticas */}
             <AutoUpdateModal />
           </View>
         </BottomSheetModalProvider>
