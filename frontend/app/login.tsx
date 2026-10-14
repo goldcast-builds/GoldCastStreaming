@@ -113,7 +113,7 @@ export default function LoginScreen() {
     };
   }, []);
 
-  // Controlador da contagem decrescente
+  // Temporizador estável: roda sem recriar o intervalo a cada segundo
   useEffect(() => {
     if (countdown <= 0) return;
     const interval = setInterval(() => {
@@ -127,13 +127,13 @@ export default function LoginScreen() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [countdown]);
+  }, [countdown > 0]);
 
-  // Executa login automático quando a contagem regressiva atinge zero
+  // Ao zerar a contagem, libera o botão e tenta conectar uma única vez sem reiniciar o timer
   useEffect(() => {
     if (countdown === 0 && autoSubmitAfterSync.current) {
       autoSubmitAfterSync.current = false;
-      setSyncNotice(null);
+      setSyncNotice("Sincronização concluída! Iniciando conexão...");
       submit();
     }
   }, [countdown]);
@@ -159,17 +159,13 @@ export default function LoginScreen() {
           rawMsg.toLowerCase().includes("não encontrada") ||
           rawMsg.toLowerCase().includes("not found");
 
+        // NUNCA reinicia o cronômetro aqui para não prender o usuário em loop
         if (is404OrSync) {
-          setSyncNotice(
-            "Conta recém-gerada! O servidor leva cerca de 1 minuto para replicar o acesso em todos os nós. Aguarde o contador para conectar automaticamente."
-          );
-          setError(null);
-          setCountdown(55);
-          autoSubmitAfterSync.current = true;
+          setError("O servidor ainda está finalizando a replicação da sua linha. Aguarde alguns segundos e clique em ENTRAR.");
         } else {
           setError(rawMsg || "Falha ao conectar.");
-          setSyncNotice(null);
         }
+        setSyncNotice(null);
         setStage(null);
       }
     } finally {
@@ -209,9 +205,9 @@ export default function LoginScreen() {
 
       setStage(null);
       setSyncNotice(
-        "Conta gerada com sucesso! O painel leva cerca de 60 segundos para replicar sua linha. O acesso será iniciado automaticamente assim que zerar."
+        "Conta gerada com sucesso! Aguarde o contador para a sincronização da sua linha no servidor."
       );
-      setCountdown(60);
+      setCountdown(45);
       autoSubmitAfterSync.current = true;
     } catch (e: any) {
       if (mounted.current) {
@@ -341,7 +337,7 @@ export default function LoginScreen() {
             <Ionicons name="hourglass-outline" size={24} color={colors.gold} />
             <View style={{ flex: 1 }}>
               <Text style={styles.syncTitle}>
-                {countdown > 0 ? `Sincronizando com o servidor (${countdown}s)` : "Sincronizando..."}
+                {countdown > 0 ? `Sincronizando com o servidor (${countdown}s)` : "Sincronização Finalizada"}
               </Text>
               <Text style={styles.syncText}>{syncNotice}</Text>
             </View>
@@ -358,7 +354,7 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {error && !syncNotice && (
+        {error && (
           <View style={styles.errorBox} testID="login-error">
             <Ionicons name="alert-circle" size={18} color={colors.error} />
             <Text style={styles.errorText}>{error}</Text>
@@ -370,6 +366,7 @@ export default function LoginScreen() {
           label={countdown > 0 ? `AGUARDE (${countdown}s)` : "ENTRAR"}
           onPress={submit}
           loading={loading && !trialLoading && countdown === 0}
+          disabled={countdown > 0}
           style={[styles.submitBtn, countdown > 0 && styles.disabledBtn]}
         />
 
