@@ -8,6 +8,7 @@ import {
   Platform,
   NativeModules,
   StatusBar,
+  DeviceEventEmitter,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -26,6 +27,10 @@ export default function PlayerScreen() {
   const queue = useSession((s: any) => s.queue || []) as PlayItem[];
   const queueIndex = useSession((s: any) => s.queueIndex ?? s.currentIndex ?? s.index ?? 0);
   const session = useSession((s: any) => s.session || s);
+  const ud = useSession((s: any) => s.ud);
+  const saveProgress = useSession((s: any) => s.saveProgress);
+  const removeProgress = useSession((s: any) => s.removeProgress);
+  const addRecent = useSession((s: any) => s.addRecent);
 
   const activePlayItem = useMemo(() => {
     if (Array.isArray(queue) && queue.length > 0 && queueIndex >= 0 && queueIndex < queue.length) {
@@ -44,10 +49,61 @@ export default function PlayerScreen() {
     );
   }, [rawParams, activePlayItem]);
 
+  const streamType = useMemo(() => {
+    return (
+      rawParams.type ||
+      rawParams.stream_type ||
+      rawParams.kind ||
+      activePlayItem?.kind ||
+      "live"
+    ).toLowerCase();
+  }, [rawParams, activePlayItem]);
+
+  const streamId = useMemo(() => {
+    return (
+      rawParams.stream_id ||
+      rawParams.streamId ||
+      rawParams.id ||
+      activePlayItem?.streamId ||
+      activePlayItem?.id ||
+      ""
+    );
+  }, [rawParams, activePlayItem]);
+
+  // Define a chave única para o histórico de progresso
+  const progressKey = useMemo(() => {
+    if (activePlayItem?.progressKey) return activePlayItem.progressKey;
+    if (streamId) {
+      return streamType !== "live" ? `${streamType}_${streamId}` : "";
+    }
+    return "";
+  }, [activePlayItem, streamId, streamType]);
+
+  // Recupera o progresso salvo na sessão
+  const savedProgress = useMemo(() => {
+    if (!progressKey || streamType === "live") return null;
+    const allProgress = ud?.progress || {};
+    return allProgress[progressKey] || (streamId ? allProgress[String(streamId)] : null) || null;
+  }, [progressKey, streamId, streamType, ud]);
+
+  // Calcula a posição inicial em milissegundos
+  const startPositionMs = useMemo(() => {
+    if (!savedProgress) return 0;
+    const pos = Number(savedProgress.position) || 0;
+    const dur = Number(savedProgress.duration) || 0;
+
+    // Se já assistiu a mais de 95%, reinicia do início
+    if (dur > 0 && pos / dur >= 0.95) return 0;
+    // Ignora se assistiu a menos de 10 segundos
+    if (pos < 10) return 0;
+
+    // Converte segundos para milissegundos se necessário
+    return pos > 100000 ? pos : Math.round(pos * 1000);
+  }, [savedProgress]);
+
   const streamUrl = useMemo(() => {
     let rawUrl = "";
 
-    // 1. URL da fila de reprodução ativa
     if (activePlayItem?.urls && activePlayItem.urls.length > 0) {
       const firstUrl = activePlayItem.urls[0];
       if (firstUrl && typeof firstUrl === "string" && (firstUrl.startsWith("http://") || firstUrl.startsWith("https://"))) {
@@ -55,7 +111,6 @@ export default function PlayerScreen() {
       }
     }
 
-    // 2. Parâmetros passados diretamente na navegação
     if (!rawUrl) {
       const directUrl =
         rawParams.url ||
@@ -70,22 +125,7 @@ export default function PlayerScreen() {
       }
     }
 
-    // 3. Reconstrução com credenciais Xtream se houver ID
     if (!rawUrl) {
-      const streamId =
-        rawParams.stream_id ||
-        rawParams.streamId ||
-        rawParams.id ||
-        activePlayItem?.streamId ||
-        activePlayItem?.id;
-
-      const streamType = (
-        rawParams.type ||
-        rawParams.stream_type ||
-        activePlayItem?.kind ||
-        "live"
-      ).toLowerCase();
-
       const server = session?.server || session?.url || "";
       const username = session?.user || session?.username || session?.userInfo?.username || "";
       const password = session?.pass || session?.password || session?.userInfo?.password || "";
@@ -109,13 +149,59 @@ export default function PlayerScreen() {
 
     if (!rawUrl) return "";
 
-    // Força HTTP em fluxos IPTV para impedir o bloqueio de SSL (ERR_CERT_AUTHORITY_INVALID)
+    // Força HTTP para evitar erros de certificados SSL em painéis IPTV
     if (rawUrl.toLowerCase().startsWith("https://")) {
       rawUrl = "http://" + rawUrl.substring(8);
     }
 
     return rawUrl;
-  }, [rawParams, activePlayItem, session]);
+  }, [rawParams, activePlayItem, session, streamId, streamType]);
+
+  // Escuta os eventos de progresso emitidos pelo player nativo
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(
+      "onPlayerProgress",
+      (data: {
+        progressKey: string;
+        position: number;
+        duration: number;
+        streamType: string;
+      }) => {
+        if (!data || !data.progressKey || data.streamType === "live") return;
+
+        const posSec = Math.round(data.position);
+        const durSec = Math.round(data.duration);
+
+        if (durSec > 0 && posSec > 10) {
+          const ratio = posSec / durSec;
+          if (ratio >= 0.95) {
+            removeProgress(data.progressKey);
+          } else {
+            const itemToSave: PlayItem = activePlayItem || {
+              kind: (data.streamType as any) || "vod",
+              id: String(streamId),
+              title: title,
+              urls: streamUrl ? [streamUrl] : [],
+              progressKey: data.progressKey,
+              logo: rawParams.logo || rawParams.stream_icon,
+            };
+
+            saveProgress(data.progressKey, {
+              position: posSec,
+              duration: durSec,
+              title: title,
+              logo: activePlayItem?.logo || rawParams.logo || rawParams.stream_icon,
+              item: itemToSave,
+            });
+          }
+        }
+      }
+    );
+
+    return () => {
+      sub.remove();
+    };
+  }, [activePlayItem, saveProgress, removeProgress, streamId, title, streamUrl, rawParams]);
 
   const [launching, setLaunching] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -131,49 +217,28 @@ export default function PlayerScreen() {
     setErrorMsg(null);
 
     try {
-      // 1. Módulo nativo compilado (JustPlayerModule ou JustPlayer)
-      const JustPlayerModule =
-        NativeModules.JustPlayer ||
-        NativeModules.JustPlayerModule ||
-        NativeModules.GoldCastPlayer;
-
       if (
         Platform.OS === "android" &&
-        JustPlayerModule &&
-        (typeof JustPlayerModule.play === "function" || typeof JustPlayerModule.playVideo === "function")
+        NativeModules.JustPlayer &&
+        typeof NativeModules.JustPlayer.play === "function"
       ) {
-        if (typeof JustPlayerModule.play === "function") {
-          JustPlayerModule.play(streamUrl, title);
-        } else {
-          JustPlayerModule.playVideo(streamUrl, title);
+        // Registra nos recentes
+        if (activePlayItem || streamId) {
+          addRecent((streamType as any) || "live", activePlayItem || { id: streamId, title, urls: [streamUrl] });
         }
+
+        NativeModules.JustPlayer.play(
+          streamUrl,
+          title,
+          startPositionMs,
+          progressKey,
+          streamType
+        );
         setLaunching(false);
         return;
       }
 
-      // 2. Disparo de Intent de vídeo no Android (abre players de vídeo instalados sem recorrer ao Chrome)
-      if (Platform.OS === "android") {
-        try {
-          const IntentLauncher = require("expo-intent-launcher");
-          if (IntentLauncher && IntentLauncher.startActivityAsync) {
-            await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
-              data: streamUrl,
-              type: "video/*",
-              flags: 1,
-              extra: {
-                title: title,
-                "android.intent.extra.TITLE": title,
-              },
-            });
-            setLaunching(false);
-            return;
-          }
-        } catch {}
-      }
-
-      throw new Error(
-        "Módulo nativo Just Player não encontrado no pacote atual. Instale o Just Player ou VLC no dispositivo para receber o stream."
-      );
+      throw new Error("Módulo nativo Just Player não encontrado no pacote atual.");
     } catch (err: any) {
       const msg = err?.message || "Falha ao abrir o reprodutor.";
       setErrorMsg(msg);
@@ -181,7 +246,7 @@ export default function PlayerScreen() {
     } finally {
       setLaunching(false);
     }
-  }, [streamUrl, title]);
+  }, [streamUrl, title, startPositionMs, progressKey, streamType, activePlayItem, streamId, addRecent]);
 
   useEffect(() => {
     if (!hasAutoLaunched.current && streamUrl) {
@@ -222,7 +287,7 @@ export default function PlayerScreen() {
         </Text>
 
         <Text style={styles.subtitle}>
-          A transmissão está a ser processada com aceleração de hardware nativa e suporte a múltiplos canais de áudio.
+          A transmissão está a ser processada com aceleração de hardware nativa e sincronização de histórico ativa.
         </Text>
 
         {errorMsg ? (
