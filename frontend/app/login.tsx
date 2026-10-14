@@ -9,111 +9,92 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Modal,
+  Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Logo } from "../src/components/Logo";
 import { GoldButton } from "../src/components/GoldButton";
 import { colors, radius, spacing } from "../src/utils/theme";
-import { Stage } from "../src/services/xtream";
+import { DEFAULT_SERVERS, SERVER_LABELS, Stage } from "../src/services/xtream";
 import { useSession } from "../src/store/session";
 
 const STAGE_LABEL: Record<Stage, string> = {
-  checking: "Verificando código...",
-  connecting: "Conectando ao servidor...",
-  validating: "Validando sua conta...",
-  loading: "Carregando catálogo...",
-  done: "Acesso liberado!",
+  checking: "Verificando servidor...",
+  connecting: "Conectando...",
+  validating: "Validando acesso...",
+  loading: "Carregando canais e filmes...",
+  done: "Conectado!",
 };
 
-const VALIDATE_CODE_URL = "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/validate-code";
-const REQUEST_TRIAL_URL = "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/request-trial";
+const REMOTE_SERVERS_URL = "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/servers.json";
+const SUPABASE_TRIAL_URL = "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/request-trial";
+
+interface ServerOption {
+  label: string;
+  url: string;
+}
 
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
 
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
+  const defaultList: ServerOption[] = [
+    { label: SERVER_LABELS[DEFAULT_SERVERS.primary] || "Servidor 1", url: DEFAULT_SERVERS.primary },
+    { label: SERVER_LABELS[DEFAULT_SERVERS.backup] || "Servidor 2", url: DEFAULT_SERVERS.backup },
+  ];
+
+  const [serverList, setServerList] = useState<ServerOption[]>(defaultList);
+  const [server, setServer] = useState(DEFAULT_SERVERS.primary);
+  const [custom, setCustom] = useState(false);
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [trialLoading, setTrialLoading] = useState(false);
   const [stage, setStage] = useState<{ s: Stage; d?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Modal de Teste Grátis
-  const [trialModalVisible, setTrialModalVisible] = useState(false);
-  const [trialEmail, setTrialEmail] = useState("");
-  const [trialLoading, setTrialLoading] = useState(false);
-  const [trialSuccessMsg, setTrialSuccessMsg] = useState<string | null>(null);
 
   const mounted = useRef(true);
 
   useEffect(() => {
-    // Carrega último e-mail e código salvos localmente
+    let active = true;
     (async () => {
       try {
-        const savedEmail = await AsyncStorage.getItem("@goldcast_saved_email");
-        const savedCode = await AsyncStorage.getItem("@goldcast_saved_code");
-        if (savedEmail) setEmail(savedEmail);
-        if (savedCode) setCode(savedCode);
+        const res = await fetch(`${REMOTE_SERVERS_URL}?t=${Date.now()}`, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0 && active) {
+            setServerList(data);
+            setServer(data[0].url);
+          }
+        }
       } catch {}
     })();
 
     return () => {
+      active = false;
       mounted.current = false;
     };
   }, []);
 
-  const handleLoginWithCode = async (customEmail?: string, customCode?: string) => {
-    const targetEmail = (customEmail || email).trim().toLowerCase();
-    const targetCode = (customCode || code).trim().toUpperCase();
-
+  const submit = async () => {
     setError(null);
-
-    if (!targetEmail || !targetEmail.includes("@")) {
-      setError("Por favor, digite um e-mail válido.");
-      return;
-    }
-
-    if (!targetCode) {
-      setError("Por favor, informe seu código de acesso.");
+    if (!server.trim() || !user.trim() || !pass) {
+      setError(custom && !server.trim() ? "Informe o endereço do servidor." : "Preencha utilizador e palavra-passe.");
       return;
     }
 
     setLoading(true);
-    setStage({ s: "checking", d: "Validando código e e-mail..." });
-
     try {
-      // 1. Valida o par (E-mail + Código) no Supabase
-      const res = await fetch(VALIDATE_CODE_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: targetEmail, code: targetCode }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Código ou e-mail inválido.");
-      }
-
-      // Salva localmente para não precisar redigitar
-      await AsyncStorage.setItem("@goldcast_saved_email", targetEmail);
-      await AsyncStorage.setItem("@goldcast_saved_code", targetCode);
-
-      // 2. Conecta ao Xtream com as credenciais associadas
-      setStage({ s: "connecting", d: "Iniciando sessão GoldCast..." });
-      await login(data.serverUrl, data.username, data.password, true, (s, d) => {
-        if (mounted.current) setStage({ s, d });
-      });
-
+      await login(server.trim(), user.trim(), pass, remember, (s, d) => mounted.current && setStage({ s, d }));
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha ao autenticar o código.");
+        setError(e?.message || "Falha ao conectar com o servidor.");
         setStage(null);
       }
     } finally {
@@ -122,39 +103,41 @@ export default function LoginScreen() {
   };
 
   const handleRequestTrial = async () => {
-    if (!trialEmail.trim() || !trialEmail.includes("@")) {
-      setError("Digite um e-mail válido para receber o teste.");
-      return;
-    }
-
-    setTrialLoading(true);
     setError(null);
+    setTrialLoading(true);
+    setLoading(true);
+    setStage({ s: "connecting", d: "Criando seu teste de 3 horas..." });
 
     try {
-      const res = await fetch(REQUEST_TRIAL_URL, {
+      const response = await fetch(SUPABASE_TRIAL_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trialEmail.trim().toLowerCase() }),
+        body: JSON.stringify({ action: "generate_trial" }),
       });
 
-      const data = await res.json();
+      const data = await response.json();
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Não foi possível gerar o teste.");
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Não foi possível ativar o teste.");
       }
 
-      // Preenche os dados no formulário principal
-      setEmail(trialEmail.trim().toLowerCase());
-      setCode(data.code || data.username);
-      setTrialModalVisible(false);
-      setTrialSuccessMsg("Teste de 3 horas gerado! Conectando automaticamente...");
+      setUser(data.username);
+      setPass(data.password);
+      const targetServer = data.serverUrl || server;
+      setServer(targetServer);
 
-      // Inicia login imediatamente com o código retornado
-      handleLoginWithCode(trialEmail.trim().toLowerCase(), data.code || data.username);
+      await login(targetServer, data.username, data.password, true, (s, d) => mounted.current && setStage({ s, d }));
+      setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
-      setError(e?.message || "Falha ao gerar teste gratuito.");
+      if (mounted.current) {
+        setError(e?.message || "Falha ao obter teste gratuito.");
+        setStage(null);
+      }
     } finally {
-      setTrialLoading(false);
+      if (mounted.current) {
+        setTrialLoading(false);
+        setLoading(false);
+      }
     }
   };
 
@@ -171,52 +154,86 @@ export default function LoginScreen() {
           <Logo size={140} />
         </View>
         <Text style={styles.brand}>GoldCast Streaming</Text>
-        <Text style={styles.subtitle}>Digite o seu e-mail e código de acesso para entrar.</Text>
+        <Text style={styles.subtitle}>Entre com a sua conta IPTV ou faça um teste grátis.</Text>
 
         <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
-          <View>
-            <Text style={styles.fieldLabel}>Seu E-mail</Text>
-            <View style={styles.fieldWrap}>
-              <Ionicons name="mail-outline" size={20} color={colors.gold} style={{ marginRight: 10 }} />
-              <TextInput
-                placeholder="exemplo@gmail.com"
-                placeholderTextColor={colors.textDim}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoCorrect={false}
-                style={styles.input}
-              />
-            </View>
+          <Text style={styles.fieldLabel}>Servidor</Text>
+          <View style={styles.serverChips}>
+            {serverList.map((item, i) => {
+              const active = !custom && server === item.url;
+              return (
+                <Pressable
+                  key={`${item.url}-${i}`}
+                  onPress={() => { setCustom(false); setServer(item.url); }}
+                  style={[styles.serverBtn, active && styles.serverBtnActive]}
+                >
+                  <Ionicons name="server-outline" size={18} color={active ? colors.onGold : colors.gold} />
+                  <Text style={[styles.serverText, active && { color: colors.onGold }]} numberOfLines={1}>
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
-          <View>
-            <Text style={styles.fieldLabel}>Código de Acesso</Text>
-            <View style={styles.fieldWrap}>
-              <Ionicons name="key-outline" size={20} color={colors.gold} style={{ marginRight: 10 }} />
-              <TextInput
-                placeholder="Ex: GOLD-123456"
-                placeholderTextColor={colors.textDim}
-                value={code}
-                onChangeText={(t) => setCode(t.toUpperCase())}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                style={styles.input}
-              />
+          <Pressable
+            onPress={() => {
+              setCustom((v) => !v);
+              if (!custom) setServer("");
+              else setServer(serverList[0]?.url || DEFAULT_SERVERS.primary);
+            }}
+            style={styles.customLink}
+          >
+            <Ionicons name={custom ? "chevron-up" : "chevron-down"} size={14} color={colors.textDim} />
+            <Text style={styles.customText}>Outro servidor</Text>
+          </Pressable>
+
+          {custom && (
+            <Field
+              label="Endereço do servidor"
+              value={server}
+              onChangeText={setServer}
+              placeholder="http://servidor.com:8080"
+              autoCapitalize="none"
+              keyboardType="url"
+            />
+          )}
+
+          <Field
+            label="Utilizador"
+            value={user}
+            onChangeText={setUser}
+            placeholder="Nome de utilizador"
+            autoCapitalize="none"
+          />
+
+          <Field
+            label="Palavra-passe"
+            value={pass}
+            onChangeText={setPass}
+            placeholder="••••••••"
+            secureTextEntry={!showPass}
+            autoCapitalize="none"
+            rightIcon={
+              <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={8}>
+                <Ionicons name={showPass ? "eye-off" : "eye"} size={18} color={colors.textMuted} />
+              </Pressable>
+            }
+          />
+
+          <View style={styles.rememberRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rememberTitle}>Lembrar acesso</Text>
+              <Text style={styles.rememberHint}>Guardar dados neste dispositivo.</Text>
             </View>
-            <Text style={styles.hintText}>
-              Este código é exclusivo e ficará vinculado ao seu e-mail de acesso.
-            </Text>
+            <Switch
+              value={remember}
+              onValueChange={setRemember}
+              trackColor={{ true: colors.gold, false: colors.surface3 }}
+              thumbColor={colors.text}
+            />
           </View>
         </View>
-
-        {trialSuccessMsg && (
-          <View style={styles.successBox}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.gold} />
-            <Text style={styles.successText}>{trialSuccessMsg}</Text>
-          </View>
-        )}
 
         {loading && stage && (
           <View style={styles.stageBox}>
@@ -236,79 +253,49 @@ export default function LoginScreen() {
         )}
 
         <GoldButton
-          label="ENTRAR NO APLICATIVO"
-          onPress={() => handleLoginWithCode()}
-          loading={loading}
+          label="ENTRAR"
+          onPress={submit}
+          loading={loading && !trialLoading}
           style={styles.submitBtn}
         />
 
         <Pressable
-          onPress={() => {
-            setTrialEmail(email);
-            setTrialModalVisible(true);
-          }}
-          disabled={loading}
-          style={({ focused, pressed }) => [
-            styles.trialBtn,
-            focused && styles.focused,
-            pressed && { opacity: 0.8 },
-          ]}
+          onPress={handleRequestTrial}
+          disabled={loading || trialLoading}
+          style={({ pressed }) => [styles.trialBtn, pressed && { opacity: 0.8 }]}
         >
-          <Ionicons name="sparkles" size={18} color={colors.gold} />
-          <Text style={styles.trialBtnText}>SOLICITAR TESTE GRÁTIS (3 HORAS)</Text>
+          {trialLoading ? (
+            <ActivityIndicator color={colors.gold} size="small" />
+          ) : (
+            <>
+              <Ionicons name="sparkles" size={18} color={colors.gold} />
+              <Text style={styles.trialBtnText}>TESTAR GRÁTIS POR 3 HORAS</Text>
+            </>
+          )}
         </Pressable>
 
-        <Pressable
-          onPress={() => router.push("/add-list")}
-          style={({ focused }) => [styles.altLink, focused && styles.focused]}
-        >
+        <Pressable onPress={() => router.push("/add-list")} style={styles.altLink}>
           <Ionicons name="link" size={16} color={colors.gold} />
-          <Text style={styles.altText}>Usar lista M3U alternativa</Text>
+          <Text style={styles.altText}>Usar lista M3U (URL ou arquivo)</Text>
+        </Pressable>
+
+        <Pressable onPress={() => router.push("/activate")} style={{ marginTop: spacing.md, alignSelf: "center", padding: 6 }}>
+          <Text style={{ color: colors.textDim, fontSize: 11 }}>Alterar código de ativação / licença</Text>
         </Pressable>
       </ScrollView>
-
-      {/* Modal para solicitar Teste Grátis */}
-      <Modal visible={trialModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="sparkles" size={24} color={colors.gold} />
-              <Text style={styles.modalTitle}>Teste Grátis de 3 Horas</Text>
-            </View>
-            <Text style={styles.modalDesc}>
-              Informe o seu e-mail abaixo. Nós iremos gerar o seu código de acesso instantâneo.
-            </Text>
-
-            <View style={[styles.fieldWrap, { marginBottom: spacing.lg }]}>
-              <Ionicons name="mail-outline" size={20} color={colors.gold} style={{ marginRight: 10 }} />
-              <TextInput
-                placeholder="Seu melhor e-mail"
-                placeholderTextColor={colors.textDim}
-                value={trialEmail}
-                onChangeText={setTrialEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoCorrect={false}
-                style={styles.input}
-              />
-            </View>
-
-            <GoldButton
-              label="GERAR MEU TESTE AGORA"
-              onPress={handleRequestTrial}
-              loading={trialLoading}
-            />
-
-            <Pressable
-              onPress={() => setTrialModalVisible(false)}
-              style={{ marginTop: 14, alignSelf: "center", padding: 8 }}
-            >
-              <Text style={{ color: "#8E929C", fontSize: 13, fontWeight: "600" }}>Cancelar</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
+  );
+}
+
+function Field({ label, rightIcon, ...props }: any) {
+  return (
+    <View>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.fieldWrap}>
+        <TextInput placeholderTextColor={colors.textDim} style={styles.input} {...props} />
+        {rightIcon ? <View style={{ marginLeft: spacing.sm }}>{rightIcon}</View> : null}
+      </View>
+    </View>
   );
 }
 
@@ -342,8 +329,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   input: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 14 },
-  hintText: { color: colors.textDim, fontSize: 11, marginTop: 6 },
-  focused: { borderColor: colors.gold, borderWidth: 2 },
+  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  serverBtn: {
+    flex: 1,
+    minWidth: 120,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 52,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 10,
+  },
+  serverBtnActive: { backgroundColor: colors.gold, borderColor: colors.gold },
+  serverText: { color: colors.text, fontSize: 12, fontWeight: "700" },
+  customLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-end",
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  customText: { color: colors.textDim, fontSize: 12 },
+  rememberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  rememberTitle: { color: colors.text, fontSize: 14, fontWeight: "600" },
+  rememberHint: { color: colors.textDim, fontSize: 11, marginTop: 2 },
   stageBox: {
     marginTop: spacing.lg,
     flexDirection: "row",
@@ -353,7 +376,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.md,
   },
-  stageText: { color: colors.text, fontSize: 14, fontWeight: "600" },
+  stageText: { color: colors.text, fontSize: 14 },
   stageDetail: { color: colors.textDim, fontSize: 12, marginTop: 2 },
   errorBox: {
     marginTop: spacing.lg,
@@ -367,21 +390,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(244,67,54,0.3)",
   },
   errorText: { color: colors.error, flex: 1, fontSize: 13 },
-  successBox: {
-    marginTop: spacing.lg,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-    backgroundColor: "rgba(229, 169, 59, 0.12)",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.35)",
-  },
-  successText: { color: colors.gold, flex: 1, fontSize: 13, fontWeight: "600" },
-  submitBtn: {
-    marginTop: spacing.xl,
-  },
+  submitBtn: { marginTop: spacing.xl },
   trialBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -396,7 +405,7 @@ const styles = StyleSheet.create({
   },
   trialBtnText: {
     color: colors.gold,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
     letterSpacing: 0.8,
   },
@@ -407,40 +416,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.lg,
     padding: spacing.md,
-    borderRadius: radius.md,
   },
-  altText: { color: colors.gold, fontSize: 13, fontWeight: "600" },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.lg,
-  },
-  modalCard: {
-    backgroundColor: "#111318",
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.3)",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: spacing.xs,
-  },
-  modalTitle: {
-    color: "#FFF",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  modalDesc: {
-    color: "#8E929C",
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: spacing.lg,
-  },
+  altText: { color: colors.gold, fontSize: 14, fontWeight: "600" },
 });
