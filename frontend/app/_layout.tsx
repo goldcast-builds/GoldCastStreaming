@@ -158,7 +158,6 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="index" />
-              <Stack.Screen name="activate" />
               <Stack.Screen name="device" />
               <Stack.Screen name="login" />
               <Stack.Screen name="(tabs)" />
@@ -174,7 +173,7 @@ export default function RootLayout() {
               />
             </Stack>
 
-            {/* Verificador de Atualizações */}
+            {/* Verificador de Atualizações Automáticas */}
             <AutoUpdateModal />
           </View>
         </BottomSheetModalProvider>
