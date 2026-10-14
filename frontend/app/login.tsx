@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Switch,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -18,154 +18,102 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { Logo } from "../src/components/Logo";
 import { GoldButton } from "../src/components/GoldButton";
 import { colors, radius, spacing } from "../src/utils/theme";
-import { DEFAULT_SERVERS, SERVER_LABELS, Stage } from "../src/services/xtream";
+import { Stage } from "../src/services/xtream";
 import { useSession } from "../src/store/session";
 
 const STAGE_LABEL: Record<Stage, string> = {
-  checking: "Verificando servidor...",
-  connecting: "Conectando...",
-  validating: "Validando acesso...",
-  loading: "Carregando conteúdo...",
-  done: "Conectado!",
+  checking: "Verificando código...",
+  connecting: "Conectando ao servidor...",
+  validating: "Validando sua conta...",
+  loading: "Carregando catálogo...",
+  done: "Acesso liberado!",
 };
 
-const REMOTE_SERVERS_URL = "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/servers.json";
-const SUPABASE_TRIAL_URL = "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/request-trial";
-
-interface ServerOption {
-  label: string;
-  url: string;
-}
-
-// Identificador único por instalação com persistência local
-const getDeviceHardware = async (): Promise<{ mac: string; key: string }> => {
-  try {
-    const savedMac = await AsyncStorage.getItem("@goldcast_device_mac");
-    const savedKey = await AsyncStorage.getItem("@goldcast_device_key");
-    if (savedMac && savedKey) {
-      return { mac: savedMac, key: savedKey };
-    }
-  } catch {}
-
-  const randomBytes = Array.from({ length: 6 }, () =>
-    Math.floor(Math.random() * 256).toString(16).padStart(2, "0").toUpperCase()
-  );
-  const mac = randomBytes.join(":");
-  const key = Math.floor(100000 + Math.random() * 900000).toString();
-
-  try {
-    await AsyncStorage.setItem("@goldcast_device_mac", mac);
-    await AsyncStorage.setItem("@goldcast_device_key", key);
-  } catch {}
-
-  return { mac, key };
-};
+const VALIDATE_CODE_URL = "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/validate-code";
+const REQUEST_TRIAL_URL = "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/request-trial";
 
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
 
-  const defaultList: ServerOption[] = [
-    { label: SERVER_LABELS[DEFAULT_SERVERS.primary] || "Servidor 1", url: DEFAULT_SERVERS.primary },
-    { label: SERVER_LABELS[DEFAULT_SERVERS.backup] || "Servidor 2", url: DEFAULT_SERVERS.backup },
-  ];
-
-  const [serverList, setServerList] = useState<ServerOption[]>(defaultList);
-  const [server, setServer] = useState(DEFAULT_SERVERS.primary);
-  const [custom, setCustom] = useState(false);
-  const [user, setUser] = useState("");
-  const [pass, setPass] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [remember, setRemember] = useState(true);
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [trialLoading, setTrialLoading] = useState(false);
   const [stage, setStage] = useState<{ s: Stage; d?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Estados do cronómetro de sincronização
-  const [countdown, setCountdown] = useState(0);
-  const [syncNotice, setSyncNotice] = useState<string | null>(null);
-  const autoSubmitAfterSync = useRef(false);
+  // Modal de Teste Grátis
+  const [trialModalVisible, setTrialModalVisible] = useState(false);
+  const [trialEmail, setTrialEmail] = useState("");
+  const [trialLoading, setTrialLoading] = useState(false);
+  const [trialSuccessMsg, setTrialSuccessMsg] = useState<string | null>(null);
+
   const mounted = useRef(true);
 
   useEffect(() => {
-    let active = true;
+    // Carrega último e-mail e código salvos localmente
     (async () => {
       try {
-        const res = await fetch(`${REMOTE_SERVERS_URL}?t=${Date.now()}`, { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0 && active) {
-            setServerList(data);
-            setServer((current) => {
-              const stillExists = data.some((s) => s.url === current);
-              return stillExists ? current : data[0].url;
-            });
-          }
-        }
+        const savedEmail = await AsyncStorage.getItem("@goldcast_saved_email");
+        const savedCode = await AsyncStorage.getItem("@goldcast_saved_code");
+        if (savedEmail) setEmail(savedEmail);
+        if (savedCode) setCode(savedCode);
       } catch {}
     })();
 
     return () => {
-      active = false;
       mounted.current = false;
     };
   }, []);
 
-  // Temporizador estável: roda sem recriar o intervalo a cada segundo
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  const handleLoginWithCode = async (customEmail?: string, customCode?: string) => {
+    const targetEmail = (customEmail || email).trim().toLowerCase();
+    const targetCode = (customCode || code).trim().toUpperCase();
 
-    return () => clearInterval(interval);
-  }, [countdown > 0]);
-
-  // Ao zerar a contagem, libera o botão e tenta conectar uma única vez sem reiniciar o timer
-  useEffect(() => {
-    if (countdown === 0 && autoSubmitAfterSync.current) {
-      autoSubmitAfterSync.current = false;
-      setSyncNotice("Sincronização concluída! Iniciando conexão...");
-      submit();
-    }
-  }, [countdown]);
-
-  const submit = async () => {
-    if (countdown > 0) return;
     setError(null);
 
-    if (!server.trim() || !user.trim() || !pass) {
-      setError(custom && !server.trim() ? "Informe o endereço do servidor." : "Preencha utilizador e palavra-passe.");
+    if (!targetEmail || !targetEmail.includes("@")) {
+      setError("Por favor, digite um e-mail válido.");
+      return;
+    }
+
+    if (!targetCode) {
+      setError("Por favor, informe seu código de acesso.");
       return;
     }
 
     setLoading(true);
+    setStage({ s: "checking", d: "Validando código e e-mail..." });
+
     try {
-      await login(server, user.trim(), pass, remember, (s, d) => mounted.current && setStage({ s, d }));
+      // 1. Valida o par (E-mail + Código) no Supabase
+      const res = await fetch(VALIDATE_CODE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: targetEmail, code: targetCode }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Código ou e-mail inválido.");
+      }
+
+      // Salva localmente para não precisar redigitar
+      await AsyncStorage.setItem("@goldcast_saved_email", targetEmail);
+      await AsyncStorage.setItem("@goldcast_saved_code", targetCode);
+
+      // 2. Conecta ao Xtream com as credenciais associadas
+      setStage({ s: "connecting", d: "Iniciando sessão GoldCast..." });
+      await login(data.serverUrl, data.username, data.password, true, (s, d) => {
+        if (mounted.current) setStage({ s, d });
+      });
+
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
-        const rawMsg = String(e?.message || "");
-        const is404OrSync =
-          rawMsg.includes("404") ||
-          rawMsg.toLowerCase().includes("não encontrada") ||
-          rawMsg.toLowerCase().includes("not found");
-
-        // NUNCA reinicia o cronômetro aqui para não prender o usuário em loop
-        if (is404OrSync) {
-          setError("O servidor ainda está finalizando a replicação da sua linha. Aguarde alguns segundos e clique em ENTRAR.");
-        } else {
-          setError(rawMsg || "Falha ao conectar.");
-        }
-        setSyncNotice(null);
+        setError(e?.message || "Falha ao autenticar o código.");
         setStage(null);
       }
     } finally {
@@ -174,51 +122,39 @@ export default function LoginScreen() {
   };
 
   const handleRequestTrial = async () => {
-    setError(null);
-    setSyncNotice(null);
+    if (!trialEmail.trim() || !trialEmail.includes("@")) {
+      setError("Digite um e-mail válido para receber o teste.");
+      return;
+    }
+
     setTrialLoading(true);
-    setLoading(true);
-    setStage({ s: "connecting", d: "Criando seu teste de 3 horas..." });
+    setError(null);
 
     try {
-      const device = await getDeviceHardware();
-
-      const response = await fetch(SUPABASE_TRIAL_URL, {
+      const res = await fetch(REQUEST_TRIAL_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mac: device.mac,
-          device_key: device.key,
-        }),
+        body: JSON.stringify({ email: trialEmail.trim().toLowerCase() }),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Não foi possível ativar o teste.");
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Não foi possível gerar o teste.");
       }
 
-      setUser(data.username);
-      setPass(data.password);
-      const targetServer = data.serverUrl || server;
-      setServer(targetServer);
+      // Preenche os dados no formulário principal
+      setEmail(trialEmail.trim().toLowerCase());
+      setCode(data.code || data.username);
+      setTrialModalVisible(false);
+      setTrialSuccessMsg("Teste de 3 horas gerado! Conectando automaticamente...");
 
-      setStage(null);
-      setSyncNotice(
-        "Conta gerada com sucesso! Aguarde o contador para a sincronização da sua linha no servidor."
-      );
-      setCountdown(45);
-      autoSubmitAfterSync.current = true;
+      // Inicia login imediatamente com o código retornado
+      handleLoginWithCode(trialEmail.trim().toLowerCase(), data.code || data.username);
     } catch (e: any) {
-      if (mounted.current) {
-        setError(e?.message || "Falha ao obter teste gratuito.");
-        setStage(null);
-      }
+      setError(e?.message || "Falha ao gerar teste gratuito.");
     } finally {
-      if (mounted.current) {
-        setTrialLoading(false);
-        setLoading(false);
-      }
+      setTrialLoading(false);
     }
   };
 
@@ -230,122 +166,60 @@ export default function LoginScreen() {
           { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xxl },
         ]}
         keyboardShouldPersistTaps="handled"
-        testID="login-screen"
       >
         <View style={styles.logoWrap}>
-          <Logo size={150} />
+          <Logo size={140} />
         </View>
         <Text style={styles.brand}>GoldCast Streaming</Text>
-        <Text style={styles.subtitle}>Entre com os seus dados ou experimente gratuitamente.</Text>
+        <Text style={styles.subtitle}>Digite o seu e-mail e código de acesso para entrar.</Text>
 
         <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
-          <Text style={styles.fieldLabel}>Servidor</Text>
-          <View style={styles.serverChips}>
-            {serverList.map((item, i) => {
-              const active = !custom && server === item.url;
-              return (
-                <Pressable
-                  key={`${item.url}-${i}`}
-                  testID={`server-chip-${i + 1}`}
-                  onPress={() => {
-                    setCustom(false);
-                    setServer(item.url);
-                  }}
-                  style={({ focused }) => [
-                    styles.serverBtn,
-                    active && styles.serverBtnActive,
-                    focused && styles.focused,
-                  ]}
-                >
-                  <Ionicons name="server-outline" size={18} color={active ? colors.onGold : colors.gold} />
-                  <Text style={[styles.serverText, active && { color: colors.onGold }]} numberOfLines={1}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          <View>
+            <Text style={styles.fieldLabel}>Seu E-mail</Text>
+            <View style={styles.fieldWrap}>
+              <Ionicons name="mail-outline" size={20} color={colors.gold} style={{ marginRight: 10 }} />
+              <TextInput
+                placeholder="exemplo@gmail.com"
+                placeholderTextColor={colors.textDim}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+                style={styles.input}
+              />
+            </View>
           </View>
 
-          <Pressable
-            testID="server-custom-toggle"
-            onPress={() => {
-              setCustom((v) => !v);
-              if (!custom) setServer("");
-              else setServer(serverList[0]?.url || DEFAULT_SERVERS.primary);
-            }}
-            style={({ focused }) => [styles.customLink, focused && styles.focused]}
-          >
-            <Ionicons name={custom ? "chevron-up" : "chevron-down"} size={14} color={colors.textDim} />
-            <Text style={styles.customText}>Outro servidor</Text>
-          </Pressable>
-
-          {custom && (
-            <Field
-              label="Endereço do servidor"
-              value={server}
-              onChangeText={setServer}
-              placeholder="http://servidor.com:8080"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              testID="login-server"
-            />
-          )}
-
-          <Field
-            label="Utilizador"
-            value={user}
-            onChangeText={setUser}
-            placeholder="utilizador"
-            autoCapitalize="none"
-            autoCorrect={false}
-            testID="login-user"
-          />
-
-          <Field
-            label="Palavra-passe"
-            value={pass}
-            onChangeText={setPass}
-            placeholder="••••••••"
-            secureTextEntry={!showPass}
-            autoCapitalize="none"
-            testID="login-pass"
-            rightIcon={
-              <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={8} testID="login-toggle-pass">
-                <Ionicons name={showPass ? "eye-off" : "eye"} size={18} color={colors.textMuted} />
-              </Pressable>
-            }
-          />
-
-          <View style={styles.rememberRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rememberTitle}>Lembrar acesso</Text>
-              <Text style={styles.rememberHint}>Credenciais guardadas no armazenamento seguro do dispositivo.</Text>
+          <View>
+            <Text style={styles.fieldLabel}>Código de Acesso</Text>
+            <View style={styles.fieldWrap}>
+              <Ionicons name="key-outline" size={20} color={colors.gold} style={{ marginRight: 10 }} />
+              <TextInput
+                placeholder="Ex: GOLD-123456"
+                placeholderTextColor={colors.textDim}
+                value={code}
+                onChangeText={(t) => setCode(t.toUpperCase())}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                style={styles.input}
+              />
             </View>
-            <Switch
-              testID="login-remember"
-              value={remember}
-              onValueChange={setRemember}
-              trackColor={{ true: colors.gold, false: colors.surface3 }}
-              thumbColor={colors.text}
-            />
+            <Text style={styles.hintText}>
+              Este código é exclusivo e ficará vinculado ao seu e-mail de acesso.
+            </Text>
           </View>
         </View>
 
-        {syncNotice && (
-          <View style={styles.syncBox} testID="login-sync-notice">
-            <Ionicons name="hourglass-outline" size={24} color={colors.gold} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.syncTitle}>
-                {countdown > 0 ? `Sincronizando com o servidor (${countdown}s)` : "Sincronização Finalizada"}
-              </Text>
-              <Text style={styles.syncText}>{syncNotice}</Text>
-            </View>
+        {trialSuccessMsg && (
+          <View style={styles.successBox}>
+            <Ionicons name="checkmark-circle" size={20} color={colors.gold} />
+            <Text style={styles.successText}>{trialSuccessMsg}</Text>
           </View>
         )}
 
         {loading && stage && (
-          <View style={styles.stageBox} testID="login-stage">
+          <View style={styles.stageBox}>
             <ActivityIndicator color={colors.gold} />
             <View style={{ flex: 1 }}>
               <Text style={styles.stageText}>{STAGE_LABEL[stage.s]}</Text>
@@ -355,64 +229,86 @@ export default function LoginScreen() {
         )}
 
         {error && (
-          <View style={styles.errorBox} testID="login-error">
+          <View style={styles.errorBox}>
             <Ionicons name="alert-circle" size={18} color={colors.error} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
 
         <GoldButton
-          testID="login-submit"
-          label={countdown > 0 ? `AGUARDE (${countdown}s)` : "ENTRAR"}
-          onPress={submit}
-          loading={loading && !trialLoading && countdown === 0}
-          disabled={countdown > 0}
-          style={[styles.submitBtn, countdown > 0 && styles.disabledBtn]}
+          label="ENTRAR NO APLICATIVO"
+          onPress={() => handleLoginWithCode()}
+          loading={loading}
+          style={styles.submitBtn}
         />
 
         <Pressable
-          testID="login-trial-button"
-          onPress={handleRequestTrial}
-          disabled={loading || trialLoading || countdown > 0}
+          onPress={() => {
+            setTrialEmail(email);
+            setTrialModalVisible(true);
+          }}
+          disabled={loading}
           style={({ focused, pressed }) => [
             styles.trialBtn,
-            (loading || trialLoading || countdown > 0) && styles.disabledBtn,
             focused && styles.focused,
             pressed && { opacity: 0.8 },
           ]}
         >
-          {trialLoading ? (
-            <ActivityIndicator color={colors.gold} size="small" />
-          ) : (
-            <>
-              <Ionicons name="sparkles" size={18} color={colors.gold} />
-              <Text style={styles.trialBtnText}>TESTAR GRÁTIS POR 3 HORAS</Text>
-            </>
-          )}
+          <Ionicons name="sparkles" size={18} color={colors.gold} />
+          <Text style={styles.trialBtnText}>SOLICITAR TESTE GRÁTIS (3 HORAS)</Text>
         </Pressable>
 
         <Pressable
-          testID="login-m3u"
           onPress={() => router.push("/add-list")}
           style={({ focused }) => [styles.altLink, focused && styles.focused]}
         >
           <Ionicons name="link" size={16} color={colors.gold} />
-          <Text style={styles.altText}>Usar lista M3U (URL ou arquivo)</Text>
+          <Text style={styles.altText}>Usar lista M3U alternativa</Text>
         </Pressable>
       </ScrollView>
-    </KeyboardAvoidingView>
-  );
-}
 
-function Field({ label, rightIcon, testID, ...props }: any) {
-  return (
-    <View>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View style={styles.fieldWrap}>
-        <TextInput testID={testID} placeholderTextColor={colors.textDim} style={styles.input} {...props} />
-        {rightIcon ? <View style={{ marginLeft: spacing.sm }}>{rightIcon}</View> : null}
-      </View>
-    </View>
+      {/* Modal para solicitar Teste Grátis */}
+      <Modal visible={trialModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="sparkles" size={24} color={colors.gold} />
+              <Text style={styles.modalTitle}>Teste Grátis de 3 Horas</Text>
+            </View>
+            <Text style={styles.modalDesc}>
+              Informe o seu e-mail abaixo. Nós iremos gerar o seu código de acesso instantâneo.
+            </Text>
+
+            <View style={[styles.fieldWrap, { marginBottom: spacing.lg }]}>
+              <Ionicons name="mail-outline" size={20} color={colors.gold} style={{ marginRight: 10 }} />
+              <TextInput
+                placeholder="Seu melhor e-mail"
+                placeholderTextColor={colors.textDim}
+                value={trialEmail}
+                onChangeText={setTrialEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+                style={styles.input}
+              />
+            </View>
+
+            <GoldButton
+              label="GERAR MEU TESTE AGORA"
+              onPress={handleRequestTrial}
+              loading={trialLoading}
+            />
+
+            <Pressable
+              onPress={() => setTrialModalVisible(false)}
+              style={{ marginTop: 14, alignSelf: "center", padding: 8 }}
+            >
+              <Text style={{ color: "#8E929C", fontSize: 13, fontWeight: "600" }}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -428,7 +324,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginTop: spacing.sm,
   },
-  subtitle: { color: colors.textMuted, fontSize: 14, textAlign: "center", marginTop: spacing.xs },
+  subtitle: { color: colors.textMuted, fontSize: 13, textAlign: "center", marginTop: spacing.xs },
   fieldLabel: {
     color: colors.textMuted,
     fontSize: 12,
@@ -446,78 +342,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   input: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 14 },
-  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  serverBtn: {
-    flex: 1,
-    minWidth: 120,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    height: 52,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 10,
-  },
-  serverBtnActive: { backgroundColor: colors.gold, borderColor: colors.gold },
-  serverText: { color: colors.text, fontSize: 12, fontWeight: "700", letterSpacing: 0.4 },
-  customLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    alignSelf: "flex-end",
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderRadius: radius.sm,
-  },
-  customText: { color: colors.textDim, fontSize: 12 },
+  hintText: { color: colors.textDim, fontSize: 11, marginTop: 6 },
   focused: { borderColor: colors.gold, borderWidth: 2 },
-  rememberRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  rememberTitle: { color: colors.text, fontSize: 14, fontWeight: "600" },
-  rememberHint: { color: colors.textDim, fontSize: 11, marginTop: 2 },
-  syncBox: {
+  stageBox: {
     marginTop: spacing.lg,
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm,
-    padding: spacing.md,
-    backgroundColor: "rgba(229, 169, 59, 0.12)",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.35)",
-  },
-  syncTitle: {
-    color: colors.gold,
-    fontSize: 14,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  syncText: {
-    color: "#E2E5EE",
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  stageBox: {
-    marginTop: spacing.xl,
-    flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     padding: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
   },
-  stageText: { color: colors.text, fontSize: 14 },
+  stageText: { color: colors.text, fontSize: 14, fontWeight: "600" },
   stageDetail: { color: colors.textDim, fontSize: 12, marginTop: 2 },
   errorBox: {
     marginTop: spacing.lg,
@@ -531,11 +367,20 @@ const styles = StyleSheet.create({
     borderColor: "rgba(244,67,54,0.3)",
   },
   errorText: { color: colors.error, flex: 1, fontSize: 13 },
+  successBox: {
+    marginTop: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: "rgba(229, 169, 59, 0.12)",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(229, 169, 59, 0.35)",
+  },
+  successText: { color: colors.gold, flex: 1, fontSize: 13, fontWeight: "600" },
   submitBtn: {
     marginTop: spacing.xl,
-  },
-  disabledBtn: {
-    opacity: 0.6,
   },
   trialBtn: {
     flexDirection: "row",
@@ -551,7 +396,7 @@ const styles = StyleSheet.create({
   },
   trialBtnText: {
     color: colors.gold,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     letterSpacing: 0.8,
   },
@@ -564,5 +409,38 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.md,
   },
-  altText: { color: colors.gold, fontSize: 14, fontWeight: "600" },
+  altText: { color: colors.gold, fontSize: 13, fontWeight: "600" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: "#111318",
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: "rgba(229, 169, 59, 0.3)",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: spacing.xs,
+  },
+  modalTitle: {
+    color: "#FFF",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  modalDesc: {
+    color: "#8E929C",
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: spacing.lg,
+  },
 });
