@@ -65,7 +65,7 @@ function AutoUpdateModal() {
     try {
       await Linking.openURL(updateInfo.apkUrl);
     } catch {
-      Alert.alert("Erro", "Não foi possível abrir o link de download do aplicativo.");
+      Alert.alert("Erro", "Não foi possível abrir a ligação de transferência.");
     }
   };
 
@@ -87,7 +87,7 @@ function AutoUpdateModal() {
             GoldCast v{updateInfo.versionName || updateInfo.versionCode}
           </Text>
           <Text style={styles.subtitle}>
-            Uma nova versão com melhorias de velocidade e estabilidade está disponível.
+            Uma nova versão com melhorias de desempenho e estabilidade está disponível.
           </Text>
 
           {updateInfo.changelog ? (
