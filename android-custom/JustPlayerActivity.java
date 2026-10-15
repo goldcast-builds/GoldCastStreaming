@@ -18,6 +18,7 @@ import android.text.TextUtils;
 import android.util.Rational;
 import android.view.GestureDetector;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
@@ -53,6 +54,7 @@ public class JustPlayerActivity extends AppCompatActivity {
     private LinearLayout topBar;
     private TextView hudView;
     private TextView lockFloatingBtn;
+    private TextView btnBack;
 
     private String progressKey;
     private String streamType = "vod";
@@ -132,11 +134,11 @@ public class JustPlayerActivity extends AppCompatActivity {
         topBar = buildTopBar(title);
         root.addView(topBar);
 
-        // Indicador Visual Central de Gestos (HUD)
+        // Indicador Visual Central de Gestos/Controle (HUD)
         hudView = buildHudView();
         root.addView(hudView);
 
-        // Cadeado Flutuante no Canto Inferior Esquerdo (Modo Bloqueado)
+        // Cadeado Flutuante no Canto Inferior Esquerdo
         lockFloatingBtn = buildLockFloatingBtn();
         root.addView(lockFloatingBtn);
 
@@ -178,7 +180,7 @@ public class JustPlayerActivity extends AppCompatActivity {
         bar.setBackground(barBg);
 
         // Botão Voltar
-        TextView btnBack = createPillButton("‹ Voltar", new View.OnClickListener() {
+        btnBack = createPillButton("‹ Voltar", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 finish();
@@ -216,7 +218,7 @@ public class JustPlayerActivity extends AppCompatActivity {
         tvTitle.setLayoutParams(titleParams);
         bar.addView(tvTitle);
 
-        // Contentor Horizontal para os botões não ficarem cortados
+        // Contentor Horizontal para os botões do topo
         HorizontalScrollView scrollButtons = new HorizontalScrollView(this);
         scrollButtons.setHorizontalScrollBarEnabled(false);
         scrollButtons.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -323,7 +325,7 @@ public class JustPlayerActivity extends AppCompatActivity {
         btn.setBackground(normalBg);
 
         final GradientDrawable focusedBg = new GradientDrawable();
-        focusedBg.setColor(Color.parseColor("#D4E5A93B"));
+        focusedBg.setColor(Color.parseColor("#E5A93B"));
         focusedBg.setCornerRadius(dp(14));
         focusedBg.setStroke(dp(2), Color.WHITE);
 
@@ -411,7 +413,7 @@ public class JustPlayerActivity extends AppCompatActivity {
         hudView.setText(text);
         hudView.setVisibility(View.VISIBLE);
         hudHandler.removeCallbacks(hideHudRunnable);
-        hudHandler.postDelayed(hideHudRunnable, 1000);
+        hudHandler.postDelayed(hideHudRunnable, 1200);
     }
 
     private void setLocked(boolean locked) {
@@ -485,6 +487,141 @@ public class JustPlayerActivity extends AppCompatActivity {
                 topBar.setVisibility(View.VISIBLE);
             }
         }
+    }
+
+    // ==============================================================
+    // CONTROLES DE SMART TV, TV BOX E PROJETORES (D-PAD & KEY EVENTS)
+    // ==============================================================
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            int keyCode = event.getKeyCode();
+
+            if (isLocked) {
+                if (keyCode == KeyEvent.KEYCODE_BACK) {
+                    setLocked(false);
+                    return true;
+                }
+                showHud("🔒 Ecrã bloqueado. Pressione Voltar para desbloquear.");
+                return true;
+            }
+
+            switch (keyCode) {
+                case KeyEvent.KEYCODE_DPAD_CENTER:
+                case KeyEvent.KEYCODE_ENTER:
+                case KeyEvent.KEYCODE_NUMPAD_ENTER:
+                    // Se estiver com foco num botão da barra superior, executa o clique normalmente
+                    View currentFocus = getCurrentFocus();
+                    if (currentFocus != null && currentFocus != playerView && topBar != null && topBar.getVisibility() == View.VISIBLE) {
+                        return super.dispatchKeyEvent(event);
+                    }
+                    if (player != null) {
+                        if (playerView != null && !playerView.isControllerFullyVisible()) {
+                            playerView.showController();
+                            if (topBar != null) topBar.setVisibility(View.VISIBLE);
+                        } else {
+                            if (player.isPlaying()) {
+                                player.pause();
+                                showHud("⏸ Pausa");
+                            } else {
+                                player.play();
+                                showHud("▶ Reproduzir");
+                            }
+                        }
+                        return true;
+                    }
+                    break;
+
+                case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+                    if (player != null) {
+                        if (player.isPlaying()) {
+                            player.pause();
+                            showHud("⏸ Pausa");
+                        } else {
+                            player.play();
+                            showHud("▶ Reproduzir");
+                        }
+                        return true;
+                    }
+                    break;
+
+                case KeyEvent.KEYCODE_MEDIA_PLAY:
+                    if (player != null) {
+                        player.play();
+                        showHud("▶ Reproduzir");
+                        return true;
+                    }
+                    break;
+
+                case KeyEvent.KEYCODE_MEDIA_PAUSE:
+                    if (player != null) {
+                        player.pause();
+                        showHud("⏸ Pausa");
+                        return true;
+                    }
+                    break;
+
+                case KeyEvent.KEYCODE_DPAD_LEFT:
+                case KeyEvent.KEYCODE_MEDIA_REWIND:
+                    // Se o foco estiver nos botões do topo, deixa navegar entre eles
+                    if (topBar != null && topBar.hasFocus()) {
+                        return super.dispatchKeyEvent(event);
+                    }
+                    if (player != null && !player.isCurrentMediaItemLive() && !player.isCurrentMediaItemDynamic()) {
+                        player.seekBack();
+                        showHud("⏪ -10s (" + formatMs(player.getCurrentPosition()) + ")");
+                        if (playerView != null) playerView.showController();
+                        return true;
+                    }
+                    break;
+
+                case KeyEvent.KEYCODE_DPAD_RIGHT:
+                case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
+                    // Se o foco estiver nos botões do topo, deixa navegar entre eles
+                    if (topBar != null && topBar.hasFocus()) {
+                        return super.dispatchKeyEvent(event);
+                    }
+                    if (player != null && !player.isCurrentMediaItemLive() && !player.isCurrentMediaItemDynamic()) {
+                        player.seekForward();
+                        showHud("⏩ +10s (" + formatMs(player.getCurrentPosition()) + ")");
+                        if (playerView != null) playerView.showController();
+                        return true;
+                    }
+                    break;
+
+                case KeyEvent.KEYCODE_DPAD_UP:
+                    if (topBar != null) {
+                        topBar.setVisibility(View.VISIBLE);
+                        if (playerView != null) playerView.showController();
+                        if (btnBack != null) btnBack.requestFocus();
+                        return true;
+                    }
+                    break;
+
+                case KeyEvent.KEYCODE_DPAD_DOWN:
+                    if (playerView != null && !playerView.isControllerFullyVisible()) {
+                        playerView.showController();
+                        if (topBar != null) topBar.setVisibility(View.VISIBLE);
+                        return true;
+                    }
+                    break;
+
+                case KeyEvent.KEYCODE_BACK:
+                    if (playerView != null && playerView.isControllerFullyVisible()) {
+                        playerView.hideController();
+                        if (topBar != null) topBar.setVisibility(View.GONE);
+                        return true;
+                    }
+                    finish();
+                    return true;
+
+                case KeyEvent.KEYCODE_MENU:
+                case KeyEvent.KEYCODE_INFO:
+                    showAudioDialog();
+                    return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     private void initGestureDetector() {
