@@ -1,21 +1,30 @@
 package com.goldcast.player;
 
+import android.app.PictureInPictureParams;
+import android.content.Context;
 import android.content.DialogInterface;
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.util.Rational;
+import android.view.GestureDetector;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -42,6 +51,8 @@ public class JustPlayerActivity extends AppCompatActivity {
     private ExoPlayer player;
     private PlayerView playerView;
     private LinearLayout topBar;
+    private TextView hudView;
+    private TextView lockFloatingBtn;
 
     private String progressKey;
     private String streamType = "vod";
@@ -49,6 +60,23 @@ public class JustPlayerActivity extends AppCompatActivity {
 
     private int currentResizeModeIndex = 0;
     private int selectedSpeedIndex = 2; // 1.0x (Normal)
+    private boolean isLocked = false;
+    private boolean isLandscape = true;
+    private boolean isMuted = false;
+
+    // Gestos Táteis
+    private AudioManager audioManager;
+    private GestureDetector gestureDetector;
+    private boolean isDraggingBrightness = false;
+    private boolean isDraggingVolume = false;
+    private boolean isDraggingSeek = false;
+    private boolean hasDecidedDrag = false;
+    private float touchStartX = 0;
+    private float touchStartY = 0;
+    private int initialVolume = 0;
+    private float initialBrightness = 0.5f;
+    private long initialSeekPosition = 0;
+    private long targetSeekPosition = 0;
 
     private final Handler progressHandler = new Handler(Looper.getMainLooper());
     private final Runnable progressRunnable = new Runnable() {
@@ -59,11 +87,22 @@ public class JustPlayerActivity extends AppCompatActivity {
         }
     };
 
+    private final Handler hudHandler = new Handler(Looper.getMainLooper());
+    private final Runnable hideHudRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (hudView != null) {
+                hudView.setVisibility(View.GONE);
+            }
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
         String url = getIntent().getStringExtra("url");
         String title = getIntent().getStringExtra("title");
@@ -89,16 +128,26 @@ public class JustPlayerActivity extends AppCompatActivity {
 
         root.addView(playerView);
 
+        // Barra Superior
         topBar = buildTopBar(title);
         root.addView(topBar);
 
+        // Indicador Visual Central de Gestos (HUD)
+        hudView = buildHudView();
+        root.addView(hudView);
+
+        // Cadeado Flutuante no Canto Inferior Esquerdo (Modo Bloqueado)
+        lockFloatingBtn = buildLockFloatingBtn();
+        root.addView(lockFloatingBtn);
+
         setContentView(root);
         hideSystemUI();
+        initGestureDetector();
 
         playerView.setControllerVisibilityListener(new PlayerView.ControllerVisibilityListener() {
             @Override
             public void onVisibilityChanged(int visibility) {
-                if (topBar != null) {
+                if (!isLocked && topBar != null) {
                     topBar.setVisibility(visibility);
                 }
             }
@@ -113,7 +162,7 @@ public class JustPlayerActivity extends AppCompatActivity {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(dp(16), dp(12), dp(16), dp(12));
+        bar.setPadding(dp(14), dp(10), dp(14), dp(10));
 
         FrameLayout.LayoutParams barParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -124,7 +173,7 @@ public class JustPlayerActivity extends AppCompatActivity {
 
         GradientDrawable barBg = new GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0xDD000000, 0x55000000, 0x00000000}
+                new int[]{0xDD000000, 0x66000000, 0x00000000}
         );
         bar.setBackground(barBg);
 
@@ -137,14 +186,14 @@ public class JustPlayerActivity extends AppCompatActivity {
         });
         bar.addView(btnBack);
 
-        // Botão Recomeçar (Aparece apenas quando o vídeo foi continuado)
+        // Botão Recomeçar (se o vídeo foi continuado)
         if (startPosition > 5000) {
             TextView btnRestart = createPillButton("Recomeçar", new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     if (player != null) {
                         player.seekTo(0);
-                        Toast.makeText(JustPlayerActivity.this, "Reproduzindo do início", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(JustPlayerActivity.this, "A reproduzir do início", Toast.LENGTH_SHORT).show();
                     }
                 }
             });
@@ -159,7 +208,7 @@ public class JustPlayerActivity extends AppCompatActivity {
         tvTitle.setTypeface(Typeface.DEFAULT_BOLD);
         tvTitle.setSingleLine(true);
         tvTitle.setEllipsize(TextUtils.TruncateAt.END);
-        tvTitle.setPadding(dp(12), 0, dp(12), 0);
+        tvTitle.setPadding(dp(10), 0, dp(10), 0);
 
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f
@@ -167,41 +216,92 @@ public class JustPlayerActivity extends AppCompatActivity {
         tvTitle.setLayoutParams(titleParams);
         bar.addView(tvTitle);
 
-        // Botão Áudio
+        // Contentor Horizontal para os botões não ficarem cortados
+        HorizontalScrollView scrollButtons = new HorizontalScrollView(this);
+        scrollButtons.setHorizontalScrollBarEnabled(false);
+        scrollButtons.setOverScrollMode(View.OVER_SCROLL_NEVER);
+
+        LinearLayout buttonsLayout = new LinearLayout(this);
+        buttonsLayout.setOrientation(LinearLayout.HORIZONTAL);
+        buttonsLayout.setGravity(Gravity.CENTER_VERTICAL);
+
+        // 1. Bloquear Ecrã
+        TextView btnLock = createPillButton("🔒 Bloquear", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                setLocked(true);
+            }
+        });
+        buttonsLayout.addView(btnLock);
+
+        // 2. Rotação de Ecrã
+        TextView btnRotate = createPillButton("🔄 Rotação", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toggleOrientation();
+            }
+        });
+        buttonsLayout.addView(btnRotate);
+
+        // 3. Mudo
+        final TextView btnMute = createPillButton("🔊 Som", null);
+        btnMute.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toggleMute(btnMute);
+            }
+        });
+        buttonsLayout.addView(btnMute);
+
+        // 4. Modo PiP (Janela Flutuante)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            TextView btnPip = createPillButton("⧉ Janela", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    enterPipMode();
+                }
+            });
+            buttonsLayout.addView(btnPip);
+        }
+
+        // 5. Faixa de Áudio
         TextView btnAudio = createPillButton("Áudio", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 showAudioDialog();
             }
         });
-        bar.addView(btnAudio);
+        buttonsLayout.addView(btnAudio);
 
-        // Botão Legendas
+        // 6. Legendas
         TextView btnSubs = createPillButton("Legendas", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 showSubtitleDialog();
             }
         });
-        bar.addView(btnSubs);
+        buttonsLayout.addView(btnSubs);
 
-        // Botão Velocidade
+        // 7. Velocidade
         TextView btnSpeed = createPillButton("Velocidade", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 showSpeedDialog();
             }
         });
-        bar.addView(btnSpeed);
+        buttonsLayout.addView(btnSpeed);
 
-        // Botão Proporção (Tela)
+        // 8. Proporção de Tela
         TextView btnAspect = createPillButton("Tela", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 showAspectRatioDialog();
             }
         });
-        bar.addView(btnAspect);
+        buttonsLayout.addView(btnAspect);
+
+        scrollButtons.addView(buttonsLayout);
+        bar.addView(scrollButtons);
 
         return bar;
     }
@@ -246,9 +346,330 @@ public class JustPlayerActivity extends AppCompatActivity {
         );
         p.setMargins(dp(3), 0, dp(3), 0);
         btn.setLayoutParams(p);
-        btn.setOnClickListener(listener);
+        if (listener != null) {
+            btn.setOnClickListener(listener);
+        }
 
         return btn;
+    }
+
+    private TextView buildHudView() {
+        TextView tv = new TextView(this);
+        tv.setTextColor(Color.WHITE);
+        tv.setTextSize(16);
+        tv.setTypeface(Typeface.DEFAULT_BOLD);
+        tv.setGravity(Gravity.CENTER);
+        tv.setPadding(dp(20), dp(12), dp(20), dp(12));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#EE111318"));
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), Color.parseColor("#E5A93B"));
+        tv.setBackground(bg);
+
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.gravity = Gravity.CENTER;
+        tv.setLayoutParams(params);
+        tv.setVisibility(View.GONE);
+        return tv;
+    }
+
+    private TextView buildLockFloatingBtn() {
+        final TextView btn = new TextView(this);
+        btn.setText("🔒");
+        btn.setTextSize(22);
+        btn.setGravity(Gravity.CENTER);
+        btn.setFocusable(true);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.OVAL);
+        bg.setColor(Color.parseColor("#CC111318"));
+        bg.setStroke(dp(2), Color.parseColor("#E5A93B"));
+        btn.setBackground(bg);
+
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(dp(50), dp(50));
+        params.gravity = Gravity.BOTTOM | Gravity.START;
+        params.setMargins(dp(20), 0, 0, dp(20));
+        btn.setLayoutParams(params);
+        btn.setVisibility(View.GONE);
+
+        btn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                setLocked(false);
+            }
+        });
+
+        return btn;
+    }
+
+    private void showHud(String text) {
+        if (hudView == null) return;
+        hudView.setText(text);
+        hudView.setVisibility(View.VISIBLE);
+        hudHandler.removeCallbacks(hideHudRunnable);
+        hudHandler.postDelayed(hideHudRunnable, 1000);
+    }
+
+    private void setLocked(boolean locked) {
+        isLocked = locked;
+        if (isLocked) {
+            if (topBar != null) topBar.setVisibility(View.GONE);
+            if (playerView != null) playerView.hideController();
+            if (lockFloatingBtn != null) lockFloatingBtn.setVisibility(View.VISIBLE);
+            showHud("🔒 Ecrã Bloqueado");
+        } else {
+            if (lockFloatingBtn != null) lockFloatingBtn.setVisibility(View.GONE);
+            if (topBar != null) topBar.setVisibility(View.VISIBLE);
+            if (playerView != null) playerView.showController();
+            showHud("🔓 Ecrã Desbloqueado");
+        }
+    }
+
+    private void toggleOrientation() {
+        if (isLandscape) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            isLandscape = false;
+            showHud("📱 Modo Retrato");
+        } else {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            isLandscape = true;
+            showHud("🖥️ Modo Paisagem");
+        }
+    }
+
+    private void toggleMute(TextView btnMute) {
+        if (player == null) return;
+        isMuted = !isMuted;
+        if (isMuted) {
+            player.setVolume(0f);
+            btnMute.setText("🔇 Mudo");
+            showHud("🔇 Áudio Mutado");
+        } else {
+            player.setVolume(1f);
+            btnMute.setText("🔊 Som");
+            showHud("🔊 Áudio Ativado");
+        }
+    }
+
+    private void enterPipMode() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                Rational rational = new Rational(16, 9);
+                PictureInPictureParams params = new PictureInPictureParams.Builder()
+                        .setAspectRatio(rational)
+                        .build();
+                enterPictureInPictureMode(params);
+            } catch (Exception e) {
+                try {
+                    enterPictureInPictureMode();
+                } catch (Exception err) {
+                    Toast.makeText(this, "Janela PiP indisponível neste dispositivo.", Toast.LENGTH_SHORT).show();
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        if (isInPictureInPictureMode) {
+            if (topBar != null) topBar.setVisibility(View.GONE);
+            if (lockFloatingBtn != null) lockFloatingBtn.setVisibility(View.GONE);
+            if (playerView != null) playerView.hideController();
+        } else {
+            if (!isLocked && topBar != null) {
+                topBar.setVisibility(View.VISIBLE);
+            }
+        }
+    }
+
+    private void initGestureDetector() {
+        gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
+
+            @Override
+            public boolean onSingleTapConfirmed(MotionEvent e) {
+                if (hasDecidedDrag) return false;
+                if (playerView != null) {
+                    if (playerView.isControllerFullyVisible()) {
+                        playerView.hideController();
+                    } else {
+                        playerView.showController();
+                    }
+                }
+                return true;
+            }
+
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                if (hasDecidedDrag || player == null) return false;
+                int screenWidth = getResources().getDisplayMetrics().widthPixels;
+                float x = e.getX();
+
+                if (x < screenWidth * 0.35f) {
+                    player.seekBack();
+                    showHud("⏪ -10s");
+                    return true;
+                } else if (x > screenWidth * 0.65f) {
+                    player.seekForward();
+                    showHud("⏩ +10s");
+                    return true;
+                } else {
+                    if (player.isPlaying()) {
+                        player.pause();
+                        showHud("⏸ Pausa");
+                    } else {
+                        player.play();
+                        showHud("▶ Reproduzir");
+                    }
+                    return true;
+                }
+            }
+        });
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (isLocked) {
+            if (lockFloatingBtn != null && lockFloatingBtn.getVisibility() == View.VISIBLE) {
+                int[] loc = new int[2];
+                lockFloatingBtn.getLocationOnScreen(loc);
+                float rx = ev.getRawX();
+                float ry = ev.getRawY();
+                if (rx >= loc[0] && rx <= loc[0] + lockFloatingBtn.getWidth()
+                        && ry >= loc[1] && ry <= loc[1] + lockFloatingBtn.getHeight()) {
+                    return super.dispatchTouchEvent(ev);
+                }
+            }
+            if (ev.getAction() == MotionEvent.ACTION_DOWN) {
+                showHud("🔒 Ecrã bloqueado. Toque no cadeado para desbloquear.");
+            }
+            return true;
+        }
+
+        // Se o toque for na barra superior, processa os botões normais
+        if (topBar != null && topBar.getVisibility() == View.VISIBLE) {
+            int[] topLoc = new int[2];
+            topBar.getLocationOnScreen(topLoc);
+            if (ev.getRawY() <= topLoc[1] + topBar.getHeight()) {
+                return super.dispatchTouchEvent(ev);
+            }
+        }
+
+        // Se a barra de progresso inferior estiver visível e o toque for nela
+        if (playerView != null && playerView.isControllerFullyVisible()) {
+            int screenHeight = getResources().getDisplayMetrics().heightPixels;
+            if (ev.getRawY() >= screenHeight - dp(90)) {
+                return super.dispatchTouchEvent(ev);
+            }
+        }
+
+        handleTouchGestures(ev);
+        return true;
+    }
+
+    private void handleTouchGestures(MotionEvent ev) {
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+        int screenHeight = getResources().getDisplayMetrics().heightPixels;
+
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                touchStartX = ev.getX();
+                touchStartY = ev.getY();
+                isDraggingVolume = false;
+                isDraggingBrightness = false;
+                isDraggingSeek = false;
+                hasDecidedDrag = false;
+
+                if (audioManager != null) {
+                    initialVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+                }
+                float b = getWindow().getAttributes().screenBrightness;
+                if (b < 0) {
+                    try {
+                        b = android.provider.Settings.System.getInt(getContentResolver(), android.provider.Settings.System.SCREEN_BRIGHTNESS) / 255.0f;
+                    } catch (Exception ignored) {
+                        b = 0.5f;
+                    }
+                }
+                initialBrightness = Math.max(0.01f, Math.min(1.0f, b));
+                initialSeekPosition = player != null ? player.getCurrentPosition() : 0;
+                targetSeekPosition = initialSeekPosition;
+                break;
+
+            case MotionEvent.ACTION_MOVE:
+                float dx = ev.getX() - touchStartX;
+                float dy = touchStartY - ev.getY();
+
+                if (!hasDecidedDrag) {
+                    if (Math.abs(dy) > dp(18) || Math.abs(dx) > dp(18)) {
+                        hasDecidedDrag = true;
+                        if (Math.abs(dy) > Math.abs(dx)) {
+                            if (touchStartX < screenWidth * 0.5f) {
+                                isDraggingBrightness = true;
+                            } else {
+                                isDraggingVolume = true;
+                            }
+                        } else {
+                            if (player != null && !player.isCurrentMediaItemLive() && !player.isCurrentMediaItemDynamic()) {
+                                isDraggingSeek = true;
+                            }
+                        }
+                    }
+                }
+
+                if (isDraggingBrightness) {
+                    float delta = dy / (float) screenHeight;
+                    float newB = Math.max(0.01f, Math.min(1.0f, initialBrightness + delta));
+                    WindowManager.LayoutParams lp = getWindow().getAttributes();
+                    lp.screenBrightness = newB;
+                    getWindow().setAttributes(lp);
+                    int pct = Math.round(newB * 100);
+                    showHud("☀️ Brilho: " + pct + "%");
+                } else if (isDraggingVolume) {
+                    if (audioManager != null) {
+                        int maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                        float delta = (dy / (float) screenHeight) * maxVol * 1.2f;
+                        int newVol = Math.max(0, Math.min(maxVol, initialVolume + Math.round(delta)));
+                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0);
+                        int pct = Math.round((newVol / (float) maxVol) * 100);
+                        showHud("🔊 Volume: " + pct + "%");
+                    }
+                } else if (isDraggingSeek) {
+                    if (player != null) {
+                        long dur = player.getDuration();
+                        if (dur > 0) {
+                            long deltaMs = (long) ((dx / (float) screenWidth) * 120000);
+                            targetSeekPosition = Math.max(0, Math.min(dur, initialSeekPosition + deltaMs));
+                            long diffSec = (targetSeekPosition - initialSeekPosition) / 1000;
+                            String sign = diffSec >= 0 ? "+" : "";
+                            showHud("⏩ " + formatMs(targetSeekPosition) + " (" + sign + diffSec + "s)");
+                        }
+                    }
+                }
+                break;
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (isDraggingSeek) {
+                    if (player != null && targetSeekPosition >= 0) {
+                        player.seekTo(targetSeekPosition);
+                    }
+                    isDraggingSeek = false;
+                }
+                isDraggingBrightness = false;
+                isDraggingVolume = false;
+                break;
+        }
+
+        gestureDetector.onTouchEvent(ev);
     }
 
     private void reportProgress() {
@@ -333,7 +754,7 @@ public class JustPlayerActivity extends AppCompatActivity {
                                                 .setOverrideForType(override)
                                                 .build()
                                 );
-                                Toast.makeText(JustPlayerActivity.this, "Áudio alterado: " + names.get(which), Toast.LENGTH_SHORT).show();
+                                Toast.makeText(JustPlayerActivity.this, "Áudio: " + names.get(which), Toast.LENGTH_SHORT).show();
                             }
                         }
                         dialog.dismiss();
@@ -405,7 +826,7 @@ public class JustPlayerActivity extends AppCompatActivity {
                                                 .setOverrideForType(override)
                                                 .build()
                                 );
-                                Toast.makeText(JustPlayerActivity.this, "Legenda ativada: " + names.get(which), Toast.LENGTH_SHORT).show();
+                                Toast.makeText(JustPlayerActivity.this, "Legenda: " + names.get(which), Toast.LENGTH_SHORT).show();
                             }
                         }
                         dialog.dismiss();
