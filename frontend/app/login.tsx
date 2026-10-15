@@ -33,7 +33,7 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
 
-  // Controla as etapas: "license" (E-mail + Código) ou "iptv" (Servidor, Usuário e Senha)
+  // Controla as etapas: "license" (E-mail + Código) ou "iptv" (Servidor, Utilizador e Senha)
   const [step, setStep] = useState<"license" | "iptv">("license");
 
   // Campos da Etapa 1: Licença
@@ -73,7 +73,7 @@ export default function LoginScreen() {
         if (savedEmail) setEmail(savedEmail);
         if (savedCode) setCode(savedCode);
 
-        // Se a licença já estiver ativada neste aparelho, abre direto na tela de login IPTV
+        // Se a licença já estiver ativada neste dispositivo, abre diretamente a área de login IPTV
         if (savedLicensed === "true") {
           setStep("iptv");
         }
@@ -111,7 +111,7 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
-    setStatusMsg("Validando licença no servidor...");
+    setStatusMsg("A validar licença no servidor...");
 
     try {
       const res = await fetch(VALIDATE_CODE_URL, {
@@ -129,7 +129,7 @@ export default function LoginScreen() {
       await AsyncStorage.setItem("@goldcast_saved_email", cleanEmail);
       await AsyncStorage.setItem("@goldcast_saved_code", cleanCode);
 
-      // Avança diretamente para os dados de login IPTV
+      // Avança diretamente para a introdução dos dados IPTV
       setStep("iptv");
     } catch (e: any) {
       if (mounted.current) {
@@ -143,25 +143,25 @@ export default function LoginScreen() {
     }
   };
 
-  // 2. Conectar Linha IPTV Permanente
+  // 2. Conectar Linha IPTV
   const handleConnectIPTV = async () => {
     setError(null);
     if (!server.trim() || !user.trim() || !pass) {
-      setError("Preencha o servidor, o usuário e a senha.");
+      setError("Preencha o servidor, o utilizador e a palavra-passe.");
       return;
     }
 
     setLoading(true);
-    setStatusMsg("Conectando ao servidor IPTV...");
+    setStatusMsg("A ligar ao servidor IPTV...");
 
     try {
       await login(server.trim(), user.trim(), pass, remember, (s, d) => {
-        if (mounted.current) setStatusMsg(d || "Carregando...");
+        if (mounted.current) setStatusMsg(d || "A carregar...");
       });
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha ao conectar ao servidor IPTV. Verifique os dados.");
+        setError(e?.message || "Falha ao ligar ao servidor IPTV. Verifique os dados.");
         setStatusMsg(null);
       }
     } finally {
@@ -187,7 +187,7 @@ export default function LoginScreen() {
         {step === "license" ? (
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
-              Digite seu e-mail e código de acesso para desbloquear o aplicativo.
+              Digite o seu e-mail e código de acesso para desbloquear a aplicação.
             </Text>
 
             <View style={styles.fieldGroup}>
@@ -235,7 +235,7 @@ export default function LoginScreen() {
             </Pressable>
           </View>
         ) : (
-          /* ================= ETAPA 2: SERVIDOR, USUÁRIO E SENHA IPTV ================= */
+          /* ================= ETAPA 2: SERVIDOR, UTILIZADOR E PALAVRA-PASSE IPTV ================= */
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
               Insira os dados da sua linha IPTV para carregar as transmissões.
@@ -297,7 +297,7 @@ export default function LoginScreen() {
               <View style={styles.inputBox}>
                 <Text style={styles.inputEmoji}>👤</Text>
                 <TextInput
-                  placeholder="Nome de usuário IPTV"
+                  placeholder="Nome de utilizador IPTV"
                   placeholderTextColor="#666"
                   value={user}
                   onChangeText={setUser}
@@ -312,7 +312,7 @@ export default function LoginScreen() {
               <View style={styles.inputBox}>
                 <Text style={styles.inputEmoji}>🔒</Text>
                 <TextInput
-                  placeholder="Sua senha IPTV"
+                  placeholder="A sua palavra-passe IPTV"
                   placeholderTextColor="#666"
                   value={pass}
                   onChangeText={setPass}
@@ -344,7 +344,7 @@ export default function LoginScreen() {
               {loading ? (
                 <ActivityIndicator color="#000" />
               ) : (
-                <Text style={styles.btnGoldText}>ENTRAR NO APLICATIVO</Text>
+                <Text style={styles.btnGoldText}>ENTRAR NA APLICAÇÃO</Text>
               )}
             </Pressable>
 
@@ -365,17 +365,13 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* Erros em destaque */}
+        {/* Apresentação de erros */}
         {error && (
           <View style={styles.errorBox}>
             <Text style={{ color: "#F44336", fontSize: 14, marginRight: 6 }}>⚠️</Text>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
-
-        <Pressable onPress={() => router.push("/add-list")} style={styles.altLink}>
-          <Text style={styles.altText}>🔗 Usar lista M3U alternativa</Text>
-        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -423,79 +419,4 @@ const styles = StyleSheet.create({
   inputEmoji: { fontSize: 16, marginRight: 10 },
   textInput: { flex: 1, color: "#FFF", fontSize: 15 },
   hintText: { color: "#666", fontSize: 11, marginTop: 4 },
-  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  serverChip: {
-    flex: 1,
-    minWidth: 110,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    height: 46,
-    borderRadius: 10,
-    backgroundColor: "#16181E",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-    paddingHorizontal: 8,
-  },
-  serverChipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
-  serverChipText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
-  customLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-end",
-    paddingVertical: 4,
-  },
-  customLinkText: { color: "#8E929C", fontSize: 11 },
-  rememberRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#16181E",
-    borderRadius: 12,
-    padding: 14,
-  },
-  rememberTitle: { color: "#FFF", fontSize: 13, fontWeight: "600" },
-  btnGold: {
-    backgroundColor: colors.gold,
-    height: 52,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 6,
-  },
-  btnGoldText: {
-    color: "#000",
-    fontSize: 14,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  statusBox: {
-    marginTop: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 14,
-    backgroundColor: "#16181E",
-    borderRadius: 12,
-  },
-  statusText: { color: "#FFF", fontSize: 13, fontWeight: "600" },
-  errorBox: {
-    marginTop: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    backgroundColor: "rgba(244,67,54,0.12)",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(244,67,54,0.3)",
-  },
-  errorText: { color: "#F44336", flex: 1, fontSize: 12 },
-  altLink: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 16,
-    padding: 8,
-  },
-  altText: { color: colors.gold, fontSize: 13, fontWeight: "600" },
-});
+  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: 8
