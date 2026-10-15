@@ -36,6 +36,7 @@ export function CatalogGrid({
   const CARD_W = (width - spacing.lg * 2 - spacing.md * (COLS - 1)) / COLS;
   const [selectedCat, setSelectedCat] = useState(CAT_ALL);
   const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const q = useDebounce(search.trim().toLowerCase(), 300);
 
   const allCats = useMemo(() => [
@@ -60,8 +61,8 @@ export function CatalogGrid({
     <View style={[styles.root, { paddingTop: insets.top + spacing.sm }]} testID={`${testIDPrefix}-screen`}>
       <Text style={styles.h1}>{title}</Text>
       
-      <View style={styles.searchWrap}>
-        <Ionicons name="search" size={17} color={colors.textMuted} />
+      <View style={[styles.searchWrap, searchFocused && styles.searchWrapFocused]}>
+        <Ionicons name="search" size={17} color={searchFocused ? colors.gold : colors.textMuted} />
         <TextInput 
           testID={`${testIDPrefix}-search`} 
           placeholder={searchPlaceholder} 
@@ -69,10 +70,16 @@ export function CatalogGrid({
           value={search} 
           onChangeText={setSearch} 
           style={styles.search} 
-          autoCorrect={false} 
+          autoCorrect={false}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setSearchFocused(false)}
         />
         {search.length > 0 && (
-          <Pressable onPress={() => setSearch("")} hitSlop={8}>
+          <Pressable 
+            focusable={true} 
+            onPress={() => setSearch("")} 
+            hitSlop={8}
+          >
             <Ionicons name="close-circle" size={18} color={colors.textMuted} />
           </Pressable>
         )}
@@ -80,25 +87,15 @@ export function CatalogGrid({
 
       <View style={styles.chipsWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg }}>
-          {allCats.map((c) => {
-            const active = selectedCat === String(c.category_id);
-            return (
-              <Pressable 
-                key={String(c.category_id)} 
-                onPress={() => setSelectedCat(String(c.category_id))} 
-                testID={`${testIDPrefix}-cat-${c.category_id}`} 
-                style={({ focused }) => [
-                  styles.chip, 
-                  active && styles.chipActive, 
-                  focused && styles.focused
-                ]}
-              >
-                <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
-                  {c.category_name}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {allCats.map((c) => (
+            <CategoryChipItem
+              key={String(c.category_id)}
+              cat={c}
+              active={selectedCat === String(c.category_id)}
+              onSelect={() => setSelectedCat(String(c.category_id))}
+              testIDPrefix={testIDPrefix}
+            />
+          ))}
         </ScrollView>
       </View>
 
@@ -108,7 +105,7 @@ export function CatalogGrid({
         <View style={styles.center}>
           <Ionicons name="cloud-offline-outline" size={44} color={colors.textDim} />
           <Text style={styles.emptyText}>{error}</Text>
-          <Pressable testID={`${testIDPrefix}-retry`} onPress={onRetry} style={styles.retryBtn}><Text style={styles.retryText}>TENTAR NOVAMENTE</Text></Pressable>
+          <Pressable focusable={true} testID={`${testIDPrefix}-retry`} onPress={onRetry} style={({ focused }) => [styles.retryBtn, focused && styles.focused]}><Text style={styles.retryText}>TENTAR NOVAMENTE</Text></Pressable>
         </View>
       ) : visible.length === 0 ? (
         <View style={styles.center} testID={`${testIDPrefix}-empty`}>
@@ -122,12 +119,12 @@ export function CatalogGrid({
           keyExtractor={(i) => i.id}
           numColumns={COLS}
           columnWrapperStyle={{ gap: spacing.md, paddingHorizontal: spacing.lg }}
-          contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.md, paddingBottom: 120 }}
+          contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.md, paddingBottom: 140 }}
           renderItem={({ item }) => <PosterCard item={item} width={CARD_W} fav={favIds.includes(item.id)} onPress={() => onOpen(item)} onFav={() => onFav(item)} testIDPrefix={testIDPrefix} />}
           initialNumToRender={12}
           maxToRenderPerBatch={12}
-          windowSize={7}
-          removeClippedSubviews
+          windowSize={9}
+          removeClippedSubviews={false}
           keyboardShouldPersistTaps="handled"
         />
       )}
@@ -135,16 +132,54 @@ export function CatalogGrid({
   );
 }
 
-const PosterCard = memo(function PosterCard({ item, width, fav, onPress, onFav, testIDPrefix }: { item: GridItem; width: number; fav: boolean; onPress: () => void; onFav: () => void; testIDPrefix: string }) {
+function CategoryChipItem({
+  cat,
+  active,
+  onSelect,
+  testIDPrefix,
+}: {
+  cat: { category_id: string; category_name: string };
+  active: boolean;
+  onSelect: () => void;
+  testIDPrefix: string;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <Pressable 
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onSelect} 
+      testID={`${testIDPrefix}-cat-${cat.category_id}`} 
+      style={[
+        styles.chip, 
+        active && styles.chipActive, 
+        isFocused && styles.chipFocused
+      ]}
+    >
+      <Text style={[styles.chipText, (active || isFocused) && styles.chipTextActive]} numberOfLines={1}>
+        {cat.category_name}
+      </Text>
+    </Pressable>
+  );
+}
+
+const PosterCard = memo(function PosterCard({ item, width, fav, onPress, onFav, testIDPrefix }: { item: GridItem; width: number; fav: boolean; onPress: () => void; onFav: () => void; testIDPrefix: string }) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable 
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
       testID={`${testIDPrefix}-item-${item.id}`} 
       onPress={onPress} 
       onLongPress={onFav} 
-      style={({ focused, pressed }) => [
+      style={({ pressed }) => [
         { width }, 
         styles.poster, 
-        focused && styles.posterFocused, 
+        isFocused && styles.posterFocused, 
         pressed && { transform: [{ scale: 0.97 }], opacity: 0.9 }
       ]}
     >
@@ -210,6 +245,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border, 
     marginBottom: spacing.xs 
   },
+  searchWrapFocused: {
+    borderColor: colors.gold,
+    borderWidth: 2,
+  },
   search: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "500" },
   
   chipsWrap: { height: 50, justifyContent: "center" },
@@ -228,6 +267,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gold, 
     borderColor: colors.gold 
   },
+  chipFocused: {
+    borderColor: colors.gold,
+    borderWidth: 2,
+    backgroundColor: "rgba(229, 169, 59, 0.25)",
+    transform: [{ scale: 1.08 }],
+  },
   chipText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
   chipTextActive: { color: colors.onGold, fontWeight: "800" },
   focused: { borderColor: colors.gold, borderWidth: 2 },
@@ -237,7 +282,17 @@ const styles = StyleSheet.create({
     overflow: "hidden", 
     backgroundColor: colors.surface2,
   },
-  posterFocused: { borderWidth: 2, borderColor: colors.gold, transform: [{ scale: 1.04 }] },
+  posterFocused: { 
+    borderWidth: 2.5, 
+    borderColor: colors.gold, 
+    transform: [{ scale: 1.06 }],
+    shadowColor: colors.gold,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 99,
+  },
   posterImgWrap: { width: "100%", aspectRatio: 2 / 3, backgroundColor: "#141721", alignItems: "center", justifyContent: "center" },
   posterImage: { width: "100%", height: "100%" },
   scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "55%" },
