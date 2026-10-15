@@ -96,6 +96,12 @@ jobs:
             fi
           done
 
+          # Configurar suporte a controles de Smart TV / TV Box / Projetores no AndroidManifest
+          if ! grep -q "android.hardware.touchscreen" "$MANIFEST"; then
+            sed -i '/<application/i \    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />\n    <uses-feature android:name="android.software.leanback" android:required="false" />\n    <uses-feature android:name="android.hardware.faketouch" android:required="true" />' "$MANIFEST"
+            echo "Suporte a TV/D-Pad injetado no AndroidManifest com sucesso!"
+          fi
+
           # Adicionar dependências Media3 ao app/build.gradle
           BUILD_GRADLE="frontend/android/app/build.gradle"
           if [ -f "$BUILD_GRADLE" ] && ! grep -q "media3-exoplayer" "$BUILD_GRADLE"; then
