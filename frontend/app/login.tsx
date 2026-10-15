@@ -43,11 +43,14 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
 
-  // Campos da Etapa 2
-  const [serverList, setServerList] = useState<ServerOption[]>([
-    { label: "Servidor Principal", url: "http://vip.topuhd.top" },
-  ]);
-  const [server, setServer] = useState("http://vip.topuhd.top");
+  // Servidores Oficiais Configurados
+  const officialServers: ServerOption[] = [
+    { label: "Servidor 1", url: "http://natfluxo.store:80" },
+    { label: "Servidor 2", url: "http://newbrtop.online:8080" },
+  ];
+
+  const [serverList, setServerList] = useState<ServerOption[]>(officialServers);
+  const [server, setServer] = useState("http://natfluxo.store:80");
   const [customServer, setCustomServer] = useState(false);
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
@@ -83,7 +86,7 @@ export default function LoginScreen() {
           setStep("iptv");
         }
 
-        // Tenta carregar lista remota de servidores
+        // Tenta carregar lista remota se houver atualização no GitHub
         const res = await fetch(`${REMOTE_SERVERS_URL}?t=${Date.now()}`, { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
@@ -130,12 +133,10 @@ export default function LoginScreen() {
         throw new Error(data.message || "Código ou e-mail inválido.");
       }
 
-      // Licença aprovada: salva no aparelho
       await AsyncStorage.setItem("@goldcast_app_licensed", "true");
       await AsyncStorage.setItem("@goldcast_saved_email", cleanEmail);
       await AsyncStorage.setItem("@goldcast_saved_code", cleanCode);
 
-      // Avança diretamente para os campos de Servidor, Usuário e Senha!
       setStep("iptv");
     } catch (e: any) {
       if (mounted.current) {
@@ -200,8 +201,8 @@ export default function LoginScreen() {
       setTrialModal(false);
       setStep("iptv");
 
-      // Preenche os dados gerados pelo painel e entra
-      const targetServer = data.serverUrl || server;
+      // Conecta usando o servidor gerado pelo painel ou o Servidor 1 padrão
+      const targetServer = data.serverUrl || "http://natfluxo.store:80";
       setServer(targetServer);
       setUser(data.username);
       setPass(data.password);
@@ -328,7 +329,7 @@ export default function LoginScreen() {
                 onPress={() => {
                   setCustomServer((v) => !v);
                   if (!customServer) setServer("");
-                  else setServer(serverList[0]?.url || "http://vip.topuhd.top");
+                  else setServer(serverList[0]?.url || "http://natfluxo.store:80");
                 }}
                 style={styles.customLink}
               >
