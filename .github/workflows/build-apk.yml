@@ -55,7 +55,7 @@ jobs:
             fi
           fi
 
-          # Registar no MainApplication com Node.js de forma segura (sem mexer nos imports do topo)
+          # Registar no MainApplication com Node.js de forma segura
           node -e '
             const fs = require("fs");
             const { execSync } = require("child_process");
@@ -112,14 +112,14 @@ jobs:
         run: |
           chmod +x frontend/android/gradlew
 
-      - name: Compilar APK (Release Standalone)
+      - name: Compilar APK (Release Universal 32-bit e 64-bit)
         run: |
           cd frontend/android
           ./gradlew assembleRelease \
             --no-daemon \
             --max-workers=2 \
             -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m" \
-            -PreactNativeArchitectures=arm64-v8a
+            -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
 
       - name: Disponibilizar APK para transferência
         uses: actions/upload-artifact@v4
