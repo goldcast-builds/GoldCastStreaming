@@ -33,7 +33,7 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
 
-  // Controla as etapas: "license" (E-mail + Código) ou "iptv" (Servidor, Utilizador e Senha)
+  // Controla as etapas: "license" (E-mail + Código) ou "iptv" (Servidor, Utilizador e Palavra-passe)
   const [step, setStep] = useState<"license" | "iptv">("license");
 
   // Campos da Etapa 1: Licença
@@ -78,7 +78,7 @@ export default function LoginScreen() {
           setStep("iptv");
         }
 
-        // Tenta carregar lista remota se houver atualização no GitHub
+        // Tenta carregar a lista remota se houver atualização no repositório
         const res = await fetch(`${REMOTE_SERVERS_URL}?t=${Date.now()}`, { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
@@ -378,9 +378,16 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#07080A" },
-  content: { paddingHorizontal: 20 },
-  logoWrap: { alignItems: "center" },
+  root: {
+    flex: 1,
+    backgroundColor: "#07080A",
+  },
+  content: {
+    paddingHorizontal: 20,
+  },
+  logoWrap: {
+    alignItems: "center",
+  },
   brand: {
     color: colors.gold,
     fontSize: 24,
@@ -397,8 +404,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: 18,
   },
-  formWrap: { gap: 14, marginTop: 8 },
-  fieldGroup: { width: "100%" },
+  formWrap: {
+    gap: 14,
+    marginTop: 8,
+  },
+  fieldGroup: {
+    width: "100%",
+  },
   fieldLabel: {
     color: "#8E929C",
     fontSize: 11,
@@ -416,7 +428,112 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 52,
   },
-  inputEmoji: { fontSize: 16, marginRight: 10 },
-  textInput: { flex: 1, color: "#FFF", fontSize: 15 },
-  hintText: { color: "#666", fontSize: 11, marginTop: 4 },
-  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: 8
+  inputEmoji: {
+    fontSize: 16,
+    marginRight: 10,
+  },
+  textInput: {
+    flex: 1,
+    color: "#FFF",
+    fontSize: 15,
+  },
+  hintText: {
+    color: "#666",
+    fontSize: 11,
+    marginTop: 4,
+  },
+  serverChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  serverChip: {
+    flex: 1,
+    minWidth: 110,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: "#16181E",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    paddingHorizontal: 8,
+  },
+  serverChipActive: {
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
+  },
+  serverChipText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  customLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-end",
+    paddingVertical: 4,
+  },
+  customLinkText: {
+    color: "#8E929C",
+    fontSize: 11,
+  },
+  rememberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#16181E",
+    borderRadius: 12,
+    padding: 14,
+  },
+  rememberTitle: {
+    color: "#FFF",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  btnGold: {
+    backgroundColor: colors.gold,
+    height: 52,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+  },
+  btnGoldText: {
+    color: "#000",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  statusBox: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 14,
+    backgroundColor: "#16181E",
+    borderRadius: 12,
+  },
+  statusText: {
+    color: "#FFF",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  errorBox: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    backgroundColor: "rgba(244,67,54,0.12)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(244,67,54,0.3)",
+  },
+  errorText: {
+    color: "#F44336",
+    flex: 1,
+    fontSize: 12,
+  },
+});
