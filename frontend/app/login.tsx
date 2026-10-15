@@ -10,7 +10,6 @@ import {
   Platform,
   ActivityIndicator,
   Switch,
-  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -23,8 +22,6 @@ const REMOTE_SERVERS_URL =
   "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/servers.json";
 const VALIDATE_CODE_URL =
   "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/validate-code";
-const REQUEST_TRIAL_URL =
-  "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/request-trial";
 
 interface ServerOption {
   label: string;
@@ -36,14 +33,14 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
 
-  // Controla se exibe a Etapa 1 (Licença) ou Etapa 2 (Dados IPTV)
+  // Controla as etapas: "license" (E-mail + Código) ou "iptv" (Servidor, Usuário e Senha)
   const [step, setStep] = useState<"license" | "iptv">("license");
 
-  // Campos da Etapa 1
+  // Campos da Etapa 1: Licença
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
 
-  // Servidores Oficiais Configurados
+  // Campos da Etapa 2: Servidores Oficiais
   const officialServers: ServerOption[] = [
     { label: "Servidor 1", url: "http://natfluxo.store:80" },
     { label: "Servidor 2", url: "http://newbrtop.online:8080" },
@@ -57,15 +54,10 @@ export default function LoginScreen() {
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(true);
 
-  // Estados gerais
+  // Estados de feedback
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Modal Teste Grátis
-  const [trialModal, setTrialModal] = useState(false);
-  const [trialEmail, setTrialEmail] = useState("");
-  const [trialLoading, setTrialLoading] = useState(false);
 
   const mounted = useRef(true);
 
@@ -81,7 +73,7 @@ export default function LoginScreen() {
         if (savedEmail) setEmail(savedEmail);
         if (savedCode) setCode(savedCode);
 
-        // Se o aplicativo já foi validado neste celular, vai direto para a tela de login IPTV
+        // Se a licença já estiver ativada neste aparelho, abre direto na tela de login IPTV
         if (savedLicensed === "true") {
           setStep("iptv");
         }
@@ -103,7 +95,7 @@ export default function LoginScreen() {
     };
   }, []);
 
-  // 1. Validação da Licença (E-mail + Código de Acesso)
+  // 1. Validação da Licença (E-mail + Código de Acesso no Supabase)
   const handleValidateLicense = async () => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanCode = code.trim().toUpperCase();
@@ -119,7 +111,7 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
-    setStatusMsg("A validar código no servidor...");
+    setStatusMsg("Validando licença no servidor...");
 
     try {
       const res = await fetch(VALIDATE_CODE_URL, {
@@ -137,6 +129,7 @@ export default function LoginScreen() {
       await AsyncStorage.setItem("@goldcast_saved_email", cleanEmail);
       await AsyncStorage.setItem("@goldcast_saved_code", cleanCode);
 
+      // Avança diretamente para os dados de login IPTV
       setStep("iptv");
     } catch (e: any) {
       if (mounted.current) {
@@ -150,73 +143,29 @@ export default function LoginScreen() {
     }
   };
 
-  // 2. Conexão IPTV Permanente (Servidor, Usuário e Senha)
+  // 2. Conectar Linha IPTV Permanente
   const handleConnectIPTV = async () => {
     setError(null);
     if (!server.trim() || !user.trim() || !pass) {
-      setError("Preencha o servidor, o utilizador e a palavra-passe.");
+      setError("Preencha o servidor, o usuário e a senha.");
       return;
     }
 
     setLoading(true);
-    setStatusMsg("A ligar ao servidor IPTV...");
+    setStatusMsg("Conectando ao servidor IPTV...");
 
     try {
       await login(server.trim(), user.trim(), pass, remember, (s, d) => {
-        if (mounted.current) setStatusMsg(d || "A carregar...");
+        if (mounted.current) setStatusMsg(d || "Carregando...");
       });
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha ao ligar ao servidor IPTV. Verifique os dados.");
+        setError(e?.message || "Falha ao conectar ao servidor IPTV. Verifique os dados.");
         setStatusMsg(null);
       }
     } finally {
       if (mounted.current) setLoading(false);
-    }
-  };
-
-  // 3. Gerador do Teste Grátis de 3 Horas
-  const handleGenerateTrial = async () => {
-    if (!trialEmail.trim() || !trialEmail.includes("@")) {
-      setError("Digite um e-mail válido para o teste.");
-      return;
-    }
-
-    setTrialLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch(REQUEST_TRIAL_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trialEmail.trim().toLowerCase() }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Não foi possível gerar o teste.");
-      }
-
-      setTrialModal(false);
-      setStep("iptv");
-
-      // Conecta usando o servidor gerado pelo painel ou o Servidor 1 padrão
-      const targetServer = data.serverUrl || "http://natfluxo.store:80";
-      setServer(targetServer);
-      setUser(data.username);
-      setPass(data.password);
-
-      setLoading(true);
-      await login(targetServer, data.username, data.password, true, (s, d) => {
-        if (mounted.current) setStatusMsg(d || "A carregar...");
-      });
-      setTimeout(() => router.replace("/(tabs)"), 350);
-    } catch (e: any) {
-      setError(e?.message || "Erro ao solicitar teste gratuito.");
-    } finally {
-      setTrialLoading(false);
-      setLoading(false);
     }
   };
 
@@ -234,7 +183,7 @@ export default function LoginScreen() {
         </View>
         <Text style={styles.brand}>GoldCast Streaming</Text>
 
-        {/* ================= ETAPA 1: E-MAIL E CÓDIGO ================= */}
+        {/* ================= ETAPA 1: E-MAIL E CÓDIGO DE LICENÇA ================= */}
         {step === "license" ? (
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
@@ -284,19 +233,9 @@ export default function LoginScreen() {
                 <Text style={styles.btnGoldText}>VALIDAR E CONTINUAR</Text>
               )}
             </Pressable>
-
-            <Pressable
-              onPress={() => {
-                setTrialEmail(email);
-                setTrialModal(true);
-              }}
-              style={styles.btnOutline}
-            >
-              <Text style={styles.btnOutlineText}>✨ SOLICITAR TESTE GRÁTIS (3 HORAS)</Text>
-            </Pressable>
           </View>
         ) : (
-          /* ================= ETAPA 2: SERVIDOR, USUÁRIO E SENHA ================= */
+          /* ================= ETAPA 2: SERVIDOR, USUÁRIO E SENHA IPTV ================= */
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
               Insira os dados da sua linha IPTV para carregar as transmissões.
@@ -418,7 +357,7 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* Feedback visual durante requisições */}
+        {/* Feedback visual de progresso */}
         {loading && statusMsg && (
           <View style={styles.statusBox}>
             <ActivityIndicator color={colors.gold} size="small" />
@@ -438,48 +377,6 @@ export default function LoginScreen() {
           <Text style={styles.altText}>🔗 Usar lista M3U alternativa</Text>
         </Pressable>
       </ScrollView>
-
-      {/* Modal de Teste Gratuito */}
-      <Modal visible={trialModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Teste Grátis de 3 Horas</Text>
-            <Text style={styles.modalDesc}>Informe o seu e-mail para receber um teste instantâneo.</Text>
-
-            <View style={[styles.inputBox, { marginBottom: 16 }]}>
-              <Text style={styles.inputEmoji}>✉️</Text>
-              <TextInput
-                placeholder="Seu melhor e-mail"
-                placeholderTextColor="#666"
-                value={trialEmail}
-                onChangeText={setTrialEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                style={styles.textInput}
-              />
-            </View>
-
-            <Pressable
-              style={[styles.btnGold, trialLoading && { opacity: 0.7 }]}
-              onPress={handleGenerateTrial}
-              disabled={trialLoading}
-            >
-              {trialLoading ? (
-                <ActivityIndicator color="#000" />
-              ) : (
-                <Text style={styles.btnGoldText}>GERAR TESTE AGORA</Text>
-              )}
-            </Pressable>
-
-            <Pressable
-              onPress={() => setTrialModal(false)}
-              style={{ marginTop: 14, alignSelf: "center", padding: 6 }}
-            >
-              <Text style={{ color: "#8E929C", fontSize: 13 }}>Cancelar</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -573,22 +470,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.5,
   },
-  btnOutline: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    backgroundColor: "rgba(218, 165, 32, 0.08)",
-  },
-  btnOutlineText: {
-    color: colors.gold,
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
   statusBox: {
     marginTop: 14,
     flexDirection: "row",
@@ -617,22 +498,4 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   altText: { color: colors.gold, fontSize: 13, fontWeight: "600" },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.85)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalCard: {
-    backgroundColor: "#111318",
-    width: "100%",
-    maxWidth: 380,
-    borderRadius: 20,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.3)",
-  },
-  modalTitle: { color: "#FFF", fontSize: 18, fontWeight: "700", marginBottom: 6 },
-  modalDesc: { color: "#8E929C", fontSize: 12, lineHeight: 18, marginBottom: 16 },
 });
