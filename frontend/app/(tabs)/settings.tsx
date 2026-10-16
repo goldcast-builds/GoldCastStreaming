@@ -12,7 +12,7 @@ import { deleteList, IPTVList, listLists, refreshList, setActiveListId } from ".
 import { useSession } from "../../src/store/session";
 
 const CURRENT_APP_VERSION = Constants.expoConfig?.version || "1.0.0";
-const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/version.json";
+const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/goldcast-builds/goldcast-app/main/version.json";
 
 type SectionKey = "account" | "lists" | "update" | "refresh" | "playback" | "device" | "history" | "cache" | "about";
 
