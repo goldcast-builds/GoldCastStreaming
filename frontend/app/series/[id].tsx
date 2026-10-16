@@ -69,21 +69,24 @@ export default function SeriesDetails() {
             {!!(meta.releaseDate || base?.releaseDate) && <Text style={styles.metaLine}><Text style={styles.metaKey}>Ano: </Text>{String(meta.releaseDate || base?.releaseDate).slice(0, 4)}</Text>}
             {!!(meta.genre || base?.genre) && <Text style={styles.metaLine} numberOfLines={1}><Text style={styles.metaKey}>Gênero: </Text>{meta.genre || base?.genre}</Text>}
             {!!meta.rating && <Text style={styles.metaLine}><Text style={styles.metaKey}>Avaliação: </Text>{String(meta.rating)}</Text>}
-            <Pressable testID="series-fav" onPress={() => toggleFav("series", String(id))} style={({ focused }) => [styles.favBtn, focused && styles.focused]}>
-              <Ionicons name={fav ? "star" : "star-outline"} size={16} color={colors.gold} />
-              <Text style={styles.favText}>{fav ? "FAVORITO" : "FAVORITAR"}</Text>
-            </Pressable>
+            
+            <TVSeriesFavBtn fav={fav} onPress={() => toggleFav("series", String(id))} />
           </View>
         </View>
       </View>
       <View style={styles.body}>
         {!!meta.plot && <Text style={styles.plot} numberOfLines={5}>{meta.plot}</Text>}
+        
+        {/* SELETOR DE TEMPORADAS NAVEGÁVEL */}
         {seasons.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }} style={{ marginTop: spacing.sm }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }} style={{ marginTop: spacing.sm, paddingVertical: 4 }}>
             {seasons.map((s) => (
-              <Pressable key={s} testID={`season-${s}`} onPress={() => setSeason(s)} style={({ focused }) => [styles.chip, season === s && styles.chipActive, focused && styles.focused]}>
-                <Text style={[styles.chipText, season === s && { color: colors.onGold }]}>Temporada {s}</Text>
-              </Pressable>
+              <SeasonChipItem
+                key={s}
+                seasonName={s}
+                active={season === s}
+                onSelect={() => setSeason(s)}
+              />
             ))}
           </ScrollView>
         )}
@@ -106,28 +109,158 @@ export default function SeriesDetails() {
             const p = progress[`ep:${ep.id}`];
             const pct = p && p.duration > 0 ? p.position / p.duration : 0;
             return (
-              <Pressable testID={`episode-${ep.id}`} onPress={() => playEpisode(index)} style={({ focused }) => [styles.epRow, focused && styles.focused]}>
-                <View style={styles.epThumb}>
-                  {ep.info?.movie_image ? <Image source={{ uri: ep.info.movie_image }} style={{ width: "100%", height: "100%" }} contentFit="cover" /> : <Ionicons name="play-circle" size={26} color={colors.textDim} />}
-                  {pct > 0.01 && <View style={styles.progTrack}><View style={[styles.progFill, { width: `${Math.min(100, pct * 100)}%` }]} /></View>}
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={styles.epTitle} numberOfLines={1}>{ep.episode_num}. {ep.title || `Episódio ${ep.episode_num}`}</Text>
-                  {!!ep.info?.duration && <Text style={styles.epMeta}>{ep.info.duration}</Text>}
-                  {!!ep.info?.plot && <Text style={styles.epPlot} numberOfLines={2}>{ep.info.plot}</Text>}
-                </View>
-                <View style={styles.epPlay}><Ionicons name="play" size={16} color={colors.onGold} /></View>
-              </Pressable>
+              <TVEpisodeRowItem
+                ep={ep}
+                pct={pct}
+                index={index}
+                onPress={() => playEpisode(index)}
+              />
             );
           }}
           initialNumToRender={10}
-          windowSize={5}
+          windowSize={7}
         />
       )}
-      <Pressable testID="series-back" onPress={() => router.back()} style={[styles.backBtn, { top: insets.top + 8 }]} hitSlop={10}>
-        <Ionicons name="chevron-back" size={22} color={colors.text} />
-      </Pressable>
+
+      {/* BOTÃO VOLTAR NAVEGÁVEL */}
+      <TVBackButton onPress={() => router.back()} top={insets.top + 8} />
     </View>
+  );
+}
+
+function TVSeriesFavBtn({ fav, onPress }: { fav: boolean; onPress: () => void }) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[
+        styles.favBtn,
+        fav && styles.favBtnActive,
+        isFocused && styles.favBtnFocused,
+      ]}
+    >
+      <Ionicons name={fav ? "star" : "star-outline"} size={16} color={isFocused ? "#000000" : colors.gold} />
+      <Text style={[styles.favText, isFocused && { color: "#000000", fontWeight: "900" }]}>
+        {fav ? "FAVORITO" : "FAVORITAR"}
+      </Text>
+    </Pressable>
+  );
+}
+
+function SeasonChipItem({
+  seasonName,
+  active,
+  onSelect,
+}: {
+  seasonName: string;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onSelect}
+      style={[
+        styles.chip,
+        active && styles.chipActive,
+        isFocused && styles.chipFocused,
+      ]}
+    >
+      <Text
+        style={[
+          styles.chipText,
+          (active || isFocused) && { color: "#000000", fontWeight: "900" },
+        ]}
+      >
+        Temporada {seasonName}
+      </Text>
+    </Pressable>
+  );
+}
+
+function TVEpisodeRowItem({
+  ep,
+  pct,
+  index,
+  onPress,
+}: {
+  ep: Episode;
+  pct: number;
+  index: number;
+  onPress: () => void;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      hasTVPreferredFocus={index === 0}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[
+        styles.epRow,
+        isFocused && styles.epRowFocused,
+      ]}
+    >
+      <View style={styles.epThumb}>
+        {ep.info?.movie_image ? (
+          <Image source={{ uri: ep.info.movie_image }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+        ) : (
+          <Ionicons name="play-circle" size={26} color={isFocused ? colors.gold : colors.textDim} />
+        )}
+        {pct > 0.01 && (
+          <View style={styles.progTrack}>
+            <View style={[styles.progFill, { width: `${Math.min(100, pct * 100)}%` }]} />
+          </View>
+        )}
+      </View>
+
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[styles.epTitle, isFocused && { color: "#FFFFFF", fontWeight: "900" }]} numberOfLines={1}>
+          {ep.episode_num}. {ep.title || `Episódio ${ep.episode_num}`}
+        </Text>
+        {!!ep.info?.duration && <Text style={[styles.epMeta, isFocused && { color: "#FFD700" }]}>{ep.info.duration}</Text>}
+        {!!ep.info?.plot && <Text style={styles.epPlot} numberOfLines={2}>{ep.info.plot}</Text>}
+      </View>
+
+      <View style={[styles.epPlay, isFocused && styles.epPlayFocused]}>
+        <Ionicons name="play" size={16} color={isFocused ? "#000000" : colors.onGold} />
+      </View>
+    </Pressable>
+  );
+}
+
+function TVBackButton({ onPress, top }: { onPress: () => void; top: number }) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      hitSlop={10}
+      style={[
+        styles.backBtn,
+        { top },
+        isFocused && styles.backBtnFocused,
+      ]}
+    >
+      <Ionicons
+        name="chevron-back"
+        size={22}
+        color={isFocused ? "#000000" : colors.text}
+      />
+    </Pressable>
   );
 }
 
@@ -135,26 +268,31 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   hero: { minHeight: 300, overflow: "hidden" },
   heroRow: { flexDirection: "row", gap: spacing.lg, padding: spacing.lg },
-  posterWrap: { width: 130, aspectRatio: 2 / 3, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surface2, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(212,175,55,0.4)" },
+  posterWrap: { width: 130, aspectRatio: 2 / 3, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surface2, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(212,175,55,0.4)" },
   title: { color: colors.text, fontSize: 22, fontWeight: "700" },
   metaLine: { color: colors.textMuted, fontSize: 13 },
   metaKey: { color: colors.gold, fontWeight: "600" },
-  favBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 12, height: 34, marginTop: 4 },
+  favBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderWidth: 1.5, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 14, height: 36, marginTop: 4 },
+  favBtnActive: { backgroundColor: "rgba(229, 169, 59, 0.2)" },
+  favBtnFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 2.5, transform: [{ scale: 1.08 }], elevation: 10 },
   favText: { color: colors.gold, fontSize: 11, fontWeight: "700", letterSpacing: 0.4 },
-  focused: { borderWidth: 2, borderColor: colors.gold },
   body: { paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: spacing.sm },
   plot: { color: colors.textMuted, fontSize: 13, lineHeight: 20 },
-  chip: { height: 34, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  chipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
+  chip: { height: 36, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  chipActive: { backgroundColor: "rgba(229, 169, 59, 0.3)", borderColor: colors.gold },
+  chipFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 2, transform: [{ scale: 1.08 }], elevation: 8 },
   chipText: { color: colors.textMuted, fontSize: 13, fontWeight: "600" },
-  epRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.surface2, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  epRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.surface2, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border },
+  epRowFocused: { borderColor: "#FFD700", borderWidth: 3.5, backgroundColor: "#202534", transform: [{ scale: 1.03 }], elevation: 14, zIndex: 99 },
   epThumb: { width: 96, aspectRatio: 16 / 9, borderRadius: radius.sm, backgroundColor: "#000", alignItems: "center", justifyContent: "center", overflow: "hidden" },
   epTitle: { color: colors.text, fontSize: 14, fontWeight: "600" },
   epMeta: { color: colors.gold, fontSize: 11 },
   epPlot: { color: colors.textDim, fontSize: 11, lineHeight: 15 },
-  epPlay: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.gold, alignItems: "center", justifyContent: "center" },
+  epPlay: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.gold, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "transparent" },
+  epPlayFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", transform: [{ scale: 1.15 }] },
   progTrack: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3, backgroundColor: "rgba(255,255,255,0.2)" },
   progFill: { height: 3, backgroundColor: colors.gold },
   hint: { color: colors.textMuted, fontSize: 13, textAlign: "center", padding: spacing.xl },
-  backBtn: { position: "absolute", left: spacing.md, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
+  backBtn: { position: "absolute", left: spacing.md, width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(0,0,0,0.65)", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)" },
+  backBtnFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3, transform: [{ scale: 1.15 }], elevation: 14, zIndex: 999 },
 });
