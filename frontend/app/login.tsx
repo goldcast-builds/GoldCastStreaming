@@ -33,11 +33,9 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
 
-  // Modo ativo: "license" (Licença com Código) ou "trial" (Área de Teste Direto)
   const [activeTab, setActiveTab] = useState<"license" | "trial">("license");
   const [step, setStep] = useState<"form" | "iptv">("form");
 
-  // Campos de texto
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [user, setUser] = useState("");
@@ -45,10 +43,12 @@ export default function LoginScreen() {
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(true);
 
-  // Estados de Foco para Controles Remotos (TV / Projetor)
-  const [focusedField, setFocusedField] = useState<string | null>("email");
+  // Referências para foco do teclado sem recarregar o ecrã
+  const emailRef = useRef<TextInput>(null);
+  const codeRef = useRef<TextInput>(null);
+  const userRef = useRef<TextInput>(null);
+  const passRef = useRef<TextInput>(null);
 
-  // Servidores
   const officialServers: ServerOption[] = [
     { label: "Servidor 1", url: "http://natfluxo.store:80" },
     { label: "Servidor 2", url: "http://newbrtop.online:8080" },
@@ -58,7 +58,6 @@ export default function LoginScreen() {
   const [server, setServer] = useState("http://natfluxo.store:80");
   const [customServer, setCustomServer] = useState(false);
 
-  // Estados de feedback visual
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +96,6 @@ export default function LoginScreen() {
     };
   }, []);
 
-  // 1. Validar Licença Oficial
   const handleValidateLicense = async () => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanCode = code.trim().toUpperCase();
@@ -144,7 +142,6 @@ export default function LoginScreen() {
     }
   };
 
-  // 2. Conectar IPTV Permanente
   const handleConnectIPTV = async () => {
     setError(null);
     if (!server.trim() || !user.trim() || !pass) {
@@ -170,7 +167,6 @@ export default function LoginScreen() {
     }
   };
 
-  // 3. Conectar Teste (Máximo 24 Horas)
   const handleConnectTrial = async () => {
     setError(null);
     if (!server.trim() || !user.trim() || !pass) {
@@ -234,167 +230,87 @@ export default function LoginScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 30 },
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 },
         ]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.logoWrap}>
-          <Logo size={130} />
+          <Logo size={120} />
         </View>
         <Text style={styles.brand}>GoldCast Streaming</Text>
 
-        {/* SELETOR DE MODO (ABAS) */}
+        {/* SELETOR DE MODO */}
         {step === "form" && (
           <View style={styles.tabSelector}>
-            <Pressable
-              focusable={true}
-              onFocus={() => setFocusedField("tab_license")}
+            <TVTabButton
+              label="🔑 Licença Oficial"
+              active={activeTab === "license"}
               onPress={() => {
                 setActiveTab("license");
                 setError(null);
               }}
-              style={[
-                styles.tabButton,
-                activeTab === "license" && styles.tabButtonActive,
-                focusedField === "tab_license" && styles.tabButtonFocused,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tabButtonText,
-                  activeTab === "license" && styles.tabButtonTextActive,
-                  focusedField === "tab_license" && { color: "#000", fontWeight: "900" },
-                ]}
-              >
-                🔑 Licença Oficial
-              </Text>
-            </Pressable>
-
-            <Pressable
-              focusable={true}
-              onFocus={() => setFocusedField("tab_trial")}
+            />
+            <TVTabButton
+              label="⏱️ Área de Teste (24h)"
+              active={activeTab === "trial"}
               onPress={() => {
                 setActiveTab("trial");
                 setError(null);
               }}
-              style={[
-                styles.tabButton,
-                activeTab === "trial" && styles.tabButtonActive,
-                focusedField === "tab_trial" && styles.tabButtonFocused,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tabButtonText,
-                  activeTab === "trial" && styles.tabButtonTextActive,
-                  focusedField === "tab_trial" && { color: "#000", fontWeight: "900" },
-                ]}
-              >
-                ⏱️ Área de Teste (24h)
-              </Text>
-            </Pressable>
+            />
           </View>
         )}
 
-        {/* 1. FLUXO DE LICENÇA (CÓDIGO + E-MAIL) */}
+        {/* 1. FLUXO DE LICENÇA */}
         {step === "form" && activeTab === "license" && (
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
               Digite o seu e-mail e código de acesso para desbloquear a aplicação.
             </Text>
 
-            {/* CAMPO DE E-MAIL */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>SEU E-MAIL</Text>
-              <View
-                style={[
-                  styles.inputBox,
-                  focusedField === "email" && styles.inputBoxFocused,
-                ]}
-              >
-                <Text style={styles.inputEmoji}>✉️</Text>
-                <TextInput
-                  focusable={true}
-                  onFocus={() => setFocusedField("email")}
-                  placeholder="exemplo@gmail.com"
-                  placeholderTextColor="#777"
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  style={styles.textInput}
-                />
-              </View>
+              <TVInputField
+                inputRef={emailRef}
+                icon="✉️"
+                placeholder="exemplo@gmail.com"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
             </View>
 
-            {/* CAMPO DE CÓDIGO */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>CÓDIGO DE ACESSO</Text>
-              <View
-                style={[
-                  styles.inputBox,
-                  focusedField === "code" && styles.inputBoxFocused,
-                ]}
-              >
-                <Text style={styles.inputEmoji}>🔑</Text>
-                <TextInput
-                  focusable={true}
-                  onFocus={() => setFocusedField("code")}
-                  placeholder="Ex: GOLD-VIP-365D"
-                  placeholderTextColor="#777"
-                  value={code}
-                  onChangeText={(t) => setCode(t.toUpperCase())}
-                  autoCapitalize="characters"
-                  style={styles.textInput}
-                />
-              </View>
+              <TVInputField
+                inputRef={codeRef}
+                icon="🔑"
+                placeholder="Ex: GOLD-VIP-365D"
+                value={code}
+                onChangeText={(t) => setCode(t.toUpperCase())}
+                autoCapitalize="characters"
+              />
               <Text style={styles.hintText}>O código ficará vinculado ao seu e-mail de acesso.</Text>
             </View>
 
-            {/* BOTÃO VALIDAR */}
-            <Pressable
-              focusable={true}
-              onFocus={() => setFocusedField("btn_validate")}
-              style={[
-                styles.btnGold,
-                focusedField === "btn_validate" && styles.btnGoldFocused,
-                loading && { opacity: 0.7 },
-              ]}
+            <TVActionButton
+              label="VALIDAR E CONTINUAR"
+              loading={loading}
               onPress={handleValidateLicense}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#000" />
-              ) : (
-                <Text
-                  style={[
-                    styles.btnGoldText,
-                    focusedField === "btn_validate" && { color: "#000", fontWeight: "900" },
-                  ]}
-                >
-                  VALIDAR E CONTINUAR
-                </Text>
-              )}
-            </Pressable>
+            />
 
-            <Pressable
-              focusable={true}
-              onFocus={() => setFocusedField("btn_go_trial")}
+            <TVLinkButton
+              label="⚡ Não tem código? Entrar com Teste de 24h →"
               onPress={() => {
                 setActiveTab("trial");
                 setError(null);
               }}
-              style={[
-                styles.quickTrialBtn,
-                focusedField === "btn_go_trial" && styles.quickTrialBtnFocused,
-              ]}
-            >
-              <Text style={styles.quickTrialBtnText}>⚡ Não tem código? Entrar com Teste de 24h →</Text>
-            </Pressable>
+            />
           </View>
         )}
 
-        {/* 2. ÁREA DE TESTE (SERVIDOR, UTILIZADOR E SENHA - MÁX 24H) */}
+        {/* 2. ÁREA DE TESTE */}
         {step === "form" && activeTab === "trial" && (
           <View style={styles.formWrap}>
             <View style={styles.trialNoticeBox}>
@@ -404,180 +320,89 @@ export default function LoginScreen() {
               </Text>
             </View>
 
-            {/* SELEÇÃO DE SERVIDOR */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>SERVIDOR DO TESTE</Text>
               <View style={styles.serverChips}>
-                {serverList.map((item, i) => {
-                  const active = !customServer && server === item.url;
-                  const chipKey = `trial_server_${i}`;
-                  return (
-                    <Pressable
-                      key={`${item.url}-${i}`}
-                      focusable={true}
-                      onFocus={() => setFocusedField(chipKey)}
-                      onPress={() => {
-                        setCustomServer(false);
-                        setServer(item.url);
-                      }}
-                      style={[
-                        styles.serverChip,
-                        active && styles.serverChipActive,
-                        focusedField === chipKey && styles.serverChipFocused,
-                      ]}
-                    >
-                      <Text style={{ fontSize: 13 }}>📺</Text>
-                      <Text
-                        style={[
-                          styles.serverChipText,
-                          (active || focusedField === chipKey) && { color: "#000", fontWeight: "800" },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                {serverList.map((item, i) => (
+                  <TVServerChip
+                    key={`${item.url}-${i}`}
+                    label={item.label}
+                    active={!customServer && server === item.url}
+                    onPress={() => {
+                      setCustomServer(false);
+                      setServer(item.url);
+                    }}
+                  />
+                ))}
               </View>
 
-              <Pressable
-                focusable={true}
-                onFocus={() => setFocusedField("toggle_custom_trial")}
+              <TVLinkButton
+                label={customServer ? "▲ Usar lista de servidores" : "▼ Inserir outro servidor"}
                 onPress={() => {
                   setCustomServer((v) => !v);
                   if (!customServer) setServer("");
                   else setServer(serverList[0]?.url || "http://natfluxo.store:80");
                 }}
-                style={[
-                  styles.customLink,
-                  focusedField === "toggle_custom_trial" && { backgroundColor: "rgba(229,169,59,0.2)", borderRadius: 6 },
-                ]}
-              >
-                <Text style={styles.customLinkText}>
-                  {customServer ? "▲ Usar lista de servidores" : "▼ Inserir outro servidor"}
-                </Text>
-              </Pressable>
+              />
 
               {customServer && (
-                <View
-                  style={[
-                    styles.inputBox,
-                    { marginTop: 8 },
-                    focusedField === "trial_custom_server" && styles.inputBoxFocused,
-                  ]}
-                >
-                  <TextInput
-                    focusable={true}
-                    onFocus={() => setFocusedField("trial_custom_server")}
-                    placeholder="http://seuservidor.com:8080"
-                    placeholderTextColor="#777"
-                    value={server}
-                    onChangeText={setServer}
-                    autoCapitalize="none"
-                    keyboardType="url"
-                    style={styles.textInput}
-                  />
-                </View>
+                <TVInputField
+                  placeholder="http://seuservidor.com:8080"
+                  value={server}
+                  onChangeText={setServer}
+                  keyboardType="url"
+                  autoCapitalize="none"
+                />
               )}
             </View>
 
-            {/* CAMPO DE UTILIZADOR */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>UTILIZADOR DO TESTE</Text>
-              <View
-                style={[
-                  styles.inputBox,
-                  focusedField === "trial_user" && styles.inputBoxFocused,
-                ]}
-              >
-                <Text style={styles.inputEmoji}>👤</Text>
-                <TextInput
-                  focusable={true}
-                  onFocus={() => setFocusedField("trial_user")}
-                  placeholder="Nome de utilizador do teste"
-                  placeholderTextColor="#777"
-                  value={user}
-                  onChangeText={setUser}
-                  autoCapitalize="none"
-                  style={styles.textInput}
-                />
-              </View>
+              <TVInputField
+                inputRef={userRef}
+                icon="👤"
+                placeholder="Nome de utilizador do teste"
+                value={user}
+                onChangeText={setUser}
+                autoCapitalize="none"
+              />
             </View>
 
-            {/* CAMPO DE PALAVRA-PASSE */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>PALAVRA-PASSE DO TESTE</Text>
-              <View
-                style={[
-                  styles.inputBox,
-                  focusedField === "trial_pass" && styles.inputBoxFocused,
-                ]}
-              >
-                <Text style={styles.inputEmoji}>🔒</Text>
-                <TextInput
-                  focusable={true}
-                  onFocus={() => setFocusedField("trial_pass")}
-                  placeholder="Palavra-passe do teste"
-                  placeholderTextColor="#777"
-                  value={pass}
-                  onChangeText={setPass}
-                  secureTextEntry={!showPass}
-                  autoCapitalize="none"
-                  style={styles.textInput}
-                />
-                <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
-                  <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
-                </Pressable>
-              </View>
+              <TVInputField
+                inputRef={passRef}
+                icon="🔒"
+                placeholder="Palavra-passe do teste"
+                value={pass}
+                onChangeText={setPass}
+                secureTextEntry={!showPass}
+                autoCapitalize="none"
+                rightElement={
+                  <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
+                    <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
+                  </Pressable>
+                }
+              />
             </View>
 
-            {/* BOTÃO ACEDER AO TESTE */}
-            <Pressable
-              focusable={true}
-              onFocus={() => setFocusedField("btn_connect_trial")}
-              style={[
-                styles.btnGold,
-                focusedField === "btn_connect_trial" && styles.btnGoldFocused,
-                loading && { opacity: 0.7 },
-              ]}
+            <TVActionButton
+              label="ACEDER AO TESTE (24H)"
+              loading={loading}
               onPress={handleConnectTrial}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#000" />
-              ) : (
-                <Text
-                  style={[
-                    styles.btnGoldText,
-                    focusedField === "btn_connect_trial" && { color: "#000", fontWeight: "900" },
-                  ]}
-                >
-                  ACEDER AO TESTE (24H)
-                </Text>
-              )}
-            </Pressable>
+            />
 
-            <Pressable
-              focusable={true}
-              onFocus={() => setFocusedField("btn_back_to_license")}
+            <TVLinkButton
+              label="← Voltar à ativação com código"
               onPress={() => {
                 setActiveTab("license");
                 setError(null);
               }}
-              style={[
-                { alignSelf: "center", marginTop: 8, padding: 8, borderRadius: 8 },
-                focusedField === "btn_back_to_license" && { backgroundColor: "rgba(229,169,59,0.25)" },
-              ]}
-            >
-              <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "700" }}>
-                ← Voltar à ativação com código
-              </Text>
-            </Pressable>
+            />
           </View>
         )}
 
-        {/* 3. FLUXO IPTV (PARA QUEM JÁ ATIVOU LICENÇA) */}
+        {/* 3. FLUXO IPTV (LICENÇA ATIVADA) */}
         {step === "iptv" && (
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
@@ -587,126 +412,67 @@ export default function LoginScreen() {
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>SERVIDOR</Text>
               <View style={styles.serverChips}>
-                {serverList.map((item, i) => {
-                  const active = !customServer && server === item.url;
-                  const chipKey = `iptv_server_${i}`;
-                  return (
-                    <Pressable
-                      key={`${item.url}-${i}`}
-                      focusable={true}
-                      onFocus={() => setFocusedField(chipKey)}
-                      onPress={() => {
-                        setCustomServer(false);
-                        setServer(item.url);
-                      }}
-                      style={[
-                        styles.serverChip,
-                        active && styles.serverChipActive,
-                        focusedField === chipKey && styles.serverChipFocused,
-                      ]}
-                    >
-                      <Text style={{ fontSize: 13 }}>📺</Text>
-                      <Text
-                        style={[
-                          styles.serverChipText,
-                          (active || focusedField === chipKey) && { color: "#000", fontWeight: "800" },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                {serverList.map((item, i) => (
+                  <TVServerChip
+                    key={`${item.url}-${i}`}
+                    label={item.label}
+                    active={!customServer && server === item.url}
+                    onPress={() => {
+                      setCustomServer(false);
+                      setServer(item.url);
+                    }}
+                  />
+                ))}
               </View>
 
-              <Pressable
-                focusable={true}
-                onFocus={() => setFocusedField("toggle_custom_iptv")}
+              <TVLinkButton
+                label={customServer ? "▲ Usar lista de servidores" : "▼ Inserir outro servidor"}
                 onPress={() => {
                   setCustomServer((v) => !v);
                   if (!customServer) setServer("");
                   else setServer(serverList[0]?.url || "http://natfluxo.store:80");
                 }}
-                style={[
-                  styles.customLink,
-                  focusedField === "toggle_custom_iptv" && { backgroundColor: "rgba(229,169,59,0.2)", borderRadius: 6 },
-                ]}
-              >
-                <Text style={styles.customLinkText}>
-                  {customServer ? "▲ Usar lista de servidores" : "▼ Inserir outro servidor"}
-                </Text>
-              </Pressable>
+              />
 
               {customServer && (
-                <View
-                  style={[
-                    styles.inputBox,
-                    { marginTop: 8 },
-                    focusedField === "iptv_custom_server" && styles.inputBoxFocused,
-                  ]}
-                >
-                  <TextInput
-                    focusable={true}
-                    onFocus={() => setFocusedField("iptv_custom_server")}
-                    placeholder="http://seuservidor.com:8080"
-                    placeholderTextColor="#777"
-                    value={server}
-                    onChangeText={setServer}
-                    autoCapitalize="none"
-                    keyboardType="url"
-                    style={styles.textInput}
-                  />
-                </View>
+                <TVInputField
+                  placeholder="http://seuservidor.com:8080"
+                  value={server}
+                  onChangeText={setServer}
+                  keyboardType="url"
+                  autoCapitalize="none"
+                />
               )}
             </View>
 
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>UTILIZADOR</Text>
-              <View
-                style={[
-                  styles.inputBox,
-                  focusedField === "iptv_user" && styles.inputBoxFocused,
-                ]}
-              >
-                <Text style={styles.inputEmoji}>👤</Text>
-                <TextInput
-                  focusable={true}
-                  onFocus={() => setFocusedField("iptv_user")}
-                  placeholder="Nome de utilizador IPTV"
-                  placeholderTextColor="#777"
-                  value={user}
-                  onChangeText={setUser}
-                  autoCapitalize="none"
-                  style={styles.textInput}
-                />
-              </View>
+              <TVInputField
+                inputRef={userRef}
+                icon="👤"
+                placeholder="Nome de utilizador IPTV"
+                value={user}
+                onChangeText={setUser}
+                autoCapitalize="none"
+              />
             </View>
 
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
-              <View
-                style={[
-                  styles.inputBox,
-                  focusedField === "iptv_pass" && styles.inputBoxFocused,
-                ]}
-              >
-                <Text style={styles.inputEmoji}>🔒</Text>
-                <TextInput
-                  focusable={true}
-                  onFocus={() => setFocusedField("iptv_pass")}
-                  placeholder="A sua palavra-passe IPTV"
-                  placeholderTextColor="#777"
-                  value={pass}
-                  onChangeText={setPass}
-                  secureTextEntry={!showPass}
-                  autoCapitalize="none"
-                  style={styles.textInput}
-                />
-                <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
-                  <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
-                </Pressable>
-              </View>
+              <TVInputField
+                inputRef={passRef}
+                icon="🔒"
+                placeholder="A sua palavra-passe IPTV"
+                value={pass}
+                onChangeText={setPass}
+                secureTextEntry={!showPass}
+                autoCapitalize="none"
+                rightElement={
+                  <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
+                    <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
+                  </Pressable>
+                }
+              />
             </View>
 
             <View style={styles.rememberRow}>
@@ -719,44 +485,16 @@ export default function LoginScreen() {
               />
             </View>
 
-            <Pressable
-              focusable={true}
-              onFocus={() => setFocusedField("btn_connect_iptv")}
-              style={[
-                styles.btnGold,
-                focusedField === "btn_connect_iptv" && styles.btnGoldFocused,
-                loading && { opacity: 0.7 },
-              ]}
+            <TVActionButton
+              label="ENTRAR NA APLICAÇÃO"
+              loading={loading}
               onPress={handleConnectIPTV}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#000" />
-              ) : (
-                <Text
-                  style={[
-                    styles.btnGoldText,
-                    focusedField === "btn_connect_iptv" && { color: "#000", fontWeight: "900" },
-                  ]}
-                >
-                  ENTRAR NA APLICAÇÃO
-                </Text>
-              )}
-            </Pressable>
+            />
 
-            <Pressable
-              focusable={true}
-              onFocus={() => setFocusedField("btn_change_license")}
+            <TVLinkButton
+              label="← Alterar código de acesso / e-mail"
               onPress={() => setStep("form")}
-              style={[
-                { alignSelf: "center", marginTop: 6, padding: 8, borderRadius: 8 },
-                focusedField === "btn_change_license" && { backgroundColor: "rgba(229,169,59,0.25)" },
-              ]}
-            >
-              <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "700" }}>
-                ← Alterar código de acesso / e-mail
-              </Text>
-            </Pressable>
+            />
           </View>
         )}
 
@@ -779,263 +517,179 @@ export default function LoginScreen() {
   );
 }
 
+// COMPONENTES OTIMIZADOS PARA COMANDO (D-PAD)
+function TVInputField({
+  inputRef,
+  icon,
+  placeholder,
+  value,
+  onChangeText,
+  secureTextEntry,
+  keyboardType,
+  autoCapitalize,
+  rightElement,
+}: any) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={() => inputRef?.current?.focus()}
+      style={[styles.inputBox, isFocused && styles.inputBoxFocused]}
+    >
+      {icon && <Text style={styles.inputEmoji}>{icon}</Text>}
+      <TextInput
+        ref={inputRef}
+        placeholder={placeholder}
+        placeholderTextColor={isFocused ? "#A0A5B5" : "#666"}
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        style={[styles.textInput, isFocused && { color: "#FFF", fontWeight: "700" }]}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+      />
+      {rightElement}
+    </Pressable>
+  );
+}
+
+function TVServerChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[
+        styles.serverChip,
+        active && styles.serverChipActive,
+        isFocused && styles.serverChipFocused,
+      ]}
+    >
+      <Text style={{ fontSize: 13 }}>📺</Text>
+      <Text
+        style={[
+          styles.serverChipText,
+          (active || isFocused) && { color: "#000", fontWeight: "900" },
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function TVTabButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[
+        styles.tabButton,
+        active && styles.tabButtonActive,
+        isFocused && styles.tabButtonFocused,
+      ]}
+    >
+      <Text
+        style={[
+          styles.tabButtonText,
+          (active || isFocused) && { color: "#000", fontWeight: "900" },
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function TVActionButton({ label, loading, onPress }: { label: string; loading: boolean; onPress: () => void }) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      disabled={loading}
+      style={[styles.btnGold, isFocused && styles.btnGoldFocused, loading && { opacity: 0.7 }]}
+    >
+      {loading ? (
+        <ActivityIndicator color="#000" />
+      ) : (
+        <Text style={[styles.btnGoldText, isFocused && { color: "#000", fontWeight: "900" }]}>
+          {label}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+function TVLinkButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[styles.linkBtn, isFocused && styles.linkBtnFocused]}
+    >
+      <Text style={[styles.linkBtnText, isFocused && { color: "#000", fontWeight: "900" }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#07080A",
-  },
-  content: {
-    paddingHorizontal: 20,
-    maxWidth: 480,
-    width: "100%",
-    alignSelf: "center",
-  },
-  logoWrap: {
-    alignItems: "center",
-  },
-  brand: {
-    color: colors.gold,
-    fontSize: 24,
-    fontWeight: "700",
-    textAlign: "center",
-    letterSpacing: 0.5,
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  subtitle: {
-    color: "#8E929C",
-    fontSize: 13,
-    textAlign: "center",
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-  tabSelector: {
-    flexDirection: "row",
-    backgroundColor: "#16181E",
-    borderRadius: 12,
-    padding: 4,
-    marginTop: 10,
-    marginBottom: 8,
-    borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 11,
-    alignItems: "center",
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: "transparent",
-  },
-  tabButtonActive: {
-    backgroundColor: colors.gold,
-  },
-  // FOCO EM ALTO CONTRASTE NA ABA
-  tabButtonFocused: {
-    backgroundColor: "#FFD700",
-    borderColor: "#FFFFFF",
-    transform: [{ scale: 1.04 }],
-    elevation: 8,
-  },
-  tabButtonText: {
-    color: "#8E929C",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  tabButtonTextActive: {
-    color: "#000",
-  },
-  formWrap: {
-    gap: 14,
-    marginTop: 8,
-  },
-  trialNoticeBox: {
-    backgroundColor: "rgba(229, 169, 59, 0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(229, 169, 59, 0.25)",
-    borderRadius: 10,
-    padding: 10,
-    gap: 4,
-  },
-  trialNoticeTitle: {
-    color: colors.gold,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  trialNoticeText: {
-    color: "#C5C9D3",
-    fontSize: 11.5,
-    lineHeight: 16,
-  },
-  fieldGroup: {
-    width: "100%",
-  },
-  fieldLabel: {
-    color: "#8E929C",
-    fontSize: 11,
-    marginBottom: 6,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
-  inputBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#16181E",
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-    paddingHorizontal: 14,
-    height: 52,
-  },
-  // CAIXA DE TEXTO COM DESTAQUE DOURADO E FUNDO VIBRANTE NO PROJETOR
-  inputBoxFocused: {
-    borderColor: "#FFD700",
-    borderWidth: 2.5,
-    backgroundColor: "#202430",
-    elevation: 10,
-    transform: [{ scale: 1.02 }],
-  },
-  inputEmoji: {
-    fontSize: 16,
-    marginRight: 10,
-  },
-  textInput: {
-    flex: 1,
-    color: "#FFF",
-    fontSize: 15,
-  },
-  hintText: {
-    color: "#777",
-    fontSize: 11,
-    marginTop: 4,
-  },
-  serverChips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  serverChip: {
-    flex: 1,
-    minWidth: 110,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    height: 46,
-    borderRadius: 10,
-    backgroundColor: "#16181E",
-    borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-    paddingHorizontal: 8,
-  },
-  serverChipActive: {
-    backgroundColor: "rgba(229, 169, 59, 0.3)",
-    borderColor: colors.gold,
-  },
-  serverChipFocused: {
-    backgroundColor: "#FFD700",
-    borderColor: "#FFFFFF",
-    borderWidth: 2.5,
-    elevation: 8,
-    transform: [{ scale: 1.05 }],
-  },
-  serverChipText: {
-    color: "#FFF",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  customLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-end",
-    paddingVertical: 5,
-    paddingHorizontal: 6,
-  },
-  customLinkText: {
-    color: "#8E929C",
-    fontSize: 11,
-  },
-  rememberRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#16181E",
-    borderRadius: 12,
-    padding: 14,
-  },
-  rememberTitle: {
-    color: "#FFF",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  btnGold: {
-    backgroundColor: colors.gold,
-    height: 52,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 6,
-    borderWidth: 1.5,
-    borderColor: "transparent",
-  },
-  btnGoldFocused: {
-    backgroundColor: "#FFD700",
-    borderColor: "#FFFFFF",
-    borderWidth: 2.5,
-    elevation: 12,
-    transform: [{ scale: 1.03 }],
-  },
-  btnGoldText: {
-    color: "#000",
-    fontSize: 14,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  quickTrialBtn: {
-    alignSelf: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginTop: 4,
-    borderRadius: 8,
-  },
-  quickTrialBtnFocused: {
-    backgroundColor: "rgba(229, 169, 59, 0.25)",
-    borderWidth: 1.5,
-    borderColor: colors.gold,
-  },
-  quickTrialBtnText: {
-    color: colors.gold,
-    fontSize: 12.5,
-    fontWeight: "700",
-  },
-  statusBox: {
-    marginTop: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 14,
-    backgroundColor: "#16181E",
-    borderRadius: 12,
-  },
-  statusText: {
-    color: "#FFF",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  errorBox: {
-    marginTop: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    backgroundColor: "rgba(244,67,54,0.12)",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(244,67,54,0.3)",
-  },
-  errorText: {
-    color: "#F44336",
-    flex: 1,
-    fontSize: 12,
-  },
+  root: { flex: 1, backgroundColor: "#07080A" },
+  content: { paddingHorizontal: 20, maxWidth: 520, width: "100%", alignSelf: "center" },
+  logoWrap: { alignItems: "center" },
+  brand: { color: colors.gold, fontSize: 24, fontWeight: "700", textAlign: "center", letterSpacing: 0.5, marginTop: 6, marginBottom: 4 },
+  subtitle: { color: "#8E929C", fontSize: 13, textAlign: "center", marginBottom: 16, lineHeight: 18 },
+  tabSelector: { flexDirection: "row", backgroundColor: "#16181E", borderRadius: 12, padding: 4, marginTop: 10, marginBottom: 8, borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.08)" },
+  tabButton: { flex: 1, paddingVertical: 11, alignItems: "center", borderRadius: 8, borderWidth: 2, borderColor: "transparent" },
+  tabButtonActive: { backgroundColor: colors.gold },
+  tabButtonFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", transform: [{ scale: 1.04 }], elevation: 8 },
+  tabButtonText: { color: "#8E929C", fontSize: 12, fontWeight: "700" },
+  formWrap: { gap: 14, marginTop: 8 },
+  trialNoticeBox: { backgroundColor: "rgba(229, 169, 59, 0.08)", borderWidth: 1, borderColor: "rgba(229, 169, 59, 0.25)", borderRadius: 10, padding: 10, gap: 4 },
+  trialNoticeTitle: { color: colors.gold, fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
+  trialNoticeText: { color: "#C5C9D3", fontSize: 11.5, lineHeight: 16 },
+  fieldGroup: { width: "100%" },
+  fieldLabel: { color: "#8E929C", fontSize: 11, marginBottom: 6, fontWeight: "700", letterSpacing: 0.5 },
+  inputBox: { flexDirection: "row", alignItems: "center", backgroundColor: "#16181E", borderRadius: 12, borderWidth: 2, borderColor: "rgba(255, 255, 255, 0.1)", paddingHorizontal: 14, height: 52 },
+  inputBoxFocused: { borderColor: "#FFD700", borderWidth: 3, backgroundColor: "#202532", elevation: 12, transform: [{ scale: 1.02 }] },
+  inputEmoji: { fontSize: 16, marginRight: 10 },
+  textInput: { flex: 1, color: "#FFF", fontSize: 15 },
+  hintText: { color: "#777", fontSize: 11, marginTop: 4 },
+  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  serverChip: { flex: 1, minWidth: 110, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 46, borderRadius: 10, backgroundColor: "#16181E", borderWidth: 2, borderColor: "rgba(255, 255, 255, 0.1)", paddingHorizontal: 8 },
+  serverChipActive: { backgroundColor: "rgba(229, 169, 59, 0.3)", borderColor: colors.gold },
+  serverChipFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3, elevation: 10, transform: [{ scale: 1.05 }] },
+  serverChipText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
+  btnGold: { backgroundColor: colors.gold, height: 52, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 6, borderWidth: 2, borderColor: "transparent" },
+  btnGoldFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3, elevation: 14, transform: [{ scale: 1.03 }] },
+  btnGoldText: { color: "#000", fontSize: 14, fontWeight: "800", letterSpacing: 0.5 },
+  linkBtn: { alignSelf: "center", paddingVertical: 8, paddingHorizontal: 14, marginTop: 4, borderRadius: 8, borderWidth: 1.5, borderColor: "transparent" },
+  linkBtnFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", transform: [{ scale: 1.04 }], elevation: 6 },
+  linkBtnText: { color: colors.gold, fontSize: 12.5, fontWeight: "700" },
+  rememberRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#16181E", borderRadius: 12, padding: 14 },
+  rememberTitle: { color: "#FFF", fontSize: 13, fontWeight: "600" },
+  statusBox: { marginTop: 14, flexDirection: "row", alignItems: "center", gap: 10, padding: 14, backgroundColor: "#16181E", borderRadius: 12 },
+  statusText: { color: "#FFF", fontSize: 13, fontWeight: "600" },
+  errorBox: { marginTop: 14, flexDirection: "row", alignItems: "center", padding: 14, backgroundColor: "rgba(244,67,54,0.12)", borderRadius: 12, borderWidth: 1, borderColor: "rgba(244,67,54,0.3)" },
+  errorText: { color: "#F44336", flex: 1, fontSize: 12 },
 });
