@@ -53,7 +53,7 @@ export default function SettingsTab() {
     <ScrollView testID="settings-screen" style={styles.root} contentContainerStyle={{ paddingTop: insets.top + spacing.sm, paddingBottom: 120 }}>
       <View style={styles.header}>
         {section ? (
-          <Pressable testID="settings-back" onPress={() => setSection(null)} hitSlop={10} style={({ focused }) => [styles.backBtn, focused && styles.focused]}>
+          <Pressable focusable={true} testID="settings-back" onPress={() => setSection(null)} hitSlop={10} style={({ focused }) => [styles.backBtn, focused && styles.focused]}>
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </Pressable>
         ) : <View style={{ width: 40 }} />}
@@ -63,11 +63,14 @@ export default function SettingsTab() {
 
       {!section ? (
         <View style={styles.grid}>
-          {TILES.filter((t) => t.key !== "logout" || session).map((t) => (
-            <Pressable key={t.key} testID={`tile-${t.key}`} onPress={() => onTile(t.key)} style={({ focused, pressed }) => [styles.tile, { width: tile, height: tile }, focused && styles.tileFocused, pressed && { opacity: 0.85 }]}>
-              <Ionicons name={t.icon} size={tile * 0.34} color={t.key === "logout" ? colors.error : colors.textMuted} />
-              <Text style={styles.tileLabel} numberOfLines={2}>{t.label}</Text>
-            </Pressable>
+          {TILES.filter((t) => t.key !== "logout" || session).map((t, idx) => (
+            <SettingsTile
+              key={t.key}
+              t={t}
+              tile={tile}
+              isFirst={idx === 0}
+              onPress={() => onTile(t.key)}
+            />
           ))}
         </View>
       ) : (
@@ -86,6 +89,52 @@ export default function SettingsTab() {
   );
 }
 
+function SettingsTile({
+  t,
+  tile,
+  isFirst,
+  onPress,
+}: {
+  t: { key: SectionKey | "logout"; label: string; icon: any };
+  tile: number;
+  isFirst?: boolean;
+  onPress: () => void;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+  const isLogout = t.key === "logout";
+
+  return (
+    <Pressable
+      focusable={true}
+      hasTVPreferredFocus={isFirst}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      testID={`tile-${t.key}`}
+      onPress={onPress}
+      style={[
+        styles.tile,
+        { width: tile, height: tile },
+        isFocused && (isLogout ? styles.tileFocusedLogout : styles.tileFocused),
+      ]}
+    >
+      <Ionicons
+        name={t.icon}
+        size={tile * 0.34}
+        color={isFocused ? (isLogout ? "#FFFFFF" : "#000000") : (isLogout ? colors.error : colors.textMuted)}
+      />
+      <Text
+        style={[
+          styles.tileLabel,
+          isFocused && { color: isLogout ? "#FFFFFF" : "#000000", fontWeight: "900" },
+        ]}
+        numberOfLines={2}
+      >
+        {t.label}
+      </Text>
+    </Pressable>
+  );
+}
+
 function Card({ children }: { children: React.ReactNode }) { return <View style={styles.card}>{children}</View>; }
 function Row({ icon, title, sub, right }: { icon: any; title: string; sub?: string; right?: React.ReactNode }) {
   return (
@@ -96,11 +145,25 @@ function Row({ icon, title, sub, right }: { icon: any; title: string; sub?: stri
     </View>
   );
 }
+
 function PillBtn({ label, icon, onPress, testID, color = colors.gold, busy }: { label: string; icon: any; onPress: () => void; testID: string; color?: string; busy?: boolean }) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
-    <Pressable testID={testID} onPress={onPress} style={({ focused }) => [styles.pillBtn, { borderColor: color }, focused && styles.focused]}>
-      {busy ? <ActivityIndicator color={color} size="small" /> : <Ionicons name={icon} size={16} color={color} />}
-      <Text style={[styles.pillText, { color }]}>{label}</Text>
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      testID={testID}
+      onPress={onPress}
+      style={[
+        styles.pillBtn,
+        { borderColor: color },
+        isFocused && { backgroundColor: color, borderColor: "#FFFFFF", borderWidth: 2, transform: [{ scale: 1.05 }] },
+      ]}
+    >
+      {busy ? <ActivityIndicator color={isFocused ? "#000" : color} size="small" /> : <Ionicons name={icon} size={16} color={isFocused ? "#000" : color} />}
+      <Text style={[styles.pillText, { color: isFocused ? "#000000" : color, fontWeight: isFocused ? "900" : "700" }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -114,7 +177,7 @@ function AccountSection() {
   if (!session) {
     return (
       <Card>
-        <Pressable testID="settings-login" style={styles.addRow} onPress={() => router.push("/login")}>
+        <Pressable focusable={true} testID="settings-login" style={styles.addRow} onPress={() => router.push("/login")}>
           <Ionicons name="log-in-outline" size={20} color={colors.gold} /><Text style={styles.addLabel}>Entrar com usuário e senha</Text>
         </Pressable>
       </Card>
@@ -147,12 +210,12 @@ function ListsSection() {
             <Text style={styles.rowTitle} numberOfLines={1}>{l.name}</Text>
             <Text style={styles.rowSub}>{TYPE_LABEL[l.type]}{l.meta?.channels_count != null ? ` · ${l.meta.channels_count} canais` : ""}{l.last_updated ? ` · ${new Date(l.last_updated).toLocaleDateString("pt-BR")}` : ""}</Text>
           </View>
-          <Pressable testID={`activate-${l.id}`} onPress={async () => { await setActiveListId(l.id); await setSource({ kind: "list", listId: l.id }); router.push("/(tabs)/live"); }} style={styles.actionBtn} hitSlop={6}><Ionicons name="play" size={16} color={colors.gold} /></Pressable>
-          <Pressable testID={`refresh-${l.id}`} onPress={async () => { try { await refreshList(l.id); load(); } catch {} }} style={styles.actionBtn} hitSlop={6}><Ionicons name="refresh" size={16} color={colors.textMuted} /></Pressable>
-          <Pressable testID={`del-${l.id}`} onPress={() => confirm("Excluir", `Remover "${l.name}"?`, async () => { try { await deleteList(l.id); load(); } catch {} })} style={styles.actionBtn} hitSlop={6}><Ionicons name="trash-outline" size={16} color={colors.error} /></Pressable>
+          <Pressable focusable={true} testID={`activate-${l.id}`} onPress={async () => { await setActiveListId(l.id); await setSource({ kind: "list", listId: l.id }); router.push("/(tabs)/live"); }} style={styles.actionBtn} hitSlop={6}><Ionicons name="play" size={16} color={colors.gold} /></Pressable>
+          <Pressable focusable={true} testID={`refresh-${l.id}`} onPress={async () => { try { await refreshList(l.id); load(); } catch {} }} style={styles.actionBtn} hitSlop={6}><Ionicons name="refresh" size={16} color={colors.textMuted} /></Pressable>
+          <Pressable focusable={true} testID={`del-${l.id}`} onPress={() => confirm("Excluir", `Remover "${l.name}"?`, async () => { try { await deleteList(l.id); load(); } catch {} })} style={styles.actionBtn} hitSlop={6}><Ionicons name="trash-outline" size={16} color={colors.error} /></Pressable>
         </View>
       ))}
-      <Pressable testID="settings-add-list" style={styles.addRow} onPress={() => router.push("/add-list")}>
+      <Pressable focusable={true} testID="settings-add-list" style={styles.addRow} onPress={() => router.push("/add-list")}>
         <Ionicons name="add-circle" size={20} color={colors.gold} /><Text style={styles.addLabel}>Adicionar nova lista</Text>
       </Pressable>
     </Card>
@@ -192,7 +255,7 @@ function PlaybackSection() {
           {(["auto", "m3u8", "ts"] as const).map((f) => {
             const disabled = f !== "auto" && formats.length > 0 && !formats.includes(f);
             return (
-              <Pressable key={f} testID={`pref-format-${f}`} disabled={disabled} onPress={() => setPrefs({ liveFormat: f })} style={({ focused }) => [styles.chip, prefs.liveFormat === f && styles.chipActive, focused && styles.focused, disabled && { opacity: 0.35 }]}>
+              <Pressable focusable={true} key={f} testID={`pref-format-${f}`} disabled={disabled} onPress={() => setPrefs({ liveFormat: f })} style={({ focused }) => [styles.chip, prefs.liveFormat === f && styles.chipActive, focused && styles.focused, disabled && { opacity: 0.35 }]}>
                 <Text style={[styles.chipText, prefs.liveFormat === f && { color: colors.onGold }]}>{f === "auto" ? "Automático" : f.toUpperCase()}</Text>
               </Pressable>
             );
@@ -209,7 +272,7 @@ function DeviceSection() {
   return (
     <Card>
       {([["tv", "Smart TV / TV Box", "Controle remoto (D-pad)", "tv"], ["mobile", "Celular / Tablet", "Tela sensível ao toque", "phone-portrait"]] as const).map(([k, t, s, ic]) => (
-        <Pressable key={k} testID={`device-${k}`} onPress={() => setDeviceMode(k)} style={({ focused }) => [styles.row, focused && styles.focused]}>
+        <Pressable focusable={true} key={k} testID={`device-${k}`} onPress={() => setDeviceMode(k)} style={({ focused }) => [styles.row, focused && styles.focused]}>
           <View style={styles.rowIcon}><Ionicons name={ic} size={18} color={colors.gold} /></View>
           <View style={{ flex: 1 }}><Text style={styles.rowTitle}>{t}</Text><Text style={styles.rowSub}>{s}</Text></View>
           <Ionicons name={deviceMode === k ? "radio-button-on" : "radio-button-off"} size={20} color={colors.gold} />
@@ -266,8 +329,9 @@ const styles = StyleSheet.create({
   title: { color: colors.textMuted, fontSize: 16, fontWeight: "600", letterSpacing: 4 },
   backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, padding: spacing.lg },
-  tile: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: spacing.sm, padding: spacing.sm },
-  tileFocused: { borderColor: colors.gold, borderWidth: 2, backgroundColor: colors.surface3, transform: [{ scale: 1.04 }] },
+  tile: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: spacing.sm, padding: spacing.sm },
+  tileFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3.5, transform: [{ scale: 1.08 }], elevation: 16, zIndex: 99 },
+  tileFocusedLogout: { backgroundColor: "#EF4444", borderColor: "#FFFFFF", borderWidth: 3.5, transform: [{ scale: 1.08 }], elevation: 16, zIndex: 99 },
   tileLabel: { color: colors.text, fontSize: 12, fontWeight: "600", textAlign: "center" },
   focused: { borderWidth: 2, borderColor: colors.gold },
   appName: { color: colors.gold, fontSize: 20, fontWeight: "700", letterSpacing: 0.5, marginTop: spacing.sm },
