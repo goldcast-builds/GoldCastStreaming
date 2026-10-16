@@ -37,6 +37,7 @@ export default function LiveTab() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedCat, setSelectedCat] = useState(CAT_ALL);
   const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const q = useDebounce(search.trim().toLowerCase(), 300);
 
   const numCols = useMemo(() => {
@@ -117,7 +118,6 @@ export default function LiveTab() {
     }));
     setQueue(items, index);
     
-    // Parâmetros preservados exatamente como estavam para o Just Player
     router.push({
       pathname: "/player",
       params: {
@@ -140,29 +140,45 @@ export default function LiveTab() {
       <View style={styles.headerRow}>
         <Text style={styles.h1}>TV ao vivo</Text>
         {(lists.length > 0 || session) && (
-          <Pressable testID="switch-list" onPress={() => setPickerOpen(true)} style={({ focused }) => [styles.switchBtn, focused && styles.focused]}>
+          <Pressable testID="switch-list" focusable={true} onPress={() => setPickerOpen(true)} style={({ focused }) => [styles.switchBtn, focused && styles.focused]}>
             <Ionicons name="swap-horizontal" size={14} color={colors.gold} />
             <Text style={styles.switchLabel} numberOfLines={1}>{sourceLabel}</Text>
           </Pressable>
         )}
       </View>
 
-      <View style={styles.searchWrap}>
-        <Ionicons name="search" size={16} color={colors.textDim} />
-        <TextInput ref={searchRef} testID="live-search" placeholder="Buscar canais..." placeholderTextColor={colors.textDim} value={search} onChangeText={setSearch} style={styles.search} autoCorrect={false} />
-        {search.length > 0 && <Pressable onPress={() => setSearch("")} hitSlop={8}><Ionicons name="close-circle" size={16} color={colors.textDim} /></Pressable>}
+      <View style={[styles.searchWrap, searchFocused && styles.searchWrapFocused]}>
+        <Ionicons name="search" size={16} color={searchFocused ? "#000000" : colors.textDim} />
+        <TextInput 
+          ref={searchRef} 
+          testID="live-search" 
+          placeholder="Buscar canais..." 
+          placeholderTextColor={searchFocused ? "#333333" : colors.textDim} 
+          value={search} 
+          onChangeText={setSearch} 
+          style={[styles.search, searchFocused && { color: "#000000", fontWeight: "700" }]} 
+          autoCorrect={false}
+          focusable={true}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setSearchFocused(false)}
+        />
+        {search.length > 0 && (
+          <Pressable focusable={true} onPress={() => setSearch("")} hitSlop={8}>
+            <Ionicons name="close-circle" size={16} color={searchFocused ? "#000000" : colors.textDim} />
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.chipsWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.md }}>
-          {cats.map((c) => {
-            const active = selectedCat === String(c.category_id);
-            return (
-              <Pressable key={String(c.category_id)} onPress={() => setSelectedCat(String(c.category_id))} testID={`cat-chip-${c.category_id}`} style={({ focused }) => [styles.chip, active && styles.chipActive, focused && styles.focused]}>
-                <Text style={[styles.chipText, active && { color: colors.onGold }]} numberOfLines={1}>{c.category_name}</Text>
-              </Pressable>
-            );
-          })}
+          {cats.map((c) => (
+            <LiveCategoryChipItem
+              key={String(c.category_id)}
+              cat={c}
+              active={selectedCat === String(c.category_id)}
+              onSelect={() => setSelectedCat(String(c.category_id))}
+            />
+          ))}
         </ScrollView>
       </View>
 
@@ -172,7 +188,7 @@ export default function LiveTab() {
         <View style={styles.center}>
           <Ionicons name="cloud-offline-outline" size={40} color={colors.textDim} />
           <Text style={styles.emptyText}>{errLive}</Text>
-          <Pressable testID="live-retry" onPress={() => loadLive(true)} style={styles.retryBtn}><Text style={styles.retryText}>TENTAR NOVAMENTE</Text></Pressable>
+          <Pressable focusable={true} testID="live-retry" onPress={() => loadLive(true)} style={styles.retryBtn}><Text style={styles.retryText}>TENTAR NOVAMENTE</Text></Pressable>
         </View>
       ) : visibleRows.length === 0 ? (
         <View style={styles.center}>
@@ -186,12 +202,20 @@ export default function LiveTab() {
           keyExtractor={(r) => r.id}
           numColumns={numCols}
           columnWrapperStyle={{ gap: 8, paddingHorizontal: spacing.md }}
-          contentContainerStyle={{ gap: 8, paddingVertical: spacing.sm, paddingBottom: 100 }}
-          renderItem={({ item, index }) => <ChannelCard row={item} fav={favs.includes(item.id)} onPress={() => open(index)} onFav={() => toggleFav("live", item.id)} />}
-          removeClippedSubviews
+          contentContainerStyle={{ gap: 8, paddingVertical: spacing.sm, paddingBottom: 120 }}
+          renderItem={({ item, index }) => (
+            <ChannelCard 
+              row={item} 
+              fav={favs.includes(item.id)} 
+              onPress={() => open(index)} 
+              onFav={() => toggleFav("live", item.id)} 
+              isFirst={index === 0}
+            />
+          )}
+          removeClippedSubviews={false}
           initialNumToRender={18}
           maxToRenderPerBatch={18}
-          windowSize={7}
+          windowSize={9}
           keyboardShouldPersistTaps="handled"
         />
       )}
@@ -201,13 +225,13 @@ export default function LiveTab() {
           <View style={styles.modalCard} testID="source-picker">
             <Text style={styles.modalTitle}>Trocar fonte</Text>
             {session && (
-              <Pressable testID="source-xtream" onPress={() => { setSource({ kind: "xtream" }); setSelectedCat(CAT_ALL); setPickerOpen(false); }} style={({ focused }) => [styles.modalRow, !listMode && styles.modalRowActive, focused && styles.focused]}>
+              <Pressable focusable={true} testID="source-xtream" onPress={() => { setSource({ kind: "xtream" }); setSelectedCat(CAT_ALL); setPickerOpen(false); }} style={({ focused }) => [styles.modalRow, !listMode && styles.modalRowActive, focused && styles.focused]}>
                 <Ionicons name="key" size={16} color={colors.gold} />
                 <Text style={styles.modalRowText}>Conta Xtream/XUI · {session.userInfo?.username || session.username}</Text>
               </Pressable>
             )}
             {lists.map((l) => (
-              <Pressable key={l.id} testID={`source-list-${l.id}`} onPress={() => { setSource({ kind: "list", listId: l.id }); setSelectedCat(CAT_ALL); setPickerOpen(false); }} style={({ focused }) => [styles.modalRow, listMode === l.id && styles.modalRowActive, focused && styles.focused]}>
+              <Pressable key={l.id} focusable={true} testID={`source-list-${l.id}`} onPress={() => { setSource({ kind: "list", listId: l.id }); setSelectedCat(CAT_ALL); setPickerOpen(false); }} style={({ focused }) => [styles.modalRow, listMode === l.id && styles.modalRowActive, focused && styles.focused]}>
                 <Ionicons name={l.type === "xtream" ? "key" : l.type === "m3u_url" ? "link" : "document"} size={16} color={colors.gold} />
                 <Text style={styles.modalRowText} numberOfLines={1}>{l.name}</Text>
               </Pressable>
@@ -219,20 +243,92 @@ export default function LiveTab() {
   );
 }
 
-const ChannelCard = memo(function ChannelCard({ row, fav, onPress, onFav }: { row: Row; fav: boolean; onPress: () => void; onFav: () => void }) {
+function LiveCategoryChipItem({
+  cat,
+  active,
+  onSelect,
+}: {
+  cat: Category;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
-    <Pressable testID={`channel-${row.id}`} onPress={onPress} onLongPress={onFav} style={({ focused, pressed }) => [styles.channel, focused && styles.channelFocused, pressed && { opacity: 0.82 }]}>
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onSelect}
+      testID={`cat-chip-${cat.category_id}`}
+      style={[
+        styles.chip,
+        active && styles.chipActive,
+        isFocused && styles.chipFocused,
+      ]}
+    >
+      <Text
+        style={[
+          styles.chipText,
+          (active || isFocused) && { color: "#000000", fontWeight: "900" },
+        ]}
+        numberOfLines={1}
+      >
+        {cat.category_name}
+      </Text>
+    </Pressable>
+  );
+}
+
+const ChannelCard = memo(function ChannelCard({
+  row,
+  fav,
+  onPress,
+  onFav,
+  isFirst,
+}: {
+  row: Row;
+  fav: boolean;
+  onPress: () => void;
+  onFav: () => void;
+  isFirst?: boolean;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      hasTVPreferredFocus={isFirst}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      testID={`channel-${row.id}`}
+      onPress={onPress}
+      onLongPress={onFav}
+      style={[
+        styles.channel,
+        isFocused && styles.channelFocused,
+      ]}
+    >
       <View style={styles.logoBox}>
         {row.logo ? (
           <Image source={{ uri: row.logo }} style={{ width: "85%", height: "85%" }} contentFit="contain" recyclingKey={row.id} cachePolicy="memory-disk" transition={120} />
         ) : (
-          <Ionicons name="tv" size={24} color={colors.textDim} />
+          <Ionicons name="tv" size={24} color={isFocused ? colors.gold : colors.textDim} />
         )}
-        <Pressable testID={`fav-${row.id}`} onPress={onFav} hitSlop={6} style={styles.favBtn}>
+
+        {isFocused && (
+          <View style={styles.channelFocusBadge}>
+            <Text style={styles.channelFocusBadgeText}>▶ ASSISTIR</Text>
+          </View>
+        )}
+
+        <Pressable focusable={true} testID={`fav-${row.id}`} onPress={onFav} hitSlop={6} style={styles.favBtn}>
           <Ionicons name={fav ? "star" : "star-outline"} size={12} color={fav ? colors.gold : colors.textMuted} />
         </Pressable>
       </View>
-      <Text style={styles.channelName} numberOfLines={1}>{row.name}</Text>
+      <Text style={[styles.channelName, isFocused && { color: "#FFFFFF", fontWeight: "900" }]} numberOfLines={1}>
+        {row.name}
+      </Text>
     </Pressable>
   );
 });
@@ -244,16 +340,20 @@ const styles = StyleSheet.create({
   h1: { color: colors.text, fontSize: 20, fontWeight: "700" },
   switchBtn: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 9, height: 30, maxWidth: 180 },
   switchLabel: { color: colors.gold, fontSize: 11, fontWeight: "600" },
-  searchWrap: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginHorizontal: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginBottom: spacing.xs },
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginHorizontal: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.sm, borderWidth: 1.5, borderColor: colors.border, marginBottom: spacing.xs },
+  searchWrapFocused: { backgroundColor: "#E5A93B", borderColor: "#FFFFFF", borderWidth: 2.5 },
   search: { flex: 1, color: colors.text, paddingVertical: 8, fontSize: 13 },
   chipsWrap: { height: 46, justifyContent: "center" },
-  chip: { height: 32, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  chipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
+  chip: { height: 34, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  chipActive: { backgroundColor: "rgba(229, 169, 59, 0.25)", borderColor: colors.gold },
+  chipFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 2, transform: [{ scale: 1.08 }], elevation: 8 },
   chipText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
   focused: { borderColor: colors.gold, borderWidth: 2 },
-  channel: { flex: 1, backgroundColor: colors.surface2, borderRadius: radius.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: 6, alignItems: "center", gap: 4 },
-  channelFocused: { borderColor: colors.gold, borderWidth: 2, transform: [{ scale: 1.03 }] },
-  logoBox: { width: "100%", aspectRatio: 1, borderRadius: radius.xs, backgroundColor: "#0c0d14", alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  channel: { flex: 1, backgroundColor: colors.surface2, borderRadius: radius.sm, borderWidth: 1.5, borderColor: colors.border, padding: 6, alignItems: "center", gap: 4 },
+  channelFocused: { borderColor: "#FFD700", borderWidth: 3.5, backgroundColor: "#202432", transform: [{ scale: 1.07 }], elevation: 14, zIndex: 99 },
+  logoBox: { width: "100%", aspectRatio: 1, borderRadius: radius.xs, backgroundColor: "#0c0d14", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative" },
+  channelFocusBadge: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "#FFD700", paddingVertical: 2.5, alignItems: "center" },
+  channelFocusBadgeText: { color: "#000000", fontSize: 8.5, fontWeight: "900" },
   favBtn: { position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: 10, backgroundColor: "rgba(0,0,0,0.65)", alignItems: "center", justifyContent: "center" },
   channelName: { color: colors.text, fontSize: 11, fontWeight: "600", textAlign: "center", width: "100%", marginTop: 2 },
   emptyText: { color: colors.textMuted, fontSize: 13, textAlign: "center" },
