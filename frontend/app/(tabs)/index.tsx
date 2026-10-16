@@ -36,7 +36,6 @@ export default function HomeTab() {
   const blinkAnim = useRef(new Animated.Value(1)).current;
   const bubbleAnim = useRef(new Animated.Value(0)).current;
 
-  // Localiza o último filme/série em andamento
   const resumeItem = useMemo(() => {
     if (!progressMap) return null;
     const list = Object.values(progressMap).filter(
@@ -167,26 +166,19 @@ export default function HomeTab() {
           <View style={styles.mainContainer}>
             <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
 
+            {/* BLOCOS PRINCIPAIS COM FOCO DOURADO SÓLIDO */}
             <View style={styles.gridNav}>
-              {MAIN.map((m) => (
-                <Pressable
+              {MAIN.map((m, idx) => (
+                <NavCardItem
                   key={m.key}
+                  item={m}
                   onPress={() => go(m.path)}
-                  hasTVPreferredFocus={m.key === "live"}
-                  style={({ focused, pressed }) => [styles.navCard, focused && styles.navCardFocused, pressed && { transform: [{ scale: 0.98 }] }]}
-                >
-                  <View style={styles.navCardIconBox}>
-                    <Ionicons name={m.icon as any} size={28} color={colors.gold} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.navCardTitle}>{m.label}</Text>
-                    <Text style={styles.navCardSub}>{m.sub}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
-                </Pressable>
+                  isFirst={idx === 0}
+                />
               ))}
             </View>
 
+            {/* ATALHOS RÁPIDOS */}
             <View style={styles.quickRow}>
               <SmallTile icon="star-outline" label="Favoritos" onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })} />
               <SmallTile icon="person-outline" label="Conta" onPress={() => router.push(session ? "/(tabs)/settings" : "/login")} />
@@ -260,7 +252,7 @@ export default function HomeTab() {
         )}
       </ScrollView>
 
-      {/* BALÃO FLUTUANTE ESTILO MESSENGER: CONTINUAR ASSISTINDO */}
+      {/* BALÃO FLUTUANTE */}
       {resumeItem && !bubbleDismissed && (
         <Animated.View
           style={[
@@ -328,6 +320,66 @@ export default function HomeTab() {
   );
 }
 
+function NavCardItem({
+  item,
+  onPress,
+  isFirst,
+}: {
+  item: (typeof MAIN)[number];
+  onPress: () => void;
+  isFirst?: boolean;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      hasTVPreferredFocus={isFirst}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[
+        styles.navCard,
+        isFocused && styles.navCardFocused,
+      ]}
+    >
+      <View style={[styles.navCardIconBox, isFocused && styles.navCardIconBoxFocused]}>
+        <Ionicons name={item.icon as any} size={28} color={isFocused ? "#000000" : colors.gold} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.navCardTitle, isFocused && styles.navCardTitleFocused]}>{item.label}</Text>
+        <Text style={[styles.navCardSub, isFocused && styles.navCardSubFocused]}>{item.sub}</Text>
+      </View>
+      {isFocused && (
+        <View style={styles.focusBadgeSmall}>
+          <Text style={styles.focusBadgeSmallText}>▶ ENTRAR</Text>
+        </View>
+      )}
+      <Ionicons name="chevron-forward" size={18} color={isFocused ? "#000000" : colors.textDim} />
+    </Pressable>
+  );
+}
+
+function SmallTile({ icon, label, onPress }: { icon: any; label: string; onPress: () => void }) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[
+        styles.tile,
+        isFocused && styles.tileFocused,
+      ]}
+    >
+      <Ionicons name={icon} size={20} color={isFocused ? "#000000" : colors.gold} />
+      <Text style={[styles.tileLabel, isFocused && styles.tileLabelFocused]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function JogosMarqueeReverse({ channels, onPressChannel }: { channels: LiveStream[]; onPressChannel: (c: LiveStream) => void }) {
   const STRIDE = 132;
   const totalBaseWidth = Math.max(channels.length, 1) * STRIDE;
@@ -357,31 +409,46 @@ function JogosMarqueeReverse({ channels, onPressChannel }: { channels: LiveStrea
     <View style={styles.marqueeOuter}>
       <Animated.View style={[styles.marqueeTrack, { transform: [{ translateX: anim }] }]}>
         {loopItems.map((ch, idx) => (
-          <Pressable key={`${ch.stream_id}-${idx}`} onPress={() => onPressChannel(ch)} style={styles.channelCard}>
-            <View style={styles.posterBox}>
-              {ch.stream_icon ? (
-                <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} resizeMode="cover" />
-              ) : (
-                <View style={styles.center}><Text style={{ fontSize: 32 }}>⚽</Text></View>
-              )}
-              <View style={styles.tagFhd}><Text style={styles.tagFhdText}>AO VIVO</Text></View>
-            </View>
-            <View style={{ padding: 8, gap: 2 }}>
-              <Text style={styles.channelName} numberOfLines={2}>{ch.name}</Text>
-              <Text style={styles.channelSub}>JOGOS DO DIA</Text>
-            </View>
-          </Pressable>
+          <JogosCardItem key={`${ch.stream_id}-${idx}`} ch={ch} onPress={() => onPressChannel(ch)} />
         ))}
       </Animated.View>
     </View>
   );
 }
 
-function SmallTile({ icon, label, onPress }: { icon: any; label: string; onPress: () => void }) {
+function JogosCardItem({ ch, onPress }: { ch: LiveStream; onPress: () => void }) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
-    <Pressable onPress={onPress} style={({ focused }) => [styles.tile, focused && { borderColor: colors.gold, borderWidth: 2 }]}>
-      <Ionicons name={icon} size={20} color={colors.gold} />
-      <Text style={styles.tileLabel}>{label}</Text>
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[
+        styles.channelCard,
+        isFocused && styles.channelCardFocused,
+      ]}
+    >
+      <View style={styles.posterBox}>
+        {ch.stream_icon ? (
+          <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} resizeMode="cover" />
+        ) : (
+          <View style={styles.center}><Text style={{ fontSize: 32 }}>⚽</Text></View>
+        )}
+        <View style={styles.tagFhd}><Text style={styles.tagFhdText}>AO VIVO</Text></View>
+        {isFocused && (
+          <View style={styles.jogosFocusBadge}>
+            <Text style={styles.jogosFocusBadgeText}>▶ ASSISTIR</Text>
+          </View>
+        )}
+      </View>
+      <View style={[styles.jogosMeta, isFocused && { backgroundColor: "#FFD700" }]}>
+        <Text style={[styles.channelName, isFocused && { color: "#000000", fontWeight: "900" }]} numberOfLines={2}>
+          {ch.name}
+        </Text>
+        <Text style={[styles.channelSub, isFocused && { color: "#333333" }]}>JOGOS DO DIA</Text>
+      </View>
     </Pressable>
   );
 }
@@ -400,21 +467,32 @@ const styles = StyleSheet.create({
   badgeLive: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(229, 169, 59, 0.15)", paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 10 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#EF4444" },
   badgeLiveText: { color: colors.gold, fontSize: 9.5, fontWeight: "800" },
-  gridNav: { gap: 10 },
-  navCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, gap: 14 },
-  navCardFocused: { borderColor: colors.gold, borderWidth: 2, backgroundColor: colors.surface2 },
+  gridNav: { gap: 12 },
+  navCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 2, borderColor: colors.border, gap: 14 },
+  navCardFocused: { backgroundColor: "#E5A93B", borderColor: "#FFFFFF", borderWidth: 3.5, transform: [{ scale: 1.04 }], elevation: 14, zIndex: 99 },
   navCardIconBox: { width: 48, height: 48, borderRadius: 10, backgroundColor: "rgba(229, 169, 59, 0.12)", alignItems: "center", justifyContent: "center" },
+  navCardIconBoxFocused: { backgroundColor: "#FFFFFF" },
   navCardTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
+  navCardTitleFocused: { color: "#000000", fontWeight: "900" },
   navCardSub: { color: colors.textMuted, fontSize: 11.5, marginTop: 2 },
+  navCardSubFocused: { color: "#1F232B", fontWeight: "600" },
+  focusBadgeSmall: { backgroundColor: "#000000", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginRight: 4 },
+  focusBadgeSmallText: { color: "#FFD700", fontSize: 9.5, fontWeight: "900" },
   quickRow: { flexDirection: "row", gap: 10, marginTop: 4 },
-  tile: { flex: 1, flexDirection: "row", height: 44, borderRadius: radius.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 6 },
+  tile: { flex: 1, flexDirection: "row", height: 46, borderRadius: radius.sm, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 6 },
+  tileFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 2.5, transform: [{ scale: 1.08 }], elevation: 12, zIndex: 99 },
   tileLabel: { color: colors.text, fontSize: 11.5, fontWeight: "600" },
-  marqueeOuter: { overflow: "hidden", marginHorizontal: -spacing.lg, paddingVertical: 4 },
+  tileLabelFocused: { color: "#000000", fontWeight: "900" },
+  marqueeOuter: { overflow: "hidden", marginHorizontal: -spacing.lg, paddingVertical: 6 },
   marqueeTrack: { flexDirection: "row", paddingLeft: spacing.lg },
-  channelCard: { width: 120, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: "rgba(229, 169, 59, 0.22)", overflow: "hidden", marginRight: 12 },
-  posterBox: { width: 120, height: 120, backgroundColor: "#161820", position: "relative" },
+  channelCard: { width: 122, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1.5, borderColor: "rgba(229, 169, 59, 0.22)", overflow: "hidden", marginRight: 12 },
+  channelCardFocused: { borderWidth: 3.5, borderColor: "#FFD700", transform: [{ scale: 1.08 }], elevation: 16, zIndex: 999 },
+  posterBox: { width: 122, height: 120, backgroundColor: "#161820", position: "relative" },
   tagFhd: { position: "absolute", top: 6, left: 6, backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
   tagFhdText: { color: "#FFF", fontSize: 8, fontWeight: "900" },
+  jogosFocusBadge: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "#FFD700", paddingVertical: 3, alignItems: "center" },
+  jogosFocusBadgeText: { color: "#000000", fontSize: 9, fontWeight: "900" },
+  jogosMeta: { padding: 8, gap: 2, backgroundColor: colors.surface },
   channelName: { color: colors.text, fontSize: 10.5, fontWeight: "700", lineHeight: 14 },
   channelSub: { color: colors.gold, fontSize: 9, fontWeight: "800" },
   planCard: { backgroundColor: "#111319", borderRadius: 14, borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.08)", padding: 14, gap: 12, marginTop: 4 },
@@ -428,63 +506,15 @@ const styles = StyleSheet.create({
   loggedOutBox: { width: "100%", maxWidth: 420, gap: spacing.md, alignItems: "center", alignSelf: "center", marginTop: 40 },
   brand: { color: colors.gold, fontSize: 26, fontWeight: "800" },
   hint: { color: colors.textMuted, fontSize: 14, textAlign: "center" },
-
-  /* Balão Messenger Flutuante */
   floatingContainer: { position: "absolute", right: 18, alignItems: "flex-end", zIndex: 999 },
   bubbleRow: { flexDirection: "row", alignItems: "flex-start", gap: 4 },
-  bubbleHead: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    borderWidth: 2.5,
-    borderColor: colors.gold,
-    backgroundColor: "#161820",
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    position: "relative",
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  bubbleHead: { width: 62, height: 62, borderRadius: 31, borderWidth: 2.5, borderColor: colors.gold, backgroundColor: "#161820", elevation: 8, position: "relative", justifyContent: "center", alignItems: "center" },
   bubbleImage: { width: 56, height: 56, borderRadius: 28 },
-  bubbleBadgePlay: {
-    position: "absolute",
-    bottom: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "#090A0E",
-  },
-  bubbleBadgePct: {
-    position: "absolute",
-    top: -4,
-    left: -4,
-    backgroundColor: "#090A0E",
-    borderWidth: 1,
-    borderColor: colors.gold,
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
+  bubbleBadgePlay: { position: "absolute", bottom: -2, right: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.gold, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#090A0E" },
+  bubbleBadgePct: { position: "absolute", top: -4, left: -4, backgroundColor: "#090A0E", borderWidth: 1, borderColor: colors.gold, borderRadius: 8, paddingHorizontal: 4, paddingVertical: 1 },
   bubbleBadgePctText: { color: colors.gold, fontSize: 8.5, fontWeight: "800" },
   bubbleCloseBtn: { marginTop: -4, marginLeft: -4 },
-  bubbleCard: {
-    width: 220,
-    backgroundColor: "#151722",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(229,169,59,0.3)",
-    padding: 10,
-    marginBottom: 8,
-    gap: 6,
-    elevation: 8,
-  },
+  bubbleCard: { width: 220, backgroundColor: "#151722", borderRadius: 12, borderWidth: 1, borderColor: "rgba(229,169,59,0.3)", padding: 10, marginBottom: 8, gap: 6, elevation: 8 },
   bubbleCardTag: { color: colors.gold, fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
   bubbleCardTitle: { color: colors.text, fontSize: 12, fontWeight: "700" },
   bubbleProgressTrack: { height: 4, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 2, overflow: "hidden" },
