@@ -62,25 +62,22 @@ export function CatalogGrid({
       <Text style={styles.h1}>{title}</Text>
       
       <View style={[styles.searchWrap, searchFocused && styles.searchWrapFocused]}>
-        <Ionicons name="search" size={17} color={searchFocused ? colors.gold : colors.textMuted} />
+        <Ionicons name="search" size={18} color={searchFocused ? "#000000" : colors.textMuted} />
         <TextInput 
           testID={`${testIDPrefix}-search`} 
           placeholder={searchPlaceholder} 
-          placeholderTextColor={colors.textDim} 
+          placeholderTextColor={searchFocused ? "#333333" : colors.textDim} 
           value={search} 
           onChangeText={setSearch} 
-          style={styles.search} 
+          style={[styles.search, searchFocused && { color: "#000000", fontWeight: "700" }]} 
           autoCorrect={false}
+          focusable={true}
           onFocus={() => setSearchFocused(true)}
           onBlur={() => setSearchFocused(false)}
         />
         {search.length > 0 && (
-          <Pressable 
-            focusable={true} 
-            onPress={() => setSearch("")} 
-            hitSlop={8}
-          >
-            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          <Pressable focusable={true} onPress={() => setSearch("")} hitSlop={8}>
+            <Ionicons name="close-circle" size={18} color={searchFocused ? "#000000" : colors.textMuted} />
           </Pressable>
         )}
       </View>
@@ -105,7 +102,9 @@ export function CatalogGrid({
         <View style={styles.center}>
           <Ionicons name="cloud-offline-outline" size={44} color={colors.textDim} />
           <Text style={styles.emptyText}>{error}</Text>
-          <Pressable focusable={true} testID={`${testIDPrefix}-retry`} onPress={onRetry} style={({ focused }) => [styles.retryBtn, focused && styles.focused]}><Text style={styles.retryText}>TENTAR NOVAMENTE</Text></Pressable>
+          <Pressable focusable={true} testID={`${testIDPrefix}-retry`} onPress={onRetry} style={styles.retryBtn}>
+            <Text style={styles.retryText}>TENTAR NOVAMENTE</Text>
+          </Pressable>
         </View>
       ) : visible.length === 0 ? (
         <View style={styles.center} testID={`${testIDPrefix}-empty`}>
@@ -120,7 +119,17 @@ export function CatalogGrid({
           numColumns={COLS}
           columnWrapperStyle={{ gap: spacing.md, paddingHorizontal: spacing.lg }}
           contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.md, paddingBottom: 140 }}
-          renderItem={({ item }) => <PosterCard item={item} width={CARD_W} fav={favIds.includes(item.id)} onPress={() => onOpen(item)} onFav={() => onFav(item)} testIDPrefix={testIDPrefix} />}
+          renderItem={({ item, index }) => (
+            <PosterCard 
+              item={item} 
+              width={CARD_W} 
+              fav={favIds.includes(item.id)} 
+              onPress={() => onOpen(item)} 
+              onFav={() => onFav(item)} 
+              testIDPrefix={testIDPrefix}
+              isFirst={index === 0}
+            />
+          )}
           initialNumToRender={12}
           maxToRenderPerBatch={12}
           windowSize={9}
@@ -165,22 +174,38 @@ function CategoryChipItem({
   );
 }
 
-const PosterCard = memo(function PosterCard({ item, width, fav, onPress, onFav, testIDPrefix }: { item: GridItem; width: number; fav: boolean; onPress: () => void; onFav: () => void; testIDPrefix: string }) {
+const PosterCard = memo(function PosterCard({ 
+  item, 
+  width, 
+  fav, 
+  onPress, 
+  onFav, 
+  testIDPrefix,
+  isFirst
+}: { 
+  item: GridItem; 
+  width: number; 
+  fav: boolean; 
+  onPress: () => void; 
+  onFav: () => void; 
+  testIDPrefix: string;
+  isFirst?: boolean;
+}) {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
     <Pressable 
       focusable={true}
+      hasTVPreferredFocus={isFirst}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       testID={`${testIDPrefix}-item-${item.id}`} 
       onPress={onPress} 
       onLongPress={onFav} 
-      style={({ pressed }) => [
+      style={[
         { width }, 
         styles.poster, 
-        isFocused && styles.posterFocused, 
-        pressed && { transform: [{ scale: 0.97 }], opacity: 0.9 }
+        isFocused && styles.posterFocused
       ]}
     >
       <View style={styles.posterImgWrap}>
@@ -202,14 +227,23 @@ const PosterCard = memo(function PosterCard({ item, width, fav, onPress, onFav, 
           style={styles.scrim} 
         />
 
-        {fav && (
+        {/* ETIQUETA VISÍVEL NO PROJETOR AO FOCAR */}
+        {isFocused && (
+          <View style={styles.focusBadge}>
+            <Text style={styles.focusBadgeText}>▶ SELECIONADO</Text>
+          </View>
+        )}
+
+        {fav && !isFocused && (
           <View style={styles.favBadge}>
             <Ionicons name="star" size={12} color={colors.gold} />
           </View>
         )}
 
         <View style={styles.posterMeta}>
-          <Text style={styles.posterTitle} numberOfLines={2}>{item.name}</Text>
+          <Text style={[styles.posterTitle, isFocused && { color: "#FFFFFF", fontWeight: "900" }]} numberOfLines={2}>
+            {item.name}
+          </Text>
           {(item.year || item.genre) && (
             <Text style={styles.posterSub} numberOfLines={1}>
               {[item.year, item.genre].filter(Boolean).join(" • ")}
@@ -241,62 +275,79 @@ const styles = StyleSheet.create({
     borderRadius: radius.md, 
     paddingHorizontal: spacing.md, 
     height: 44,
-    borderWidth: 1, 
+    borderWidth: 1.5, 
     borderColor: colors.border, 
     marginBottom: spacing.xs 
   },
   searchWrapFocused: {
-    borderColor: colors.gold,
-    borderWidth: 2,
+    backgroundColor: "#E5A93B",
+    borderColor: "#FFFFFF",
+    borderWidth: 2.5,
   },
   search: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "500" },
   
   chipsWrap: { height: 50, justifyContent: "center" },
   chip: { 
-    height: 34, 
+    height: 36, 
     paddingHorizontal: 16, 
     borderRadius: radius.pill, 
     backgroundColor: colors.surface, 
-    borderWidth: 1, 
+    borderWidth: 1.5, 
     borderColor: colors.border, 
     alignItems: "center", 
     justifyContent: "center", 
     flexShrink: 0 
   },
   chipActive: { 
-    backgroundColor: colors.gold, 
+    backgroundColor: "rgba(229, 169, 59, 0.25)", 
     borderColor: colors.gold 
   },
+  // ESTILO DE ALTO CONTRASTE (IGUAL AO PLAYER DA FOTO)
   chipFocused: {
-    borderColor: colors.gold,
+    backgroundColor: "#E5A93B",
+    borderColor: "#FFFFFF",
     borderWidth: 2,
-    backgroundColor: "rgba(229, 169, 59, 0.25)",
     transform: [{ scale: 1.08 }],
+    elevation: 8,
   },
   chipText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
-  chipTextActive: { color: colors.onGold, fontWeight: "800" },
-  focused: { borderColor: colors.gold, borderWidth: 2 },
+  chipTextActive: { color: "#000000", fontWeight: "900" },
   
   poster: { 
-    borderRadius: 8, 
+    borderRadius: 10, 
     overflow: "hidden", 
     backgroundColor: colors.surface2,
+    borderWidth: 1.5,
+    borderColor: "transparent",
   },
+  // MOLDURA GROSSA DOURADA DE 4PX E ELEVAÇÃO
   posterFocused: { 
-    borderWidth: 2.5, 
-    borderColor: colors.gold, 
-    transform: [{ scale: 1.06 }],
-    shadowColor: colors.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 10,
-    zIndex: 99,
+    borderWidth: 4, 
+    borderColor: "#FFD700", 
+    transform: [{ scale: 1.07 }],
+    elevation: 16,
+    zIndex: 999,
   },
   posterImgWrap: { width: "100%", aspectRatio: 2 / 3, backgroundColor: "#141721", alignItems: "center", justifyContent: "center" },
   posterImage: { width: "100%", height: "100%" },
-  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "55%" },
+  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "60%" },
   
+  focusBadge: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFD700",
+    paddingVertical: 3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  focusBadgeText: {
+    color: "#000000",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
   favBadge: {
     position: "absolute",
     top: 6,
@@ -310,8 +361,8 @@ const styles = StyleSheet.create({
   posterTitle: { color: colors.text, fontSize: 12, fontWeight: "700", lineHeight: 15 },
   posterSub: { color: colors.textMuted, fontSize: 10, fontWeight: "500", marginTop: 3 },
   
-  progTrack: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3.5, backgroundColor: "rgba(255,255,255,0.22)" },
-  progFill: { height: 3.5, backgroundColor: colors.gold },
+  progTrack: { position: "absolute", left: 0, right: 0, bottom: 0, height: 4, backgroundColor: "rgba(255,255,255,0.22)" },
+  progFill: { height: 4, backgroundColor: colors.gold },
   
   emptyText: { color: colors.textMuted, fontSize: 13, textAlign: "center" },
   retryBtn: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 20, height: 40, justifyContent: "center" },
