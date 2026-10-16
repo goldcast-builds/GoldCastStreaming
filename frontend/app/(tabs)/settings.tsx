@@ -1,19 +1,24 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator, Switch, useWindowDimensions } from "react-native";
-import { useCallback, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator, Switch, useWindowDimensions, Linking } from "react-native";
+import { useCallback, useEffect, useState } from "react";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
+import Constants from "expo-constants";
 import { Logo } from "../../src/components/Logo";
 import { AccountCard } from "../../src/components/AccountCard";
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { deleteList, IPTVList, listLists, refreshList, setActiveListId } from "../../src/utils/api";
 import { useSession } from "../../src/store/session";
 
-type SectionKey = "account" | "lists" | "refresh" | "playback" | "device" | "history" | "cache" | "about";
+const CURRENT_APP_VERSION = Constants.expoConfig?.version || "1.0.0";
+const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/version.json";
+
+type SectionKey = "account" | "lists" | "update" | "refresh" | "playback" | "device" | "history" | "cache" | "about";
 
 const TILES: { key: SectionKey | "logout"; label: string; icon: any }[] = [
   { key: "account", label: "Conta", icon: "person-circle-outline" },
+  { key: "update", label: "Atualizar App", icon: "arrow-up-circle-outline" },
   { key: "lists", label: "Listas M3U", icon: "list-outline" },
   { key: "refresh", label: "Atualizar conteúdo", icon: "cloud-download-outline" },
   { key: "playback", label: "Reprodução", icon: "play-circle-outline" },
@@ -29,6 +34,21 @@ const TYPE_LABEL: Record<IPTVList["type"], string> = { xtream: "Xtream Codes", m
 function confirm(title: string, msg: string, onOk: () => void) {
   if (typeof window !== "undefined" && (window as any).confirm) { if ((window as any).confirm(msg)) onOk(); return; }
   Alert.alert(title, msg, [{ text: "Cancelar", style: "cancel" }, { text: "OK", style: "destructive", onPress: onOk }]);
+}
+
+// Compara versões semânticas (ex: 1.2.0 é maior que 1.0.0)
+function isNewerVersion(remote: string, current: string): boolean {
+  try {
+    const r = remote.replace(/[^0-9.]/g, "").split(".").map(Number);
+    const c = current.replace(/[^0-9.]/g, "").split(".").map(Number);
+    for (let i = 0; i < Math.max(r.length, c.length); i++) {
+      const rv = r[i] || 0;
+      const cv = c[i] || 0;
+      if (rv > cv) return true;
+      if (rv < cv) return false;
+    }
+  } catch {}
+  return false;
 }
 
 export default function SettingsTab() {
@@ -76,6 +96,7 @@ export default function SettingsTab() {
       ) : (
         <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.md }}>
           {section === "account" && <AccountSection />}
+          {section === "update" && <UpdateSection />}
           {section === "lists" && <ListsSection />}
           {section === "refresh" && <RefreshSection />}
           {section === "playback" && <PlaybackSection />}
@@ -130,6 +151,168 @@ function SettingsTile({
         numberOfLines={2}
       >
         {t.label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// -------------------------------------------------------------
+// SESSÃO DE ATUALIZAÇÃO DO APLICATIVO
+// -------------------------------------------------------------
+function UpdateSection() {
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<"idle" | "updated" | "available" | "error">("idle");
+  const [remoteInfo, setRemoteInfo] = useState<{
+    versionName: string;
+    apkUrl: string;
+    changelog?: string;
+    forceUpdate?: boolean;
+  } | null>(null);
+
+  const checkUpdates = async (manual = false) => {
+    setLoading(true);
+    setStatus("idle");
+    try {
+      const res = await fetch(`${UPDATE_CHECK_URL}?t=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Não foi possível conectar ao servidor de atualizações.");
+      const data = await res.json();
+
+      // Compatível com seu version.json oficial
+      const vName = data?.versionName || data?.version;
+      const cLog = data?.changelog || data?.notes;
+      const url = data?.apkUrl;
+      const force = data?.forceUpdate;
+
+      if (vName && url) {
+        setRemoteInfo({
+          versionName: vName,
+          apkUrl: url,
+          changelog: cLog,
+          forceUpdate: !!force,
+        });
+
+        if (isNewerVersion(vName, CURRENT_APP_VERSION)) {
+          setStatus("available");
+        } else {
+          setStatus("updated");
+        }
+      } else {
+        throw new Error("Estrutura do arquivo de versão não identificada.");
+      }
+    } catch (e: any) {
+      setStatus("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Verificação automática ao entrar na tela
+  useEffect(() => {
+    checkUpdates();
+  }, []);
+
+  const handleDownload = () => {
+    if (remoteInfo?.apkUrl) {
+      Linking.openURL(remoteInfo.apkUrl).catch(() => {
+        Alert.alert("Erro", "Não foi possível abrir o link para baixar a atualização.");
+      });
+    }
+  };
+
+  return (
+    <Card>
+      <View style={{ padding: spacing.md, gap: 14 }}>
+        <View style={{ gap: 4 }}>
+          <Text style={styles.updateTitle}>ATUALIZAÇÃO DO APLICATIVO</Text>
+          <Text style={styles.updateSub}>Versão atual instalada: v{CURRENT_APP_VERSION}</Text>
+        </View>
+
+        {loading ? (
+          <View style={styles.updateBoxStatus}>
+            <ActivityIndicator color={colors.gold} size="small" />
+            <Text style={styles.updateStatusText}>Buscando atualizações disponíveis...</Text>
+          </View>
+        ) : status === "available" && remoteInfo ? (
+          <View style={[styles.updateAvailableBox, remoteInfo.forceUpdate && styles.updateForcedBox]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Ionicons name="sparkles" size={20} color={colors.gold} />
+              <Text style={styles.updateAvailableTitle}>
+                NOVA VERSÃO DISPONÍVEL: v{remoteInfo.versionName}
+              </Text>
+            </View>
+
+            {!!remoteInfo.changelog && (
+              <Text style={styles.updateNotesText}>
+                Novidades: {remoteInfo.changelog}
+              </Text>
+            )}
+
+            {remoteInfo.forceUpdate && (
+              <Text style={styles.forceBadge}>⚠️ Atualização recomendada para manter a compatibilidade</Text>
+            )}
+
+            <TVFocusButton
+              label="BAIXAR E ATUALIZAR AGORA"
+              icon="cloud-download"
+              onPress={handleDownload}
+              highlight
+            />
+          </View>
+        ) : status === "updated" ? (
+          <View style={styles.updateBoxSuccess}>
+            <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+            <Text style={styles.updateSuccessText}>Seu aplicativo já está na versão mais recente!</Text>
+          </View>
+        ) : status === "error" ? (
+          <View style={styles.updateBoxError}>
+            <Ionicons name="alert-circle" size={22} color={colors.error} />
+            <Text style={styles.updateErrorText}>Não foi possível verificar no momento. Tente novamente.</Text>
+          </View>
+        ) : null}
+
+        <TVFocusButton
+          label="VERIFICAR ATUALIZAÇÃO AGORA"
+          icon="refresh"
+          busy={loading}
+          onPress={() => checkUpdates(true)}
+        />
+      </View>
+    </Card>
+  );
+}
+
+function TVFocusButton({ label, icon, onPress, highlight, busy }: { label: string; icon: any; onPress: () => void; highlight?: boolean; busy?: boolean }) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[
+        styles.focusBtn,
+        highlight && { backgroundColor: colors.gold },
+        isFocused && styles.focusBtnActive,
+      ]}
+    >
+      {busy ? (
+        <ActivityIndicator color={isFocused ? "#000" : (highlight ? "#000" : colors.gold)} size="small" />
+      ) : (
+        <Ionicons
+          name={icon}
+          size={18}
+          color={isFocused ? "#000000" : (highlight ? "#000000" : colors.gold)}
+        />
+      )}
+      <Text
+        style={[
+          styles.focusBtnText,
+          highlight && { color: "#000000" },
+          isFocused && { color: "#000000", fontWeight: "900" },
+        ]}
+      >
+        {label}
       </Text>
     </Pressable>
   );
@@ -314,7 +497,7 @@ function AboutSection() {
     <View style={{ gap: spacing.md }}>
       <View style={{ alignItems: "center", gap: 4 }}><Logo size={90} /><Text style={styles.appName}>GoldCast Streaming</Text></View>
       <Card>
-        <Row icon="information-circle" title="Versão do aplicativo" sub="1.0.0" />
+        <Row icon="information-circle" title="Versão do aplicativo" sub={`v${CURRENT_APP_VERSION}`} />
         <Row icon="shield-checkmark" title="Política de privacidade" sub="Credenciais ficam apenas no seu dispositivo; nenhuma lista ou histórico é enviado a terceiros." />
         <Row icon="document-text" title="Termos de uso" sub="Use apenas conteúdo autorizado pelo seu provedor." />
         <Row icon="help-buoy" title="Suporte" sub="Entre em contato com seu provedor de acesso." />
@@ -349,4 +532,22 @@ const styles = StyleSheet.create({
   chip: { height: 36, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface3, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, justifyContent: "center" },
   chipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
   chipText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
+  
+  /* Área de Atualização */
+  updateTitle: { color: colors.gold, fontSize: 13, fontWeight: "800", letterSpacing: 0.6 },
+  updateSub: { color: colors.textMuted, fontSize: 12 },
+  updateBoxStatus: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, backgroundColor: "#111319", borderRadius: 10 },
+  updateStatusText: { color: colors.text, fontSize: 12.5 },
+  updateAvailableBox: { backgroundColor: "rgba(229, 169, 59, 0.12)", borderWidth: 1.5, borderColor: colors.gold, borderRadius: 12, padding: 14, gap: 10 },
+  updateForcedBox: { borderColor: "#FFD700", backgroundColor: "rgba(229, 169, 59, 0.18)" },
+  updateAvailableTitle: { color: colors.gold, fontSize: 13, fontWeight: "900" },
+  updateNotesText: { color: colors.text, fontSize: 12, lineHeight: 17 },
+  forceBadge: { color: "#F59E0B", fontSize: 11, fontWeight: "700" },
+  updateBoxSuccess: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, backgroundColor: "rgba(16, 185, 129, 0.12)", borderWidth: 1, borderColor: "rgba(16, 185, 129, 0.4)", borderRadius: 10 },
+  updateSuccessText: { color: "#10B981", fontSize: 12.5, fontWeight: "700" },
+  updateBoxError: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, backgroundColor: "rgba(239, 68, 68, 0.12)", borderWidth: 1, borderColor: "rgba(239, 68, 68, 0.4)", borderRadius: 10 },
+  updateErrorText: { color: colors.error, fontSize: 12 },
+  focusBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 46, borderRadius: radius.md, backgroundColor: "#1C1F2B", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)", marginTop: 4 },
+  focusBtnActive: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3, transform: [{ scale: 1.03 }], elevation: 12 },
+  focusBtnText: { color: colors.text, fontSize: 12.5, fontWeight: "800", letterSpacing: 0.4 },
 });
