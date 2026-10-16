@@ -33,17 +33,22 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
 
-  // Modo ativo no ecrã inicial: "license" (Licença com Código) ou "trial" (Área de Teste Direto)
+  // Modo ativo: "license" (Licença com Código) ou "trial" (Área de Teste Direto)
   const [activeTab, setActiveTab] = useState<"license" | "trial">("license");
-
-  // Etapa interna para clientes com licença aprovada: "form" ou "iptv"
   const [step, setStep] = useState<"form" | "iptv">("form");
 
-  // Campos da Licença (Etapa 1)
+  // Campos de texto
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [remember, setRemember] = useState(true);
 
-  // Servidores Oficiais Configurados
+  // Estados de Foco para Controles Remotos (TV / Projetor)
+  const [focusedField, setFocusedField] = useState<string | null>("email");
+
+  // Servidores
   const officialServers: ServerOption[] = [
     { label: "Servidor 1", url: "http://natfluxo.store:80" },
     { label: "Servidor 2", url: "http://newbrtop.online:8080" },
@@ -52,12 +57,6 @@ export default function LoginScreen() {
   const [serverList, setServerList] = useState<ServerOption[]>(officialServers);
   const [server, setServer] = useState("http://natfluxo.store:80");
   const [customServer, setCustomServer] = useState(false);
-
-  // Campos de Login (Utilizador e Palavra-passe)
-  const [user, setUser] = useState("");
-  const [pass, setPass] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [remember, setRemember] = useState(true);
 
   // Estados de feedback visual
   const [loading, setLoading] = useState(false);
@@ -78,12 +77,10 @@ export default function LoginScreen() {
         if (savedEmail) setEmail(savedEmail);
         if (savedCode) setCode(savedCode);
 
-        // Se a licença já estiver ativada neste dispositivo, abre diretamente a área de login IPTV completa
         if (savedLicensed === "true") {
           setStep("iptv");
         }
 
-        // Tenta carregar servidores remotos se houver atualização no repositório
         const res = await fetch(`${REMOTE_SERVERS_URL}?t=${Date.now()}`, { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
@@ -100,7 +97,7 @@ export default function LoginScreen() {
     };
   }, []);
 
-  // 1. Validação da Licença (E-mail + Código de Acesso no Supabase)
+  // 1. Validar Licença Oficial
   const handleValidateLicense = async () => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanCode = code.trim().toUpperCase();
@@ -147,7 +144,7 @@ export default function LoginScreen() {
     }
   };
 
-  // 2. Conectar Linha IPTV com Licença Oficial (Qualquer validade: 30 dias, 365 dias, etc.)
+  // 2. Conectar IPTV Permanente
   const handleConnectIPTV = async () => {
     setError(null);
     if (!server.trim() || !user.trim() || !pass) {
@@ -173,7 +170,7 @@ export default function LoginScreen() {
     }
   };
 
-  // 3. Conectar pela ÁREA DE TESTE (Trava rigorosa: Apenas contas de até 24 horas!)
+  // 3. Conectar Teste (Máximo 24 Horas)
   const handleConnectTrial = async () => {
     setError(null);
     if (!server.trim() || !user.trim() || !pass) {
@@ -182,22 +179,20 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
-    setStatusMsg("A autenticar e verificar validade do teste...");
+    setStatusMsg("A verificar validade do teste...");
 
     try {
-      // Autentica no servidor IPTV
       await login(server.trim(), user.trim(), pass, false, (s, d) => {
         if (mounted.current) setStatusMsg(d || "A verificar conta...");
       });
 
-      // Validação anti-abuso: Apenas contas de teste com duração máxima de 24 horas (com tolerância de fuso de 2 horas = 26h)
       const currentSession = useSession.getState().session;
       const expDate = currentSession?.userInfo?.exp_date;
 
       if (!expDate || expDate === "null" || expDate === "") {
         useSession.getState().logout?.();
         throw new Error(
-          "Esta área é exclusiva para testes temporários (até 24 horas). A conta introduzida não possui data limite. Para utilizá-la, ative a sua licença na secção principal."
+          "Esta área é exclusiva para testes de até 24 horas. A conta inserida não possui data limite. Utilize a secção de licença oficial."
         );
       }
 
@@ -210,22 +205,19 @@ export default function LoginScreen() {
       const nowMs = Date.now();
       const diffHours = (expTimestampMs - nowMs) / (1000 * 60 * 60);
 
-      // Se a conta já estiver vencida
       if (diffHours <= 0) {
         useSession.getState().logout?.();
         throw new Error("Esta conta de teste já se encontra expirada.");
       }
 
-      // Se for uma conta mensal/anual (superior a 26 horas)
       if (diffHours > 26) {
         useSession.getState().logout?.();
         const diasRestantes = Math.round(diffHours / 24);
         throw new Error(
-          `Esta área destina-se apenas a testes de até 24 horas. Esta conta possui aproximadamente ${diasRestantes} dias de validade. Para usufruir de planos completos, ative a aplicação com um código de licença.`
+          `Esta área destina-se apenas a testes temporários. Esta conta possui aproximadamente ${diasRestantes} dias de validade. Adquira ou insira uma licença oficial.`
         );
       }
 
-      // Teste válido (até 24 horas): acesso autorizado
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
@@ -251,49 +243,81 @@ export default function LoginScreen() {
         </View>
         <Text style={styles.brand}>GoldCast Streaming</Text>
 
-        {/* SELETOR DE MODO: LICENÇA OFICIAL OU ÁREA DE TESTE */}
+        {/* SELETOR DE MODO (ABAS) */}
         {step === "form" && (
           <View style={styles.tabSelector}>
             <Pressable
+              focusable={true}
+              onFocus={() => setFocusedField("tab_license")}
               onPress={() => {
                 setActiveTab("license");
                 setError(null);
               }}
-              style={[styles.tabButton, activeTab === "license" && styles.tabButtonActive]}
+              style={[
+                styles.tabButton,
+                activeTab === "license" && styles.tabButtonActive,
+                focusedField === "tab_license" && styles.tabButtonFocused,
+              ]}
             >
-              <Text style={[styles.tabButtonText, activeTab === "license" && styles.tabButtonTextActive]}>
+              <Text
+                style={[
+                  styles.tabButtonText,
+                  activeTab === "license" && styles.tabButtonTextActive,
+                  focusedField === "tab_license" && { color: "#000", fontWeight: "900" },
+                ]}
+              >
                 🔑 Licença Oficial
               </Text>
             </Pressable>
 
             <Pressable
+              focusable={true}
+              onFocus={() => setFocusedField("tab_trial")}
               onPress={() => {
                 setActiveTab("trial");
                 setError(null);
               }}
-              style={[styles.tabButton, activeTab === "trial" && styles.tabButtonActive]}
+              style={[
+                styles.tabButton,
+                activeTab === "trial" && styles.tabButtonActive,
+                focusedField === "tab_trial" && styles.tabButtonFocused,
+              ]}
             >
-              <Text style={[styles.tabButtonText, activeTab === "trial" && styles.tabButtonTextActive]}>
+              <Text
+                style={[
+                  styles.tabButtonText,
+                  activeTab === "trial" && styles.tabButtonTextActive,
+                  focusedField === "tab_trial" && { color: "#000", fontWeight: "900" },
+                ]}
+              >
                 ⏱️ Área de Teste (24h)
               </Text>
             </Pressable>
           </View>
         )}
 
-        {/* ================= 1. ÁREA DE LICENÇA (EXATAMENTE COMO NA FOTO) ================= */}
+        {/* 1. FLUXO DE LICENÇA (CÓDIGO + E-MAIL) */}
         {step === "form" && activeTab === "license" && (
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
               Digite o seu e-mail e código de acesso para desbloquear a aplicação.
             </Text>
 
+            {/* CAMPO DE E-MAIL */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>SEU E-MAIL</Text>
-              <View style={styles.inputBox}>
+              <View
+                style={[
+                  styles.inputBox,
+                  focusedField === "email" && styles.inputBoxFocused,
+                ]}
+              >
                 <Text style={styles.inputEmoji}>✉️</Text>
                 <TextInput
+                  focusable={true}
+                  onFocus={() => setFocusedField("email")}
                   placeholder="exemplo@gmail.com"
-                  placeholderTextColor="#666"
+                  placeholderTextColor="#777"
                   value={email}
                   onChangeText={setEmail}
                   autoCapitalize="none"
@@ -303,13 +327,21 @@ export default function LoginScreen() {
               </View>
             </View>
 
+            {/* CAMPO DE CÓDIGO */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>CÓDIGO DE ACESSO</Text>
-              <View style={styles.inputBox}>
+              <View
+                style={[
+                  styles.inputBox,
+                  focusedField === "code" && styles.inputBoxFocused,
+                ]}
+              >
                 <Text style={styles.inputEmoji}>🔑</Text>
                 <TextInput
+                  focusable={true}
+                  onFocus={() => setFocusedField("code")}
                   placeholder="Ex: GOLD-VIP-365D"
-                  placeholderTextColor="#666"
+                  placeholderTextColor="#777"
                   value={code}
                   onChangeText={(t) => setCode(t.toUpperCase())}
                   autoCapitalize="characters"
@@ -319,31 +351,50 @@ export default function LoginScreen() {
               <Text style={styles.hintText}>O código ficará vinculado ao seu e-mail de acesso.</Text>
             </View>
 
+            {/* BOTÃO VALIDAR */}
             <Pressable
-              style={[styles.btnGold, loading && { opacity: 0.7 }]}
+              focusable={true}
+              onFocus={() => setFocusedField("btn_validate")}
+              style={[
+                styles.btnGold,
+                focusedField === "btn_validate" && styles.btnGoldFocused,
+                loading && { opacity: 0.7 },
+              ]}
               onPress={handleValidateLicense}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#000" />
               ) : (
-                <Text style={styles.btnGoldText}>VALIDAR E CONTINUAR</Text>
+                <Text
+                  style={[
+                    styles.btnGoldText,
+                    focusedField === "btn_validate" && { color: "#000", fontWeight: "900" },
+                  ]}
+                >
+                  VALIDAR E CONTINUAR
+                </Text>
               )}
             </Pressable>
 
             <Pressable
+              focusable={true}
+              onFocus={() => setFocusedField("btn_go_trial")}
               onPress={() => {
                 setActiveTab("trial");
                 setError(null);
               }}
-              style={styles.quickTrialBtn}
+              style={[
+                styles.quickTrialBtn,
+                focusedField === "btn_go_trial" && styles.quickTrialBtnFocused,
+              ]}
             >
               <Text style={styles.quickTrialBtnText}>⚡ Não tem código? Entrar com Teste de 24h →</Text>
             </Pressable>
           </View>
         )}
 
-        {/* ================= 2. ÁREA DE TESTE (SEM NECESSIDADE DE CÓDIGO - MÁX 24H) ================= */}
+        {/* 2. ÁREA DE TESTE (SERVIDOR, UTILIZADOR E SENHA - MÁX 24H) */}
         {step === "form" && activeTab === "trial" && (
           <View style={styles.formWrap}>
             <View style={styles.trialNoticeBox}>
@@ -353,22 +404,36 @@ export default function LoginScreen() {
               </Text>
             </View>
 
+            {/* SELEÇÃO DE SERVIDOR */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>SERVIDOR DO TESTE</Text>
               <View style={styles.serverChips}>
                 {serverList.map((item, i) => {
                   const active = !customServer && server === item.url;
+                  const chipKey = `trial_server_${i}`;
                   return (
                     <Pressable
                       key={`${item.url}-${i}`}
+                      focusable={true}
+                      onFocus={() => setFocusedField(chipKey)}
                       onPress={() => {
                         setCustomServer(false);
                         setServer(item.url);
                       }}
-                      style={[styles.serverChip, active && styles.serverChipActive]}
+                      style={[
+                        styles.serverChip,
+                        active && styles.serverChipActive,
+                        focusedField === chipKey && styles.serverChipFocused,
+                      ]}
                     >
                       <Text style={{ fontSize: 13 }}>📺</Text>
-                      <Text style={[styles.serverChipText, active && { color: "#000" }]} numberOfLines={1}>
+                      <Text
+                        style={[
+                          styles.serverChipText,
+                          (active || focusedField === chipKey) && { color: "#000", fontWeight: "800" },
+                        ]}
+                        numberOfLines={1}
+                      >
                         {item.label}
                       </Text>
                     </Pressable>
@@ -377,12 +442,17 @@ export default function LoginScreen() {
               </View>
 
               <Pressable
+                focusable={true}
+                onFocus={() => setFocusedField("toggle_custom_trial")}
                 onPress={() => {
                   setCustomServer((v) => !v);
                   if (!customServer) setServer("");
                   else setServer(serverList[0]?.url || "http://natfluxo.store:80");
                 }}
-                style={styles.customLink}
+                style={[
+                  styles.customLink,
+                  focusedField === "toggle_custom_trial" && { backgroundColor: "rgba(229,169,59,0.2)", borderRadius: 6 },
+                ]}
               >
                 <Text style={styles.customLinkText}>
                   {customServer ? "▲ Usar lista de servidores" : "▼ Inserir outro servidor"}
@@ -390,10 +460,18 @@ export default function LoginScreen() {
               </Pressable>
 
               {customServer && (
-                <View style={[styles.inputBox, { marginTop: 8 }]}>
+                <View
+                  style={[
+                    styles.inputBox,
+                    { marginTop: 8 },
+                    focusedField === "trial_custom_server" && styles.inputBoxFocused,
+                  ]}
+                >
                   <TextInput
+                    focusable={true}
+                    onFocus={() => setFocusedField("trial_custom_server")}
                     placeholder="http://seuservidor.com:8080"
-                    placeholderTextColor="#666"
+                    placeholderTextColor="#777"
                     value={server}
                     onChangeText={setServer}
                     autoCapitalize="none"
@@ -404,13 +482,21 @@ export default function LoginScreen() {
               )}
             </View>
 
+            {/* CAMPO DE UTILIZADOR */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>UTILIZADOR DO TESTE</Text>
-              <View style={styles.inputBox}>
+              <View
+                style={[
+                  styles.inputBox,
+                  focusedField === "trial_user" && styles.inputBoxFocused,
+                ]}
+              >
                 <Text style={styles.inputEmoji}>👤</Text>
                 <TextInput
+                  focusable={true}
+                  onFocus={() => setFocusedField("trial_user")}
                   placeholder="Nome de utilizador do teste"
-                  placeholderTextColor="#666"
+                  placeholderTextColor="#777"
                   value={user}
                   onChangeText={setUser}
                   autoCapitalize="none"
@@ -419,50 +505,79 @@ export default function LoginScreen() {
               </View>
             </View>
 
+            {/* CAMPO DE PALAVRA-PASSE */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>PALAVRA-PASSE DO TESTE</Text>
-              <View style={styles.inputBox}>
+              <View
+                style={[
+                  styles.inputBox,
+                  focusedField === "trial_pass" && styles.inputBoxFocused,
+                ]}
+              >
                 <Text style={styles.inputEmoji}>🔒</Text>
                 <TextInput
+                  focusable={true}
+                  onFocus={() => setFocusedField("trial_pass")}
                   placeholder="Palavra-passe do teste"
-                  placeholderTextColor="#666"
+                  placeholderTextColor="#777"
                   value={pass}
                   onChangeText={setPass}
                   secureTextEntry={!showPass}
                   autoCapitalize="none"
                   style={styles.textInput}
                 />
-                <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={8}>
+                <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
                   <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
                 </Pressable>
               </View>
             </View>
 
+            {/* BOTÃO ACEDER AO TESTE */}
             <Pressable
-              style={[styles.btnGold, loading && { opacity: 0.7 }]}
+              focusable={true}
+              onFocus={() => setFocusedField("btn_connect_trial")}
+              style={[
+                styles.btnGold,
+                focusedField === "btn_connect_trial" && styles.btnGoldFocused,
+                loading && { opacity: 0.7 },
+              ]}
               onPress={handleConnectTrial}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#000" />
               ) : (
-                <Text style={styles.btnGoldText}>ACEDER AO TESTE (24H)</Text>
+                <Text
+                  style={[
+                    styles.btnGoldText,
+                    focusedField === "btn_connect_trial" && { color: "#000", fontWeight: "900" },
+                  ]}
+                >
+                  ACEDER AO TESTE (24H)
+                </Text>
               )}
             </Pressable>
 
             <Pressable
+              focusable={true}
+              onFocus={() => setFocusedField("btn_back_to_license")}
               onPress={() => {
                 setActiveTab("license");
                 setError(null);
               }}
-              style={{ alignSelf: "center", marginTop: 8, padding: 6 }}
+              style={[
+                { alignSelf: "center", marginTop: 8, padding: 8, borderRadius: 8 },
+                focusedField === "btn_back_to_license" && { backgroundColor: "rgba(229,169,59,0.25)" },
+              ]}
             >
-              <Text style={{ color: colors.gold, fontSize: 12 }}>← Voltar à ativação com código</Text>
+              <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "700" }}>
+                ← Voltar à ativação com código
+              </Text>
             </Pressable>
           </View>
         )}
 
-        {/* ================= 3. ÁREA IPTV PARA QUEM JÁ ATIVOU A LICENÇA ================= */}
+        {/* 3. FLUXO IPTV (PARA QUEM JÁ ATIVOU LICENÇA) */}
         {step === "iptv" && (
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
@@ -474,17 +589,30 @@ export default function LoginScreen() {
               <View style={styles.serverChips}>
                 {serverList.map((item, i) => {
                   const active = !customServer && server === item.url;
+                  const chipKey = `iptv_server_${i}`;
                   return (
                     <Pressable
                       key={`${item.url}-${i}`}
+                      focusable={true}
+                      onFocus={() => setFocusedField(chipKey)}
                       onPress={() => {
                         setCustomServer(false);
                         setServer(item.url);
                       }}
-                      style={[styles.serverChip, active && styles.serverChipActive]}
+                      style={[
+                        styles.serverChip,
+                        active && styles.serverChipActive,
+                        focusedField === chipKey && styles.serverChipFocused,
+                      ]}
                     >
                       <Text style={{ fontSize: 13 }}>📺</Text>
-                      <Text style={[styles.serverChipText, active && { color: "#000" }]} numberOfLines={1}>
+                      <Text
+                        style={[
+                          styles.serverChipText,
+                          (active || focusedField === chipKey) && { color: "#000", fontWeight: "800" },
+                        ]}
+                        numberOfLines={1}
+                      >
                         {item.label}
                       </Text>
                     </Pressable>
@@ -493,12 +621,17 @@ export default function LoginScreen() {
               </View>
 
               <Pressable
+                focusable={true}
+                onFocus={() => setFocusedField("toggle_custom_iptv")}
                 onPress={() => {
                   setCustomServer((v) => !v);
                   if (!customServer) setServer("");
                   else setServer(serverList[0]?.url || "http://natfluxo.store:80");
                 }}
-                style={styles.customLink}
+                style={[
+                  styles.customLink,
+                  focusedField === "toggle_custom_iptv" && { backgroundColor: "rgba(229,169,59,0.2)", borderRadius: 6 },
+                ]}
               >
                 <Text style={styles.customLinkText}>
                   {customServer ? "▲ Usar lista de servidores" : "▼ Inserir outro servidor"}
@@ -506,10 +639,18 @@ export default function LoginScreen() {
               </Pressable>
 
               {customServer && (
-                <View style={[styles.inputBox, { marginTop: 8 }]}>
+                <View
+                  style={[
+                    styles.inputBox,
+                    { marginTop: 8 },
+                    focusedField === "iptv_custom_server" && styles.inputBoxFocused,
+                  ]}
+                >
                   <TextInput
+                    focusable={true}
+                    onFocus={() => setFocusedField("iptv_custom_server")}
                     placeholder="http://seuservidor.com:8080"
-                    placeholderTextColor="#666"
+                    placeholderTextColor="#777"
                     value={server}
                     onChangeText={setServer}
                     autoCapitalize="none"
@@ -522,11 +663,18 @@ export default function LoginScreen() {
 
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>UTILIZADOR</Text>
-              <View style={styles.inputBox}>
+              <View
+                style={[
+                  styles.inputBox,
+                  focusedField === "iptv_user" && styles.inputBoxFocused,
+                ]}
+              >
                 <Text style={styles.inputEmoji}>👤</Text>
                 <TextInput
+                  focusable={true}
+                  onFocus={() => setFocusedField("iptv_user")}
                   placeholder="Nome de utilizador IPTV"
-                  placeholderTextColor="#666"
+                  placeholderTextColor="#777"
                   value={user}
                   onChangeText={setUser}
                   autoCapitalize="none"
@@ -537,18 +685,25 @@ export default function LoginScreen() {
 
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
-              <View style={styles.inputBox}>
+              <View
+                style={[
+                  styles.inputBox,
+                  focusedField === "iptv_pass" && styles.inputBoxFocused,
+                ]}
+              >
                 <Text style={styles.inputEmoji}>🔒</Text>
                 <TextInput
+                  focusable={true}
+                  onFocus={() => setFocusedField("iptv_pass")}
                   placeholder="A sua palavra-passe IPTV"
-                  placeholderTextColor="#666"
+                  placeholderTextColor="#777"
                   value={pass}
                   onChangeText={setPass}
                   secureTextEntry={!showPass}
                   autoCapitalize="none"
                   style={styles.textInput}
                 />
-                <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={8}>
+                <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
                   <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
                 </Pressable>
               </View>
@@ -565,27 +720,47 @@ export default function LoginScreen() {
             </View>
 
             <Pressable
-              style={[styles.btnGold, loading && { opacity: 0.7 }]}
+              focusable={true}
+              onFocus={() => setFocusedField("btn_connect_iptv")}
+              style={[
+                styles.btnGold,
+                focusedField === "btn_connect_iptv" && styles.btnGoldFocused,
+                loading && { opacity: 0.7 },
+              ]}
               onPress={handleConnectIPTV}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#000" />
               ) : (
-                <Text style={styles.btnGoldText}>ENTRAR NA APLICAÇÃO</Text>
+                <Text
+                  style={[
+                    styles.btnGoldText,
+                    focusedField === "btn_connect_iptv" && { color: "#000", fontWeight: "900" },
+                  ]}
+                >
+                  ENTRAR NA APLICAÇÃO
+                </Text>
               )}
             </Pressable>
 
             <Pressable
+              focusable={true}
+              onFocus={() => setFocusedField("btn_change_license")}
               onPress={() => setStep("form")}
-              style={{ alignSelf: "center", marginTop: 6, padding: 8 }}
+              style={[
+                { alignSelf: "center", marginTop: 6, padding: 8, borderRadius: 8 },
+                focusedField === "btn_change_license" && { backgroundColor: "rgba(229,169,59,0.25)" },
+              ]}
             >
-              <Text style={{ color: colors.gold, fontSize: 12 }}>← Alterar código de acesso / e-mail</Text>
+              <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "700" }}>
+                ← Alterar código de acesso / e-mail
+              </Text>
             </Pressable>
           </View>
         )}
 
-        {/* Feedback visual de progresso */}
+        {/* FEEDBACKS */}
         {loading && statusMsg && (
           <View style={styles.statusBox}>
             <ActivityIndicator color={colors.gold} size="small" />
@@ -593,7 +768,6 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* Apresentação de erros */}
         {error && (
           <View style={styles.errorBox}>
             <Text style={{ color: "#F44336", fontSize: 14, marginRight: 6 }}>⚠️</Text>
@@ -612,6 +786,9 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
+    maxWidth: 480,
+    width: "100%",
+    alignSelf: "center",
   },
   logoWrap: {
     alignItems: "center",
@@ -639,17 +816,26 @@ const styles = StyleSheet.create({
     padding: 4,
     marginTop: 10,
     marginBottom: 8,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "rgba(255, 255, 255, 0.08)",
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 11,
     alignItems: "center",
     borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "transparent",
   },
   tabButtonActive: {
     backgroundColor: colors.gold,
+  },
+  // FOCO EM ALTO CONTRASTE NA ABA
+  tabButtonFocused: {
+    backgroundColor: "#FFD700",
+    borderColor: "#FFFFFF",
+    transform: [{ scale: 1.04 }],
+    elevation: 8,
   },
   tabButtonText: {
     color: "#8E929C",
@@ -697,10 +883,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#16181E",
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "rgba(255, 255, 255, 0.1)",
     paddingHorizontal: 14,
     height: 52,
+  },
+  // CAIXA DE TEXTO COM DESTAQUE DOURADO E FUNDO VIBRANTE NO PROJETOR
+  inputBoxFocused: {
+    borderColor: "#FFD700",
+    borderWidth: 2.5,
+    backgroundColor: "#202430",
+    elevation: 10,
+    transform: [{ scale: 1.02 }],
   },
   inputEmoji: {
     fontSize: 16,
@@ -712,7 +906,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   hintText: {
-    color: "#666",
+    color: "#777",
     fontSize: 11,
     marginTop: 4,
   },
@@ -731,13 +925,20 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 10,
     backgroundColor: "#16181E",
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "rgba(255, 255, 255, 0.1)",
     paddingHorizontal: 8,
   },
   serverChipActive: {
-    backgroundColor: colors.gold,
+    backgroundColor: "rgba(229, 169, 59, 0.3)",
     borderColor: colors.gold,
+  },
+  serverChipFocused: {
+    backgroundColor: "#FFD700",
+    borderColor: "#FFFFFF",
+    borderWidth: 2.5,
+    elevation: 8,
+    transform: [{ scale: 1.05 }],
   },
   serverChipText: {
     color: "#FFF",
@@ -748,7 +949,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-end",
-    paddingVertical: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
   },
   customLinkText: {
     color: "#8E929C",
@@ -774,6 +976,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 6,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+  },
+  btnGoldFocused: {
+    backgroundColor: "#FFD700",
+    borderColor: "#FFFFFF",
+    borderWidth: 2.5,
+    elevation: 12,
+    transform: [{ scale: 1.03 }],
   },
   btnGoldText: {
     color: "#000",
@@ -784,12 +995,19 @@ const styles = StyleSheet.create({
   quickTrialBtn: {
     alignSelf: "center",
     paddingVertical: 8,
+    paddingHorizontal: 12,
     marginTop: 4,
+    borderRadius: 8,
+  },
+  quickTrialBtnFocused: {
+    backgroundColor: "rgba(229, 169, 59, 0.25)",
+    borderWidth: 1.5,
+    borderColor: colors.gold,
   },
   quickTrialBtnText: {
     color: colors.gold,
     fontSize: 12.5,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   statusBox: {
     marginTop: 14,
