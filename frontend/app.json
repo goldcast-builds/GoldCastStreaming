@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "GoldCast Media Player",
-    "slug": "GoldCast Media Player",
+    "slug": "goldcast-media-player",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
