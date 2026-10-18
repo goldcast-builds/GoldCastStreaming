@@ -111,7 +111,7 @@ export default function HomeTab() {
     if (isExpired || daysLeft <= 1) {
       return {
         color: "#EF4444", bg: "rgba(239, 68, 68, 0.16)", border: "rgba(239, 68, 68, 0.6)",
-        text: isExpired ? "PLANO VENCIDO" : daysLeft === 1 ? "1 DIA RESTANTE" : "VENCE HOJE", icon: "alert-circle",
+        text: isExpired ? "ACESSO EXPIRADO" : daysLeft === 1 ? "1 DIA RESTANTE" : "EXPIRA HOJE", icon: "alert-circle",
       };
     }
     if (daysLeft >= 2 && daysLeft <= 5) {
@@ -166,7 +166,6 @@ export default function HomeTab() {
           <View style={styles.mainContainer}>
             <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
 
-            {/* BLOCOS PRINCIPAIS COM FOCO DOURADO SÓLIDO */}
             <View style={styles.gridNav}>
               {MAIN.map((m, idx) => (
                 <NavCardItem
@@ -178,7 +177,6 @@ export default function HomeTab() {
               ))}
             </View>
 
-            {/* ATALHOS RÁPIDOS */}
             <View style={styles.quickRow}>
               <SmallTile icon="star-outline" label="Favoritos" onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })} />
               <SmallTile icon="person-outline" label="Conta" onPress={() => router.push(session ? "/(tabs)/settings" : "/login")} />
@@ -188,7 +186,7 @@ export default function HomeTab() {
             {jogosChannels.length > 0 && (
               <View style={{ gap: 8 }}>
                 <View style={styles.rowBetween}>
-                  <Text style={styles.sectionTitle}>⚽ JOGOS DO DIA</Text>
+                  <Text style={styles.sectionTitle}>⚽ TRANSMISSÕES DO DIA</Text>
                   <View style={styles.badgeLive}>
                     <View style={styles.liveDot} />
                     <Text style={styles.badgeLiveText}>AO VIVO</Text>
@@ -236,8 +234,8 @@ export default function HomeTab() {
                   <Animated.View style={[styles.expiredBanner, { opacity: blinkAnim }]}>
                     <Ionicons name="warning" size={20} color="#EF4444" />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.expiredTitle}>PLANO EXPIRADO!</Text>
-                      <Text style={styles.expiredSub}>Entre em contato com o vendedor para renovar seu acesso.</Text>
+                      <Text style={styles.expiredTitle}>ACESSO EXPIRADO!</Text>
+                      <Text style={styles.expiredSub}>Entre em contato com seu provedor de mídia para renovar o acesso.</Text>
                     </View>
                   </Animated.View>
                 )}
@@ -246,13 +244,12 @@ export default function HomeTab() {
           </View>
         ) : (
           <View style={styles.loggedOutBox}>
-            <Text style={styles.brand}>GoldCast Streaming</Text>
+            <Text style={styles.brand}>GoldCast Media Player</Text>
             <Text style={styles.hint}>Inicie sessão para carregar a programação.</Text>
           </View>
         )}
       </ScrollView>
 
-      {/* BALÃO FLUTUANTE */}
       {resumeItem && !bubbleDismissed && (
         <Animated.View
           style={[
@@ -447,7 +444,7 @@ function JogosCardItem({ ch, onPress }: { ch: LiveStream; onPress: () => void })
         <Text style={[styles.channelName, isFocused && { color: "#000000", fontWeight: "900" }]} numberOfLines={2}>
           {ch.name}
         </Text>
-        <Text style={[styles.channelSub, isFocused && { color: "#333333" }]}>JOGOS DO DIA</Text>
+        <Text style={[styles.channelSub, isFocused && { color: "#333333" }]}>TRANSMISSÕES DO DIA</Text>
       </View>
     </Pressable>
   );
