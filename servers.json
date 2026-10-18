@@ -1,10 +1,4 @@
 [
-  {
-    "label": "Servidor 1",
-    "url": "http://natfluxo.store:80"
-  },
-  {
-    "label": "Servidor 2",
-    "url": "http://newbrtop.online:8080"
-  }
+  { "label": "Servidor Multimídia 1", "url": "http://seu-link-aqui:80" },
+  { "label": "Servidor Multimídia 2", "url": "http://seu-link-aqui:8080" }
 ]
