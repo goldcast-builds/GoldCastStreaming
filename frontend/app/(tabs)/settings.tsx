@@ -177,7 +177,6 @@ function UpdateSection() {
       if (!res.ok) throw new Error("Não foi possível conectar ao servidor de atualizações.");
       const data = await res.json();
 
-      // Compatível com seu version.json oficial
       const vName = data?.versionName || data?.version;
       const cLog = data?.changelog || data?.notes;
       const url = data?.apkUrl;
@@ -206,7 +205,6 @@ function UpdateSection() {
     }
   };
 
-  // Verificação automática ao entrar na tela
   useEffect(() => {
     checkUpdates();
   }, []);
@@ -495,12 +493,32 @@ function CacheSection() {
 function AboutSection() {
   return (
     <View style={{ gap: spacing.md }}>
-      <View style={{ alignItems: "center", gap: 4 }}><Logo size={90} /><Text style={styles.appName}>GoldCast Streaming</Text></View>
+      <View style={{ alignItems: "center", gap: 4 }}>
+        <Logo size={90} />
+        <Text style={styles.appName}>GoldCast Media Player</Text>
+      </View>
       <Card>
         <Row icon="information-circle" title="Versão do aplicativo" sub={`v${CURRENT_APP_VERSION}`} />
-        <Row icon="shield-checkmark" title="Política de privacidade" sub="Credenciais ficam apenas no seu dispositivo; nenhuma lista ou histórico é enviado a terceiros." />
-        <Row icon="document-text" title="Termos de uso" sub="Use apenas conteúdo autorizado pelo seu provedor." />
-        <Row icon="help-buoy" title="Suporte" sub="Entre em contato com seu provedor de acesso." />
+        <Row
+          icon="shield-checkmark"
+          title="Isenção de responsabilidade"
+          sub="O GoldCast é exclusivamente um reprodutor multimídia neutro. O aplicativo não fornece, não hospeda e não comercializa nenhum tipo de lista ou conteúdo audiovisual."
+        />
+        <Row
+          icon="document-text"
+          title="Termos de uso"
+          sub="O usuário é o único e integral responsável pelas fontes de transmissão inseridas e deve reproduzir apenas conteúdos autorizados."
+        />
+        <Row
+          icon="lock-closed"
+          title="Privacidade e dados"
+          sub="Suas credenciais e listas configuradas permanecem armazenadas de forma segura e exclusiva na memória local do seu aparelho."
+        />
+        <Row
+          icon="help-buoy"
+          title="Suporte técnico"
+          sub="Para dúvidas relacionadas a listas ou reprodução de canais e filmes, consulte o seu respectivo provedor."
+        />
       </Card>
     </View>
   );
