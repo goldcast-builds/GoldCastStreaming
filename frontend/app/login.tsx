@@ -43,15 +43,14 @@ export default function LoginScreen() {
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(true);
 
-  // Referências para foco do teclado sem recarregar o ecrã
   const emailRef = useRef<TextInput>(null);
   const codeRef = useRef<TextInput>(null);
   const userRef = useRef<TextInput>(null);
   const passRef = useRef<TextInput>(null);
 
   const officialServers: ServerOption[] = [
-    { label: "Servidor 1", url: "http://natfluxo.store:80" },
-    { label: "Servidor 2", url: "http://newbrtop.online:8080" },
+    { label: "Servidor Principal", url: "http://natfluxo.store:80" },
+    { label: "Servidor Alternativo", url: "http://newbrtop.online:8080" },
   ];
 
   const [serverList, setServerList] = useState<ServerOption[]>(officialServers);
@@ -106,12 +105,12 @@ export default function LoginScreen() {
       return;
     }
     if (!cleanCode) {
-      setError("Informe o seu código de acesso.");
+      setError("Informe a sua chave de ativação do reprodutor.");
       return;
     }
 
     setLoading(true);
-    setStatusMsg("A validar licença no servidor...");
+    setStatusMsg("Validando licença do reprodutor...");
 
     try {
       const res = await fetch(VALIDATE_CODE_URL, {
@@ -122,7 +121,7 @@ export default function LoginScreen() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.message || "Código ou e-mail inválido.");
+        throw new Error(data.message || "Chave de software ou e-mail inválido.");
       }
 
       await AsyncStorage.setItem("@goldcast_app_licensed", "true");
@@ -132,7 +131,7 @@ export default function LoginScreen() {
       setStep("iptv");
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha na validação do código de acesso.");
+        setError(e?.message || "Falha na validação da chave do reprodutor.");
       }
     } finally {
       if (mounted.current) {
@@ -145,21 +144,21 @@ export default function LoginScreen() {
   const handleConnectIPTV = async () => {
     setError(null);
     if (!server.trim() || !user.trim() || !pass) {
-      setError("Preencha o servidor, o utilizador e a palavra-passe.");
+      setError("Preencha a URL do servidor, o utilizador e a palavra-passe.");
       return;
     }
 
     setLoading(true);
-    setStatusMsg("A ligar ao servidor IPTV...");
+    setStatusMsg("Conectando ao provedor de conteúdo...");
 
     try {
       await login(server.trim(), user.trim(), pass, remember, (s, d) => {
-        if (mounted.current) setStatusMsg(d || "A carregar...");
+        if (mounted.current) setStatusMsg(d || "Carregando mídia...");
       });
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha ao ligar ao servidor IPTV. Verifique os dados.");
+        setError(e?.message || "Falha ao conectar ao servidor. Verifique os dados com o seu provedor.");
         setStatusMsg(null);
       }
     } finally {
@@ -170,16 +169,16 @@ export default function LoginScreen() {
   const handleConnectTrial = async () => {
     setError(null);
     if (!server.trim() || !user.trim() || !pass) {
-      setError("Preencha o servidor, o utilizador e a palavra-passe de teste.");
+      setError("Preencha o servidor, o utilizador e a senha de avaliação.");
       return;
     }
 
     setLoading(true);
-    setStatusMsg("A verificar validade do teste...");
+    setStatusMsg("Verificando credenciais temporárias...");
 
     try {
       await login(server.trim(), user.trim(), pass, false, (s, d) => {
-        if (mounted.current) setStatusMsg(d || "A verificar conta...");
+        if (mounted.current) setStatusMsg(d || "Acessando...");
       });
 
       const currentSession = useSession.getState().session;
@@ -188,14 +187,14 @@ export default function LoginScreen() {
       if (!expDate || expDate === "null" || expDate === "") {
         useSession.getState().logout?.();
         throw new Error(
-          "Esta área é exclusiva para testes de até 24 horas. A conta inserida não possui data limite. Utilize a secção de licença oficial."
+          "Esta área é exclusiva para testes temporários (até 24 horas). Para contas permanentes, utilize a chave de software."
         );
       }
 
       const expTimestampMs = Number(expDate) * 1000;
       if (isNaN(expTimestampMs)) {
         useSession.getState().logout?.();
-        throw new Error("Não foi possível verificar a data de validade da conta.");
+        throw new Error("Não foi possível validar a validade da conta.");
       }
 
       const nowMs = Date.now();
@@ -203,21 +202,21 @@ export default function LoginScreen() {
 
       if (diffHours <= 0) {
         useSession.getState().logout?.();
-        throw new Error("Esta conta de teste já se encontra expirada.");
+        throw new Error("Este período de demonstração já está expirado.");
       }
 
       if (diffHours > 26) {
         useSession.getState().logout?.();
         const diasRestantes = Math.round(diffHours / 24);
         throw new Error(
-          `Esta área destina-se apenas a testes temporários. Esta conta possui aproximadamente ${diasRestantes} dias de validade. Adquira ou insira uma licença oficial.`
+          `Esta área destina-se apenas a períodos de avaliação de até 24h. Sua conta possui validade de ${diasRestantes} dias.`
         );
       }
 
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha ao entrar no modo de teste.");
+        setError(e?.message || "Falha na conexão de demonstração.");
         setStatusMsg(null);
       }
     } finally {
@@ -237,13 +236,12 @@ export default function LoginScreen() {
         <View style={styles.logoWrap}>
           <Logo size={120} />
         </View>
-        <Text style={styles.brand}>GoldCast Streaming</Text>
+        <Text style={styles.brand}>GoldCast Media Player</Text>
 
-        {/* SELETOR DE MODO */}
         {step === "form" && (
           <View style={styles.tabSelector}>
             <TVTabButton
-              label="🔑 Licença Oficial"
+              label="🔑 Chave do Reprodutor"
               active={activeTab === "license"}
               onPress={() => {
                 setActiveTab("license");
@@ -251,7 +249,7 @@ export default function LoginScreen() {
               }}
             />
             <TVTabButton
-              label="⏱️ Área de Teste (24h)"
+              label="⏱️ Acesso de Avaliação"
               active={activeTab === "trial"}
               onPress={() => {
                 setActiveTab("trial");
@@ -261,11 +259,11 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* 1. FLUXO DE LICENÇA */}
+        {/* 1. FLUXO DE ATIVAÇÃO DO SOFTWARE */}
         {step === "form" && activeTab === "license" && (
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
-              Digite o seu e-mail e código de acesso para desbloquear a aplicação.
+              Digite o seu e-mail e chave de software para desbloquear o reprodutor.
             </Text>
 
             <View style={styles.fieldGroup}>
@@ -282,7 +280,7 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>CÓDIGO DE ACESSO</Text>
+              <Text style={styles.fieldLabel}>CHAVE DE ATIVAÇÃO</Text>
               <TVInputField
                 inputRef={codeRef}
                 icon="🔑"
@@ -291,17 +289,17 @@ export default function LoginScreen() {
                 onChangeText={(t) => setCode(t.toUpperCase())}
                 autoCapitalize="characters"
               />
-              <Text style={styles.hintText}>O código ficará vinculado ao seu e-mail de acesso.</Text>
+              <Text style={styles.hintText}>A chave de software será vinculada ao seu e-mail.</Text>
             </View>
 
             <TVActionButton
-              label="VALIDAR E CONTINUAR"
+              label="ATIVAR E CONTINUAR"
               loading={loading}
               onPress={handleValidateLicense}
             />
 
             <TVLinkButton
-              label="⚡ Não tem código? Entrar com Teste de 24h →"
+              label="⚡ Não tem chave? Entrar com período de avaliação →"
               onPress={() => {
                 setActiveTab("trial");
                 setError(null);
@@ -310,18 +308,18 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* 2. ÁREA DE TESTE */}
+        {/* 2. ÁREA DE AVALIAÇÃO */}
         {step === "form" && activeTab === "trial" && (
           <View style={styles.formWrap}>
             <View style={styles.trialNoticeBox}>
-              <Text style={styles.trialNoticeTitle}>MODO DE TESTE TEMPORÁRIO</Text>
+              <Text style={styles.trialNoticeTitle}>MODO DE AVALIAÇÃO (DEMO)</Text>
               <Text style={styles.trialNoticeText}>
-                Esta área permite testar a aplicação sem código. É permitida apenas a utilização de linhas de teste com validade de até 24 horas.
+                Esta área permite testar o reprodutor com seu provedor de mídia por até 24 horas antes de ativar a licença.
               </Text>
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>SERVIDOR DO TESTE</Text>
+              <Text style={styles.fieldLabel}>PROVEDOR / SERVIDOR</Text>
               <View style={styles.serverChips}>
                 {serverList.map((item, i) => (
                   <TVServerChip
@@ -337,7 +335,7 @@ export default function LoginScreen() {
               </View>
 
               <TVLinkButton
-                label={customServer ? "▲ Usar lista de servidores" : "▼ Inserir outro servidor"}
+                label={customServer ? "▲ Usar lista sugerida" : "▼ Inserir servidor personalizado"}
                 onPress={() => {
                   setCustomServer((v) => !v);
                   if (!customServer) setServer("");
@@ -347,7 +345,7 @@ export default function LoginScreen() {
 
               {customServer && (
                 <TVInputField
-                  placeholder="http://seuservidor.com:8080"
+                  placeholder="http://servidordoprovedor.com:8080"
                   value={server}
                   onChangeText={setServer}
                   keyboardType="url"
@@ -357,11 +355,11 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>UTILIZADOR DO TESTE</Text>
+              <Text style={styles.fieldLabel}>USUÁRIO</Text>
               <TVInputField
                 inputRef={userRef}
                 icon="👤"
-                placeholder="Nome de utilizador do teste"
+                placeholder="Nome de usuário do provedor"
                 value={user}
                 onChangeText={setUser}
                 autoCapitalize="none"
@@ -369,11 +367,11 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>PALAVRA-PASSE DO TESTE</Text>
+              <Text style={styles.fieldLabel}>SENHA</Text>
               <TVInputField
                 inputRef={passRef}
                 icon="🔒"
-                placeholder="Palavra-passe do teste"
+                placeholder="Senha de acesso"
                 value={pass}
                 onChangeText={setPass}
                 secureTextEntry={!showPass}
@@ -387,13 +385,13 @@ export default function LoginScreen() {
             </View>
 
             <TVActionButton
-              label="ACEDER AO TESTE (24H)"
+              label="INICIAR AVALIAÇÃO (24H)"
               loading={loading}
               onPress={handleConnectTrial}
             />
 
             <TVLinkButton
-              label="← Voltar à ativação com código"
+              label="← Voltar à ativação por chave"
               onPress={() => {
                 setActiveTab("license");
                 setError(null);
@@ -402,15 +400,15 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* 3. FLUXO IPTV (LICENÇA ATIVADA) */}
+        {/* 3. FLUXO CONECTAR CONTA DEFINITIVA */}
         {step === "iptv" && (
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
-              Licença verificada! Insira os dados da sua linha IPTV permanente.
+              Reprodutor ativado com sucesso! Insira os dados do seu provedor de conteúdo.
             </Text>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>SERVIDOR</Text>
+              <Text style={styles.fieldLabel}>PROVEDOR DE CONTEÚDO</Text>
               <View style={styles.serverChips}>
                 {serverList.map((item, i) => (
                   <TVServerChip
@@ -426,7 +424,7 @@ export default function LoginScreen() {
               </View>
 
               <TVLinkButton
-                label={customServer ? "▲ Usar lista de servidores" : "▼ Inserir outro servidor"}
+                label={customServer ? "▲ Usar lista sugerida" : "▼ Inserir servidor personalizado"}
                 onPress={() => {
                   setCustomServer((v) => !v);
                   if (!customServer) setServer("");
@@ -436,7 +434,7 @@ export default function LoginScreen() {
 
               {customServer && (
                 <TVInputField
-                  placeholder="http://seuservidor.com:8080"
+                  placeholder="http://servidordoprovedor.com:8080"
                   value={server}
                   onChangeText={setServer}
                   keyboardType="url"
@@ -446,11 +444,11 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>UTILIZADOR</Text>
+              <Text style={styles.fieldLabel}>USUÁRIO</Text>
               <TVInputField
                 inputRef={userRef}
                 icon="👤"
-                placeholder="Nome de utilizador IPTV"
+                placeholder="Usuário fornecido pelo seu provedor"
                 value={user}
                 onChangeText={setUser}
                 autoCapitalize="none"
@@ -458,11 +456,11 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
+              <Text style={styles.fieldLabel}>SENHA</Text>
               <TVInputField
                 inputRef={passRef}
                 icon="🔒"
-                placeholder="A sua palavra-passe IPTV"
+                placeholder="Senha de acesso"
                 value={pass}
                 onChangeText={setPass}
                 secureTextEntry={!showPass}
@@ -486,13 +484,13 @@ export default function LoginScreen() {
             </View>
 
             <TVActionButton
-              label="ENTRAR NA APLICAÇÃO"
+              label="ENTRAR NO REPRODUTOR"
               loading={loading}
               onPress={handleConnectIPTV}
             />
 
             <TVLinkButton
-              label="← Alterar código de acesso / e-mail"
+              label="← Alterar chave do reprodutor / e-mail"
               onPress={() => setStep("form")}
             />
           </View>
@@ -512,12 +510,18 @@ export default function LoginScreen() {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
+
+        {/* AVISO DE ISENÇÃO LEGAL */}
+        <View style={styles.disclaimerBox}>
+          <Text style={styles.disclaimerText}>
+            Aviso: O GoldCast é um reprodutor de mídia neutro e não inclui nenhum canal ou conteúdo audiovisual. O usuário é o responsável pelo conteúdo inserido.
+          </Text>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-// COMPONENTES OTIMIZADOS PARA COMANDO (D-PAD)
 function TVInputField({
   inputRef,
   icon,
@@ -573,7 +577,7 @@ function TVServerChip({ label, active, onPress }: { label: string; active: boole
         isFocused && styles.serverChipFocused,
       ]}
     >
-      <Text style={{ fontSize: 13 }}>📺</Text>
+      <Text style={{ fontSize: 13 }}>📡</Text>
       <Text
         style={[
           styles.serverChipText,
@@ -692,4 +696,6 @@ const styles = StyleSheet.create({
   statusText: { color: "#FFF", fontSize: 13, fontWeight: "600" },
   errorBox: { marginTop: 14, flexDirection: "row", alignItems: "center", padding: 14, backgroundColor: "rgba(244,67,54,0.12)", borderRadius: 12, borderWidth: 1, borderColor: "rgba(244,67,54,0.3)" },
   errorText: { color: "#F44336", flex: 1, fontSize: 12 },
+  disclaimerBox: { marginTop: 24, padding: 12, borderRadius: 8, backgroundColor: "rgba(255, 255, 255, 0.03)", borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.07)" },
+  disclaimerText: { color: "#777C8A", fontSize: 10.5, textAlign: "center", lineHeight: 15 },
 });
