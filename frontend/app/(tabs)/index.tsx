@@ -1,13 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, Animated, Easing, Image } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  Animated,
+  Easing,
+  Image,
+  ActivityIndicator,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { TrendingMarquee, MarqueeItem } from "../../src/components/TrendingMarquee";
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { listLists } from "../../src/utils/api";
 import { useSession } from "../../src/store/session";
 import { xtream, LiveStream, Category } from "../../src/services/xtream";
+
+interface GuiaMatch {
+  id: string;
+  time: string;
+  league: string;
+  match: string;
+  channels: string;
+}
 
 const MAIN = [
   { key: "live", label: "TV AO VIVO", sub: "Canais em tempo real", icon: "tv", path: "/(tabs)/live" },
@@ -30,11 +49,93 @@ export default function HomeTab() {
   const [hasLists, setHasLists] = useState(false);
   const [jogosChannels, setJogosChannels] = useState<LiveStream[]>([]);
   const [jogosCatId, setJogosCatId] = useState<string | null>(null);
+  const [activationCode, setActivationCode] = useState<string>("LICENÇA ATIVA");
+  const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
+  const [loadingGuia, setLoadingGuia] = useState(false);
+
   const [bubbleDismissed, setBubbleDismissed] = useState(false);
   const [bubbleOpen, setBubbleOpen] = useState(false);
 
   const blinkAnim = useRef(new Animated.Value(1)).current;
   const bubbleAnim = useRef(new Animated.Value(0)).current;
+
+  // Carrega a chave de ativação guardada no dispositivo
+  useEffect(() => {
+    (async () => {
+      try {
+        const code = await AsyncStorage.getItem("@goldcast_saved_code");
+        if (code) setActivationCode(code);
+      } catch {}
+    })();
+  }, []);
+
+  // Extração da programação do Guia de Jogos na TV
+  useEffect(() => {
+    let isMounted = true;
+    const fetchGuia = async () => {
+      setLoadingGuia(true);
+      try {
+        const res = await fetch("https://www.jogosnatv.com.br/", {
+          headers: { "User-Agent": "Mozilla/5.0 (Android; Mobile; rv:120.0)" },
+        });
+        const html = await res.text();
+        const matches: GuiaMatch[] = [];
+
+        // Extrai as partidas da grelha HTML do jogosnatv
+        const regexBlock = /<li[^>]*class="[^"]*list-group-item[^"]*"[^>]*>([\s\S]*?)<\/li>/gi;
+        let match;
+        let index = 0;
+
+        while ((match = regexBlock.exec(html)) !== null && index < 10) {
+          const block = match[1];
+          const timeMatch = block.match(/(\d{2}:\d{2})/);
+          const teamsMatch = block.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i) || block.match(/<span[^>]*class="[^"]*jogo[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+          const leagueMatch = block.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i) || block.match(/<span[^>]*class="[^"]*campeonato[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+          const canalMatch = block.match(/<span[^>]*class="[^"]*canal[^"]*"[^>]*>([\s\S]*?)<\/span>/i) || block.match(/onde assistir:?\s*([^<]+)/i);
+
+          const time = timeMatch ? timeMatch[1] : "Hoje";
+          const gameTitle = teamsMatch ? teamsMatch[1].replace(/<[^>]+>/g, "").trim() : "Partida do Dia";
+          const league = leagueMatch ? leagueMatch[1].replace(/<[^>]+>/g, "").trim() : "Futebol";
+          const channels = canalMatch ? canalMatch[1].replace(/<[^>]+>/g, "").trim() : "Transmissão Oficial";
+
+          if (gameTitle && gameTitle.length > 2) {
+            matches.push({
+              id: String(index++),
+              time,
+              league,
+              match: gameTitle,
+              channels,
+            });
+          }
+        }
+
+        if (isMounted) {
+          if (matches.length > 0) {
+            setGuiaJogos(matches);
+          } else {
+            // Grelha de salvaguarda com as principais competições da semana
+            setGuiaJogos([
+              { id: "1", time: "16:00", league: "Champions League / Europa", match: "Jogos em Destaque", channels: "TNT • Space • Max" },
+              { id: "2", time: "19:00", league: "Brasileirão / Taças", match: "Rodada Principal", channels: "Premiere • SporTV" },
+              { id: "3", time: "21:30", league: "Libertadores / Sudamericana", match: "Confrontos Noturnos", channels: "ESPN • Disney+ • Globo" },
+            ]);
+          }
+        }
+      } catch {
+        if (isMounted) {
+          setGuiaJogos([
+            { id: "1", time: "16:00", league: "Futebol Internacional", match: "Transmissões ao Vivo", channels: "ESPN • TNT • Max" },
+            { id: "2", time: "20:00", league: "Futebol Nacional", match: "Campeonatos Nacionais", channels: "Premiere • SporTV • CazéTV" },
+          ]);
+        }
+      } finally {
+        if (isMounted) setLoadingGuia(false);
+      }
+    };
+
+    fetchGuia();
+    return () => { isMounted = false; };
+  }, []);
 
   const resumeItem = useMemo(() => {
     if (!progressMap) return null;
@@ -166,6 +267,7 @@ export default function HomeTab() {
           <View style={styles.mainContainer}>
             <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
 
+            {/* BLOCOS PRINCIPAIS */}
             <View style={styles.gridNav}>
               {MAIN.map((m, idx) => (
                 <NavCardItem
@@ -177,46 +279,56 @@ export default function HomeTab() {
               ))}
             </View>
 
+            {/* ATALHOS RÁPIDOS */}
             <View style={styles.quickRow}>
               <SmallTile icon="star-outline" label="Favoritos" onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })} />
               <SmallTile icon="person-outline" label="Conta" onPress={() => router.push(session ? "/(tabs)/settings" : "/login")} />
               <SmallTile icon="settings-outline" label="Ajustes" onPress={() => router.push("/(tabs)/settings")} />
             </View>
 
+            {/* CANAIS DE JOGOS (Xtream) */}
             {jogosChannels.length > 0 && (
               <View style={{ gap: 8 }}>
                 <View style={styles.rowBetween}>
-                  <Text style={styles.sectionTitle}>⚽ TRANSMISSÕES DO DIA</Text>
+                  <Text style={styles.sectionTitle}>⚽ CANAIS DE JOGOS AO VIVO</Text>
                   <View style={styles.badgeLive}>
                     <View style={styles.liveDot} />
-                    <Text style={styles.badgeLiveText}>AO VIVO</Text>
+                    <Text style={styles.badgeLiveText}>NO AR</Text>
                   </View>
                 </View>
                 <JogosMarqueeReverse channels={jogosChannels} onPressChannel={handleOpenChannel} />
               </View>
             )}
 
+            {/* NOVIDADES & DESTAQUES (Cabeçalho único sem repetição) */}
             {marqueeItems.length > 0 && (
-              <View style={{ gap: 8 }}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.sectionTitle}>🔥 NOVIDADES & DESTAQUES</Text>
-                  <Text style={styles.badgeTextSmall}>EM ALTA</Text>
-                </View>
-                <TrendingMarquee items={marqueeItems} onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })} />
-              </View>
+              <TrendingMarquee
+                items={marqueeItems}
+                onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })}
+              />
             )}
 
+            {/* CARTÃO DE CONTA COM CHAVE DE ATIVAÇÃO E VENCIMENTO */}
             {session && (
               <View style={styles.planCard}>
-                <View style={styles.rowBetween}>
-                  <View style={{ gap: 2 }}>
-                    <Text style={styles.planLabel}>USUÁRIO</Text>
+                <View style={styles.planInfoGrid}>
+                  <View style={styles.planCol}>
+                    <Text style={styles.planLabel}>UTILIZADOR</Text>
                     <View style={styles.rowAlign}>
-                      <Ionicons name="person-circle-outline" size={16} color={colors.gold} />
-                      <Text style={styles.planVal}>{username}</Text>
+                      <Ionicons name="person-circle-outline" size={15} color={colors.gold} />
+                      <Text style={styles.planVal} numberOfLines={1}>{username}</Text>
                     </View>
                   </View>
-                  <View style={{ alignItems: "flex-end", gap: 2 }}>
+
+                  <View style={styles.planCol}>
+                    <Text style={styles.planLabel}>CÓDIGO DE ATIVAÇÃO</Text>
+                    <View style={styles.rowAlign}>
+                      <Ionicons name="key-outline" size={14} color={colors.gold} />
+                      <Text style={styles.planVal} numberOfLines={1}>{activationCode}</Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.planCol, { alignItems: "flex-end" }]}>
                     <Text style={styles.planLabel}>VENCIMENTO</Text>
                     <View style={styles.rowAlign}>
                       <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
@@ -235,12 +347,48 @@ export default function HomeTab() {
                     <Ionicons name="warning" size={20} color="#EF4444" />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.expiredTitle}>ACESSO EXPIRADO!</Text>
-                      <Text style={styles.expiredSub}>Entre em contato com seu provedor de mídia para renovar o acesso.</Text>
+                      <Text style={styles.expiredSub}>Renove a subscrição com o seu fornecedor de multimédia.</Text>
                     </View>
                   </Animated.View>
                 )}
               </View>
             )}
+
+            {/* GUIA OFICIAL DE JOGOS (jogosnatv.com.br) */}
+            <View style={styles.guiaSection}>
+              <View style={styles.rowBetween}>
+                <View style={{ gap: 2 }}>
+                  <Text style={styles.sectionTitle}>📺 GUIA DE JOGOS NA TV</Text>
+                  <Text style={styles.guiaSubtitle}>Programação oficial de transmissões desportivas</Text>
+                </View>
+                {loadingGuia && <ActivityIndicator size="small" color={colors.gold} />}
+              </View>
+
+              <View style={styles.guiaList}>
+                {guiaJogos.map((g) => (
+                  <View key={g.id} style={styles.guiaCard}>
+                    <View style={styles.guiaHeaderRow}>
+                      <View style={styles.guiaTimeBadge}>
+                        <Ionicons name="time-outline" size={11} color="#000" />
+                        <Text style={styles.guiaTimeText}>{g.time}</Text>
+                      </View>
+                      <Text style={styles.guiaLeagueText} numberOfLines={1}>{g.league}</Text>
+                    </View>
+
+                    <Text style={styles.guiaMatchTitle} numberOfLines={2}>
+                      {g.match}
+                    </Text>
+
+                    <View style={styles.guiaChannelsRow}>
+                      <Ionicons name="tv-outline" size={13} color={colors.gold} />
+                      <Text style={styles.guiaChannelsText} numberOfLines={1}>
+                        {g.channels}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
           </View>
         ) : (
           <View style={styles.loggedOutBox}>
@@ -250,6 +398,7 @@ export default function HomeTab() {
         )}
       </ScrollView>
 
+      {/* BALÃO RETOMAR REPRODUÇÃO */}
       {resumeItem && !bubbleDismissed && (
         <Animated.View
           style={[
@@ -264,7 +413,7 @@ export default function HomeTab() {
           {bubbleOpen && (
             <View style={styles.bubbleCard}>
               <View style={styles.rowBetween}>
-                <Text style={styles.bubbleCardTag}>CONTINUAR ASSISTINDO</Text>
+                <Text style={styles.bubbleCardTag}>CONTINUAR A ASSISTIR</Text>
                 <Pressable onPress={() => setBubbleOpen(false)} hitSlop={8}>
                   <Ionicons name="close" size={16} color={colors.textDim} />
                 </Pressable>
@@ -317,17 +466,8 @@ export default function HomeTab() {
   );
 }
 
-function NavCardItem({
-  item,
-  onPress,
-  isFirst,
-}: {
-  item: (typeof MAIN)[number];
-  onPress: () => void;
-  isFirst?: boolean;
-}) {
+function NavCardItem({ item, onPress, isFirst }: { item: (typeof MAIN)[number]; onPress: () => void; isFirst?: boolean }) {
   const [isFocused, setIsFocused] = useState(false);
-
   return (
     <Pressable
       focusable={true}
@@ -335,10 +475,7 @@ function NavCardItem({
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
-      style={[
-        styles.navCard,
-        isFocused && styles.navCardFocused,
-      ]}
+      style={[styles.navCard, isFocused && styles.navCardFocused]}
     >
       <View style={[styles.navCardIconBox, isFocused && styles.navCardIconBoxFocused]}>
         <Ionicons name={item.icon as any} size={28} color={isFocused ? "#000000" : colors.gold} />
@@ -359,17 +496,13 @@ function NavCardItem({
 
 function SmallTile({ icon, label, onPress }: { icon: any; label: string; onPress: () => void }) {
   const [isFocused, setIsFocused] = useState(false);
-
   return (
     <Pressable
       focusable={true}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
-      style={[
-        styles.tile,
-        isFocused && styles.tileFocused,
-      ]}
+      style={[styles.tile, isFocused && styles.tileFocused]}
     >
       <Ionicons name={icon} size={20} color={isFocused ? "#000000" : colors.gold} />
       <Text style={[styles.tileLabel, isFocused && styles.tileLabelFocused]}>{label}</Text>
@@ -415,17 +548,13 @@ function JogosMarqueeReverse({ channels, onPressChannel }: { channels: LiveStrea
 
 function JogosCardItem({ ch, onPress }: { ch: LiveStream; onPress: () => void }) {
   const [isFocused, setIsFocused] = useState(false);
-
   return (
     <Pressable
       focusable={true}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
-      style={[
-        styles.channelCard,
-        isFocused && styles.channelCardFocused,
-      ]}
+      style={[styles.channelCard, isFocused && styles.channelCardFocused]}
     >
       <View style={styles.posterBox}>
         {ch.stream_icon ? (
@@ -444,7 +573,7 @@ function JogosCardItem({ ch, onPress }: { ch: LiveStream; onPress: () => void })
         <Text style={[styles.channelName, isFocused && { color: "#000000", fontWeight: "900" }]} numberOfLines={2}>
           {ch.name}
         </Text>
-        <Text style={[styles.channelSub, isFocused && { color: "#333333" }]}>TRANSMISSÕES DO DIA</Text>
+        <Text style={[styles.channelSub, isFocused && { color: "#333333" }]}>TRANSMISSÃO</Text>
       </View>
     </Pressable>
   );
@@ -460,7 +589,6 @@ const styles = StyleSheet.create({
   rowAlign: { flexDirection: "row", alignItems: "center", gap: 5 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   fullSize: { width: "100%", height: "100%" },
-  badgeTextSmall: { color: colors.gold, fontSize: 10, fontWeight: "800" },
   badgeLive: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(229, 169, 59, 0.15)", paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 10 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#EF4444" },
   badgeLiveText: { color: colors.gold, fontSize: 9.5, fontWeight: "800" },
@@ -492,14 +620,32 @@ const styles = StyleSheet.create({
   jogosMeta: { padding: 8, gap: 2, backgroundColor: colors.surface },
   channelName: { color: colors.text, fontSize: 10.5, fontWeight: "700", lineHeight: 14 },
   channelSub: { color: colors.gold, fontSize: 9, fontWeight: "800" },
+  
+  /* Cartão de Conta com 3 Colunas */
   planCard: { backgroundColor: "#111319", borderRadius: 14, borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.08)", padding: 14, gap: 12, marginTop: 4 },
-  planLabel: { color: colors.textDim, fontSize: 9.5, fontWeight: "800", letterSpacing: 0.8 },
-  planVal: { color: colors.text, fontSize: 13, fontWeight: "700" },
+  planInfoGrid: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  planCol: { flex: 1, gap: 2 },
+  planLabel: { color: colors.textDim, fontSize: 9, fontWeight: "800", letterSpacing: 0.6 },
+  planVal: { color: colors.text, fontSize: 12, fontWeight: "700" },
   daysBadge: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1.5 },
   daysBadgeText: { fontSize: 13, fontWeight: "900", letterSpacing: 0.6 },
   expiredBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(239, 68, 68, 0.18)", borderWidth: 1, borderColor: "#EF4444", padding: 10, borderRadius: 10 },
   expiredTitle: { color: "#EF4444", fontSize: 11, fontWeight: "900" },
   expiredSub: { color: "#FCA5A5", fontSize: 10.5, lineHeight: 14 },
+
+  /* Secção Guia de Jogos na TV */
+  guiaSection: { gap: 10, marginTop: 6 },
+  guiaSubtitle: { color: colors.textMuted, fontSize: 11 },
+  guiaList: { gap: 8 },
+  guiaCard: { backgroundColor: "#12141C", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.07)", gap: 6 },
+  guiaHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  guiaTimeBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.gold, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  guiaTimeText: { color: "#000", fontSize: 10, fontWeight: "900" },
+  guiaLeagueText: { color: colors.textDim, fontSize: 11, fontWeight: "700", flex: 1 },
+  guiaMatchTitle: { color: colors.text, fontSize: 13, fontWeight: "800", letterSpacing: 0.2 },
+  guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "700" },
+
   loggedOutBox: { width: "100%", maxWidth: 420, gap: spacing.md, alignItems: "center", alignSelf: "center", marginTop: 40 },
   brand: { color: colors.gold, fontSize: 26, fontWeight: "800" },
   hint: { color: colors.textMuted, fontSize: 14, textAlign: "center" },
