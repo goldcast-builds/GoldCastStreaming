@@ -80,7 +80,7 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
-  // Estados de Perfis
+  // Perfis
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [showProfileGate, setShowProfileGate] = useState(false);
@@ -88,12 +88,12 @@ export default function HomeTab() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
-  // Campos de Novo Perfil
+  // Novo Perfil
   const [newProfileName, setNewProfileName] = useState("");
   const [selectedPreset, setSelectedPreset] = useState(0);
   const [newProfileKids, setNewProfileKids] = useState(false);
 
-  // Estados de Navegação e Categorias Reais da Lista
+  // Navegação e Categorias Xtream Reais
   const [otrEnabled, setOtrEnabled] = useState(true);
   const [vodCategories, setVodCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("Todos os títulos");
@@ -102,7 +102,7 @@ export default function HomeTab() {
   const [showGuiaModal, setShowGuiaModal] = useState(false);
   const [myListIds, setMyListIds] = useState<string[]>([]);
 
-  // Balão de retomar no Modo Clássico
+  // Balão Clássico
   const [bubbleDismissed, setBubbleDismissed] = useState(false);
   const [bubbleOpen, setBubbleOpen] = useState(false);
 
@@ -419,16 +419,19 @@ export default function HomeTab() {
       .slice(0, 10);
   }, [progressMap]);
 
+  // Filtro Rigoroso para Modo Criança (Kids)
   const filteredVod = useMemo(() => {
     if (!catalog.vod?.length) return [];
     let list = catalog.vod.filter((v) => !!v.stream_icon);
 
     if (currentProfile?.isKids) {
-      list = list.filter((v) =>
-        /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon/i.test(
-          v.name
-        )
-      );
+      list = list.filter((v) => {
+        const title = (v.name || "").toLowerCase();
+        const catName = (v.category_name || "").toLowerCase();
+        return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|spider|herói|hero|frozen|princesa|sonic|pokemon|minions/i.test(
+          title + " " + catName
+        );
+      });
     }
 
     if (selectedCategory !== "Todos os títulos") {
@@ -1077,9 +1080,7 @@ export default function HomeTab() {
         </Animated.View>
       )}
 
-      {/* ====================================================================
-          MODAL 1: TELA "ESCOLHA O SEU PERFIL"
-         ==================================================================== */}
+      {/* MODAL DE PERFIL */}
       <Modal visible={showProfileGate} animationType="fade" transparent={false}>
         <View style={styles.gateRoot}>
           <View style={styles.mosaicGrid}>
@@ -1179,9 +1180,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* ====================================================================
-          MODAL 2: MENU GAVETA "PERFIL" E CONTA
-         ==================================================================== */}
+      {/* MENU GAVETA DE PERFIL */}
       <Modal visible={showProfileSheet} animationType="slide" transparent={true}>
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheetContainer, { paddingBottom: insets.bottom + 20 }]}>
@@ -1339,9 +1338,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* ====================================================================
-          MODAL 3: CRIAR NOVO PERFIL PELO CLIENTE
-         ==================================================================== */}
+      {/* MODAL CRIAR PERFIL */}
       <Modal visible={showCreateModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.createProfileModalCard}>
@@ -1405,9 +1402,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* ====================================================================
-          MODAL 4: MENU VERTICAL DE CATEGORIAS REAIS DA LISTA XTREAM
-         ==================================================================== */}
+      {/* MODAL CATEGORIAS REAIS DA LISTA */}
       <Modal visible={showCategoriesModal} animationType="fade" transparent={true}>
         <View style={styles.categoriesDrawerOverlay}>
           <View style={[styles.categoriesDrawerBox, { paddingTop: insets.top + 16 }]}>
@@ -1462,9 +1457,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* ====================================================================
-          MODAL 5: GRADE COMPLETA DO GUIA DE JOGOS NA TV
-         ==================================================================== */}
+      {/* MODAL GUIA DE JOGOS */}
       <Modal visible={showGuiaModal} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={[styles.accountCardModal, { maxHeight: SCREEN_HEIGHT * 0.8 }]}>
@@ -1501,9 +1494,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* ====================================================================
-          MODAL 6: DETALHES DA CONTA E CÓDIGO DE ATIVAÇÃO
-         ==================================================================== */}
+      {/* MODAL CONTA */}
       <Modal visible={showAccountModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.accountCardModal}>
