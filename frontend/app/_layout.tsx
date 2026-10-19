@@ -23,7 +23,7 @@ LogBox.ignoreAllLogs(true);
 
 const APP_VERSION_CODE = 1;
 const URL_VERSION =
-  "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/version.json";
+  "https://raw.githubusercontent.com/goldcast-builds/goldcast-app/main/version.json";
 
 const _WARM = [
   require("../assets/images/goldcast-logo.png"),
@@ -32,7 +32,6 @@ const _WARM = [
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-// SISTEMA DE ATUALIZAÇÃO AUTOMÁTICA
 function AutoUpdateModal() {
   const [updateInfo, setUpdateInfo] = useState<{
     versionCode: number;
