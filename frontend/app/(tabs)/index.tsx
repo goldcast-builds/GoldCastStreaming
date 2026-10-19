@@ -55,6 +55,9 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
+  // Layout OTR State
+  const [otrEnabled, setOtrEnabled] = useState(false);
+
   // Modal de Detalhes da Conta do Usuário
   const [showAccountModal, setShowAccountModal] = useState(false);
 
@@ -64,17 +67,21 @@ export default function HomeTab() {
   const blinkAnim = useRef(new Animated.Value(1)).current;
   const bubbleAnim = useRef(new Animated.Value(0)).current;
 
-  // Carrega chave de ativação guardada
-  useEffect(() => {
-    (async () => {
-      try {
-        const code = await AsyncStorage.getItem("@goldcast_saved_code");
+  // Carrega chave de ativação guardada e verifica modo OTR
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.getItem("@goldcast_saved_code").then((code) => {
         if (code) setActivationCode(code);
-      } catch {}
-    })();
-  }, []);
+      });
+      AsyncStorage.getItem("@goldcast_otr_layout").then((val) => {
+        setOtrEnabled(val === "true");
+      });
+      listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
+      if (source?.kind === "xtream" && !catalog.vodLoaded) loadVod();
+    }, [source?.kind, catalog.vodLoaded, loadVod])
+  );
 
-  // Extração inteligente de jogos com os times reais de jogosnatv.com.br
+  // Extração inteligente de jogos de jogosnatv.com.br
   useEffect(() => {
     let isMounted = true;
     const fetchGuia = async () => {
@@ -86,7 +93,6 @@ export default function HomeTab() {
         const html = await res.text();
         const matches: GuiaMatch[] = [];
 
-        // Busca artigos no formato "Onde Assistir Time A x Time B ao Vivo" ou padrões com VS
         const titleRegex = /Onde Assistir\s+([^x\n\r<]+)\s*x\s*([^<:\n\r]+?)(?:\s+ao\s+Vivo|\s*:|\s+pelo|\s+da\s+|$)/gi;
         let m;
         let index = 0;
@@ -96,7 +102,6 @@ export default function HomeTab() {
           const team2 = m[2].replace(/<[^>]+>/g, "").trim();
 
           if (team1.length > 2 && team2.length > 2 && !team1.toLowerCase().includes("jogos")) {
-            // Localiza horários e canais próximos no texto
             const sliceAround = html.slice(m.index, m.index + 500);
             const timeMatch = sliceAround.match(/(\d{2}:\d{2})/);
             const channelMatch =
@@ -117,7 +122,6 @@ export default function HomeTab() {
           if (matches.length > 0) {
             setGuiaJogos(matches);
           } else {
-            // Grade padrão com confrontos reais de destaque nacional e internacional
             setGuiaJogos([
               { id: "1", time: "16:00", league: "Champions League", match: "Real Madrid x Barcelona", channels: "TNT • Max" },
               { id: "2", time: "18:30", league: "Brasileirão Série A", match: "Flamengo x Palmeiras", channels: "Premiere • SporTV" },
@@ -180,13 +184,6 @@ export default function HomeTab() {
       active = false;
     };
   }, [session]);
-
-  useFocusEffect(
-    useCallback(() => {
-      listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
-      if (source?.kind === "xtream" && !catalog.vodLoaded) loadVod();
-    }, [source?.kind, catalog.vodLoaded, loadVod])
-  );
 
   const hasContent = !!session || hasLists;
 
@@ -280,156 +277,266 @@ export default function HomeTab() {
     }
   };
 
+  const heroItem = useMemo(() => {
+    if (catalog.vod && catalog.vod.length > 0) {
+      return catalog.vod[0];
+    }
+    return null;
+  }, [catalog.vod]);
+
   return (
     <View style={styles.root}>
       <ScrollView
         style={styles.root}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + 120 },
+          { paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + 120 },
         ]}
         showsVerticalScrollIndicator={false}
       >
         {hasContent ? (
-          <View style={styles.mainContainer}>
-            <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
-
-            {/* BLOCOS PRINCIPAIS */}
-            <View style={styles.gridNav}>
-              {MAIN.map((m, idx) => (
-                <NavCardItem key={m.key} item={m} onPress={() => go(m.path)} isFirst={idx === 0} />
-              ))}
-            </View>
-
-            {/* ATALHOS RÁPIDOS (Conta agora abre os dados da conta) */}
-            <View style={styles.quickRow}>
-              <SmallTile
-                icon="star-outline"
-                label="Favoritos"
-                onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })}
-              />
-              <SmallTile
-                icon="person-outline"
-                label="Conta"
-                onPress={() => {
-                  if (session) {
-                    setShowAccountModal(true);
-                  } else {
-                    router.push("/login");
-                  }
-                }}
-              />
-              <SmallTile
-                icon="settings-outline"
-                label="Ajustes"
-                onPress={() => router.push("/(tabs)/settings")}
-              />
-            </View>
-
-            {/* CANAIS DE JOGOS (Xtream) */}
-            {jogosChannels.length > 0 && (
-              <View style={{ gap: 8 }}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.sectionTitle}>⚽ CANAIS DE JOGOS AO VIVO</Text>
-                  <View style={styles.badgeLive}>
-                    <View style={styles.liveDot} />
-                    <Text style={styles.badgeLiveText}>NO AR</Text>
-                  </View>
-                </View>
-                <JogosMarqueeReverse channels={jogosChannels} onPressChannel={handleOpenChannel} />
-              </View>
-            )}
-
-            {/* NOVIDADES & DESTAQUES */}
-            {marqueeItems.length > 0 && (
-              <TrendingMarquee
-                items={marqueeItems}
-                onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })}
-              />
-            )}
-
-            {/* CARTÃO DE CONTA COM CHAVE DE ATIVAÇÃO E VENCIMENTO */}
-            {session && (
-              <View style={styles.planCard}>
-                <View style={styles.planInfoGrid}>
-                  <View style={styles.planCol}>
-                    <Text style={styles.planLabel}>UTILIZADOR</Text>
-                    <View style={styles.rowAlign}>
-                      <Ionicons name="person-circle-outline" size={15} color={colors.gold} />
-                      <Text style={styles.planVal} numberOfLines={1}>{username}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.planCol}>
-                    <Text style={styles.planLabel}>CÓDIGO DE ATIVAÇÃO</Text>
-                    <View style={styles.rowAlign}>
-                      <Ionicons name="key-outline" size={14} color={colors.gold} />
-                      <Text style={styles.planVal} numberOfLines={1}>{activationCode}</Text>
-                    </View>
-                  </View>
-
-                  <View style={[styles.planCol, { alignItems: "flex-end" }]}>
-                    <Text style={styles.planLabel}>VENCIMENTO</Text>
-                    <View style={styles.rowAlign}>
-                      <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
-                      <Text style={styles.planVal}>{expFormatted}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={[styles.daysBadge, { backgroundColor: statusConfig.bg, borderColor: statusConfig.border }]}>
-                  <Ionicons name={statusConfig.icon as any} size={18} color={statusConfig.color} />
-                  <Text style={[styles.daysBadgeText, { color: statusConfig.color }]}>{statusConfig.text}</Text>
-                </View>
-
-                {isExpired && (
-                  <Animated.View style={[styles.expiredBanner, { opacity: blinkAnim }]}>
-                    <Ionicons name="warning" size={20} color="#EF4444" />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.expiredTitle}>ACESSO EXPIRADO!</Text>
-                      <Text style={styles.expiredSub}>Renove a subscrição com o seu fornecedor de multimédia.</Text>
-                    </View>
-                  </Animated.View>
+          otrEnabled ? (
+            <View style={styles.mainContainer}>
+              <View style={styles.otrHero}>
+                {heroItem?.stream_icon ? (
+                  <Image source={{ uri: heroItem.stream_icon }} style={styles.otrHeroImg} resizeMode="cover" />
+                ) : (
+                  <View style={[styles.otrHeroImg, { backgroundColor: "#11141E" }]} />
                 )}
-              </View>
-            )}
-
-            {/* GUIA OFICIAL DE JOGOS COM OS TIMES REAIS */}
-            <View style={styles.guiaSection}>
-              <View style={styles.rowBetween}>
-                <View style={{ gap: 2 }}>
-                  <Text style={styles.sectionTitle}>📺 GUIA DE JOGOS NA TV</Text>
-                  <Text style={styles.guiaSubtitle}>Programação oficial de transmissões desportivas</Text>
+                <View style={styles.otrHeroOverlay}>
+                  <View style={styles.otrHeroBadge}>
+                    <Text style={styles.otrHeroBadgeText}>★ DESTAQUE OTR</Text>
+                  </View>
+                  <Text style={styles.otrHeroTitle} numberOfLines={1}>
+                    {heroItem?.name || "GoldCast Media Player"}
+                  </Text>
+                  <Text style={styles.otrHeroSub} numberOfLines={2}>
+                    Reprodução multimídia com máxima fluidez e compatibilidade total com controles remotos.
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
+                    <Pressable
+                      focusable={true}
+                      style={styles.otrPlayBtn}
+                      onPress={() => {
+                        if (heroItem) {
+                          router.push({ pathname: "/movie/[id]", params: { id: String(heroItem.stream_id) } });
+                        } else {
+                          go("/(tabs)/live");
+                        }
+                      }}
+                    >
+                      <Ionicons name="play" size={16} color="#000" />
+                      <Text style={styles.otrPlayBtnText}>ASSISTIR</Text>
+                    </Pressable>
+                    <Pressable focusable={true} style={styles.otrInfoBtn} onPress={() => setShowAccountModal(true)}>
+                      <Ionicons name="person-outline" size={16} color="#FFF" />
+                      <Text style={styles.otrInfoBtnText}>MINHA CONTA</Text>
+                    </Pressable>
+                  </View>
                 </View>
-                {loadingGuia && <ActivityIndicator size="small" color={colors.gold} />}
               </View>
 
-              <View style={styles.guiaList}>
-                {guiaJogos.map((g) => (
-                  <View key={g.id} style={styles.guiaCard}>
-                    <View style={styles.guiaHeaderRow}>
-                      <View style={styles.guiaTimeBadge}>
-                        <Ionicons name="time-outline" size={11} color="#000" />
-                        <Text style={styles.guiaTimeText}>{g.time}</Text>
-                      </View>
-                      <Text style={styles.guiaLeagueText} numberOfLines={1}>{g.league}</Text>
-                    </View>
+              <View style={styles.otrNavRow}>
+                {MAIN.map((m) => (
+                  <Pressable
+                    key={m.key}
+                    focusable={true}
+                    onPress={() => go(m.path)}
+                    style={styles.otrNavCard}
+                  >
+                    <Ionicons name={m.icon as any} size={20} color={colors.gold} />
+                    <Text style={styles.otrNavCardTitle}>{m.label}</Text>
+                  </Pressable>
+                ))}
+                <Pressable
+                  focusable={true}
+                  onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })}
+                  style={styles.otrNavCard}
+                >
+                  <Ionicons name="star" size={20} color={colors.gold} />
+                  <Text style={styles.otrNavCardTitle}>FAVORITOS</Text>
+                </Pressable>
+              </View>
 
-                    <Text style={styles.guiaMatchTitle} numberOfLines={2}>
-                      {g.match}
-                    </Text>
-
-                    <View style={styles.guiaChannelsRow}>
-                      <Ionicons name="tv-outline" size={13} color={colors.gold} />
-                      <Text style={styles.guiaChannelsText} numberOfLines={1}>
-                        {g.channels}
-                      </Text>
+              {jogosChannels.length > 0 && (
+                <View style={{ gap: 8 }}>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.sectionTitle}>⚽ CANAIS DE JOGOS AO VIVO</Text>
+                    <View style={styles.badgeLive}>
+                      <View style={styles.liveDot} />
+                      <Text style={styles.badgeLiveText}>NO AR</Text>
                     </View>
                   </View>
+                  <JogosMarqueeReverse channels={jogosChannels} onPressChannel={handleOpenChannel} />
+                </View>
+              )}
+
+              {marqueeItems.length > 0 && (
+                <TrendingMarquee
+                  items={marqueeItems}
+                  onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })}
+                />
+              )}
+
+              <View style={styles.guiaSection}>
+                <View style={styles.rowBetween}>
+                  <View style={{ gap: 2 }}>
+                    <Text style={styles.sectionTitle}>📺 GUIA DE JOGOS NA TV</Text>
+                    <Text style={styles.guiaSubtitle}>Programação oficial de transmissões desportivas</Text>
+                  </View>
+                  {loadingGuia && <ActivityIndicator size="small" color={colors.gold} />}
+                </View>
+                <View style={styles.guiaList}>
+                  {guiaJogos.map((g) => (
+                    <View key={g.id} style={styles.guiaCard}>
+                      <View style={styles.guiaHeaderRow}>
+                        <View style={styles.guiaTimeBadge}>
+                          <Ionicons name="time-outline" size={11} color="#000" />
+                          <Text style={styles.guiaTimeText}>{g.time}</Text>
+                        </View>
+                        <Text style={styles.guiaLeagueText} numberOfLines={1}>{g.league}</Text>
+                      </View>
+                      <Text style={styles.guiaMatchTitle} numberOfLines={2}>{g.match}</Text>
+                      <View style={styles.guiaChannelsRow}>
+                        <Ionicons name="tv-outline" size={13} color={colors.gold} />
+                        <Text style={styles.guiaChannelsText} numberOfLines={1}>{g.channels}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.mainContainer}>
+              <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
+
+              <View style={styles.gridNav}>
+                {MAIN.map((m, idx) => (
+                  <NavCardItem key={m.key} item={m} onPress={() => go(m.path)} isFirst={idx === 0} />
                 ))}
               </View>
+
+              <View style={styles.quickRow}>
+                <SmallTile
+                  icon="star-outline"
+                  label="Favoritos"
+                  onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })}
+                />
+                <SmallTile
+                  icon="person-outline"
+                  label="Conta"
+                  onPress={() => {
+                    if (session) {
+                      setShowAccountModal(true);
+                    } else {
+                      router.push("/login");
+                    }
+                  }}
+                />
+                <SmallTile
+                  icon="settings-outline"
+                  label="Ajustes"
+                  onPress={() => router.push("/(tabs)/settings")}
+                />
+              </View>
+
+              {jogosChannels.length > 0 && (
+                <View style={{ gap: 8 }}>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.sectionTitle}>⚽ CANAIS DE JOGOS AO VIVO</Text>
+                    <View style={styles.badgeLive}>
+                      <View style={styles.liveDot} />
+                      <Text style={styles.badgeLiveText}>NO AR</Text>
+                    </View>
+                  </View>
+                  <JogosMarqueeReverse channels={jogosChannels} onPressChannel={handleOpenChannel} />
+                </View>
+              )}
+
+              {marqueeItems.length > 0 && (
+                <TrendingMarquee
+                  items={marqueeItems}
+                  onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })}
+                />
+              )}
+
+              {session && (
+                <View style={styles.planCard}>
+                  <View style={styles.planInfoGrid}>
+                    <View style={styles.planCol}>
+                      <Text style={styles.planLabel}>UTILIZADOR</Text>
+                      <View style={styles.rowAlign}>
+                        <Ionicons name="person-circle-outline" size={15} color={colors.gold} />
+                        <Text style={styles.planVal} numberOfLines={1}>{username}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.planCol}>
+                      <Text style={styles.planLabel}>CÓDIGO DE ATIVAÇÃO</Text>
+                      <View style={styles.rowAlign}>
+                        <Ionicons name="key-outline" size={14} color={colors.gold} />
+                        <Text style={styles.planVal} numberOfLines={1}>{activationCode}</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.planCol, { alignItems: "flex-end" }]}>
+                      <Text style={styles.planLabel}>VENCIMENTO</Text>
+                      <View style={styles.rowAlign}>
+                        <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
+                        <Text style={styles.planVal}>{expFormatted}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={[styles.daysBadge, { backgroundColor: statusConfig.bg, borderColor: statusConfig.border }]}>
+                    <Ionicons name={statusConfig.icon as any} size={18} color={statusConfig.color} />
+                    <Text style={[styles.daysBadgeText, { color: statusConfig.color }]}>{statusConfig.text}</Text>
+                  </View>
+
+                  {isExpired && (
+                    <Animated.View style={[styles.expiredBanner, { opacity: blinkAnim }]}>
+                      <Ionicons name="warning" size={20} color="#EF4444" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.expiredTitle}>ACESSO EXPIRADO!</Text>
+                        <Text style={styles.expiredSub}>Renove a subscrição com o seu fornecedor de multimédia.</Text>
+                      </View>
+                    </Animated.View>
+                  )}
+                </View>
+              )}
+
+              <View style={styles.guiaSection}>
+                <View style={styles.rowBetween}>
+                  <View style={{ gap: 2 }}>
+                    <Text style={styles.sectionTitle}>📺 GUIA DE JOGOS NA TV</Text>
+                    <Text style={styles.guiaSubtitle}>Programação oficial de transmissões desportivas</Text>
+                  </View>
+                  {loadingGuia && <ActivityIndicator size="small" color={colors.gold} />}
+                </View>
+
+                <View style={styles.guiaList}>
+                  {guiaJogos.map((g) => (
+                    <View key={g.id} style={styles.guiaCard}>
+                      <View style={styles.guiaHeaderRow}>
+                        <View style={styles.guiaTimeBadge}>
+                          <Ionicons name="time-outline" size={11} color="#000" />
+                          <Text style={styles.guiaTimeText}>{g.time}</Text>
+                        </View>
+                        <Text style={styles.guiaLeagueText} numberOfLines={1}>{g.league}</Text>
+                      </View>
+
+                      <Text style={styles.guiaMatchTitle} numberOfLines={2}>{g.match}</Text>
+
+                      <View style={styles.guiaChannelsRow}>
+                        <Ionicons name="tv-outline" size={13} color={colors.gold} />
+                        <Text style={styles.guiaChannelsText} numberOfLines={1}>{g.channels}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
             </View>
-          </View>
+          )
         ) : (
           <View style={styles.loggedOutBox}>
             <Text style={styles.brand}>GoldCast Media Player</Text>
@@ -438,7 +545,6 @@ export default function HomeTab() {
         )}
       </ScrollView>
 
-      {/* MODAL DETALHADO DA CONTA DE USUÁRIO */}
       <Modal visible={showAccountModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.accountCardModal}>
@@ -507,7 +613,6 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* BALÃO RETOMAR REPRODUÇÃO */}
       {resumeItem && !bubbleDismissed && (
         <Animated.View
           style={[
@@ -704,4 +809,105 @@ const styles = StyleSheet.create({
   gridNav: { gap: 12 },
   navCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 2, borderColor: colors.border, gap: 14 },
   navCardFocused: { backgroundColor: "#E5A93B", borderColor: "#FFFFFF", borderWidth: 3.5, transform: [{ scale: 1.04 }], elevation: 14, zIndex: 99 },
-  navCardIconBox: { width: 48, height: 48, borderRadius: 10, backgroundColor
+  navCardIconBox: { width: 48, height: 48, borderRadius: 10, backgroundColor: "rgba(229, 169, 59, 0.12)", alignItems: "center", justifyContent: "center" },
+  navCardIconBoxFocused: { backgroundColor: "#FFFFFF" },
+  navCardTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
+  navCardTitleFocused: { color: "#000000", fontWeight: "900" },
+  navCardSub: { color: colors.textMuted, fontSize: 11.5, marginTop: 2 },
+  navCardSubFocused: { color: "#1F232B", fontWeight: "600" },
+  focusBadgeSmall: { backgroundColor: "#000000", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginRight: 4 },
+  focusBadgeSmallText: { color: "#FFD700", fontSize: 9.5, fontWeight: "900" },
+  quickRow: { flexDirection: "row", gap: 10, marginTop: 4 },
+  tile: { flex: 1, flexDirection: "row", height: 46, borderRadius: radius.sm, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 6 },
+  tileFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 2.5, transform: [{ scale: 1.08 }], elevation: 12, zIndex: 99 },
+  tileLabel: { color: colors.text, fontSize: 11.5, fontWeight: "600" },
+  tileLabelFocused: { color: "#000000", fontWeight: "900" },
+  marqueeOuter: { overflow: "hidden", marginHorizontal: -spacing.lg, paddingVertical: 6 },
+  marqueeTrack: { flexDirection: "row", paddingLeft: spacing.lg },
+  channelCard: { width: 122, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1.5, borderColor: "rgba(229, 169, 59, 0.22)", overflow: "hidden", marginRight: 12 },
+  channelCardFocused: { borderWidth: 3.5, borderColor: "#FFD700", transform: [{ scale: 1.08 }], elevation: 16, zIndex: 999 },
+  posterBox: { width: 122, height: 120, backgroundColor: "#161820", position: "relative" },
+  tagFhd: { position: "absolute", top: 6, left: 6, backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
+  tagFhdText: { color: "#FFF", fontSize: 8, fontWeight: "900" },
+  jogosFocusBadge: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "#FFD700", paddingVertical: 3, alignItems: "center" },
+  jogosFocusBadgeText: { color: "#000000", fontSize: 9, fontWeight: "900" },
+  jogosMeta: { padding: 8, gap: 2, backgroundColor: colors.surface },
+  channelName: { color: colors.text, fontSize: 10.5, fontWeight: "700", lineHeight: 14 },
+  channelSub: { color: colors.gold, fontSize: 9, fontWeight: "800" },
+
+  /* Cartão de Conta com 3 Colunas */
+  planCard: { backgroundColor: "#111319", borderRadius: 14, borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.08)", padding: 14, gap: 12, marginTop: 4 },
+  planInfoGrid: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  planCol: { flex: 1, gap: 2 },
+  planLabel: { color: colors.textDim, fontSize: 9, fontWeight: "800", letterSpacing: 0.6 },
+  planVal: { color: colors.text, fontSize: 12, fontWeight: "700" },
+  daysBadge: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1.5 },
+  daysBadgeText: { fontSize: 13, fontWeight: "900", letterSpacing: 0.6 },
+  expiredBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(239, 68, 68, 0.18)", borderWidth: 1, borderColor: "#EF4444", padding: 10, borderRadius: 10 },
+  expiredTitle: { color: "#EF4444", fontSize: 11, fontWeight: "900" },
+  expiredSub: { color: "#FCA5A5", fontSize: 10.5, lineHeight: 14 },
+
+  /* Secção Guia de Jogos na TV */
+  guiaSection: { gap: 10, marginTop: 6 },
+  guiaSubtitle: { color: colors.textMuted, fontSize: 11 },
+  guiaList: { gap: 8 },
+  guiaCard: { backgroundColor: "#12141C", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.07)", gap: 6 },
+  guiaHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  guiaTimeBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.gold, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  guiaTimeText: { color: "#000", fontSize: 10, fontWeight: "900" },
+  guiaLeagueText: { color: colors.textDim, fontSize: 11, fontWeight: "700", flex: 1 },
+  guiaMatchTitle: { color: colors.text, fontSize: 13, fontWeight: "800", letterSpacing: 0.2 },
+  guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "700" },
+
+  /* Estilos Exclusivos do Modo OTR */
+  otrHero: { width: "100%", height: 180, borderRadius: 14, overflow: "hidden", position: "relative", borderWidth: 1.5, borderColor: "rgba(229,169,59,0.3)" },
+  otrHeroImg: { width: "100%", height: "100%", position: "absolute" },
+  otrHeroOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.65)", padding: 16, justifyContent: "flex-end" },
+  otrHeroBadge: { backgroundColor: colors.gold, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, marginBottom: 6 },
+  otrHeroBadgeText: { color: "#000", fontSize: 9.5, fontWeight: "900" },
+  otrHeroTitle: { color: "#FFF", fontSize: 17, fontWeight: "800" },
+  otrHeroSub: { color: "#B0B4C3", fontSize: 11, marginTop: 2, maxWidth: 420 },
+  otrPlayBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.gold, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 },
+  otrPlayBtnText: { color: "#000", fontSize: 11, fontWeight: "900" },
+  otrInfoBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
+  otrInfoBtnText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
+  otrNavRow: { flexDirection: "row", gap: 10, marginTop: 2 },
+  otrNavCard: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#12141C", paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
+  otrNavCardTitle: { color: "#FFF", fontSize: 11, fontWeight: "800" },
+
+  /* Modal de Informações da Conta */
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
+  accountCardModal: { width: "100%", maxWidth: 380, backgroundColor: "#111319", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(229,169,59,0.3)", padding: 24, alignItems: "center" },
+  accountIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(229,169,59,0.12)", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.gold, marginBottom: 12 },
+  accountModalTitle: { color: colors.gold, fontSize: 18, fontWeight: "800", letterSpacing: 0.5 },
+  accountModalSubtitle: { color: colors.textMuted, fontSize: 12, textAlign: "center", marginTop: 4, marginBottom: 16 },
+  accountInfoList: { width: "100%", backgroundColor: "#161822", borderRadius: 12, padding: 14, gap: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)", marginBottom: 18 },
+  accountInfoRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  accountRowLabel: { color: colors.textDim, fontSize: 12, fontWeight: "600" },
+  accountRowValue: { color: "#FFF", fontSize: 12.5, fontWeight: "700" },
+  btnModalClose: { backgroundColor: colors.gold, width: "100%", height: 46, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  btnModalCloseText: { color: "#000", fontSize: 13, fontWeight: "900" },
+  btnModalLogout: { paddingVertical: 10, marginTop: 6 },
+  btnModalLogoutText: { color: "#EF4444", fontSize: 12, fontWeight: "700" },
+
+  loggedOutBox: { width: "100%", maxWidth: 420, gap: spacing.md, alignItems: "center", alignSelf: "center", marginTop: 40 },
+  brand: { color: colors.gold, fontSize: 26, fontWeight: "800" },
+  hint: { color: colors.textMuted, fontSize: 14, textAlign: "center" },
+  floatingContainer: { position: "absolute", right: 18, alignItems: "flex-end", zIndex: 999 },
+  bubbleRow: { flexDirection: "row", alignItems: "flex-start", gap: 4 },
+  bubbleHead: { width: 62, height: 62, borderRadius: 31, borderWidth: 2.5, borderColor: colors.gold, backgroundColor: "#161820", elevation: 8, position: "relative", justifyContent: "center", alignItems: "center" },
+  bubbleImage: { width: 56, height: 56, borderRadius: 28 },
+  bubbleBadgePlay: { position: "absolute", bottom: -2, right: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.gold, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#090A0E" },
+  bubbleBadgePct: { position: "absolute", top: -4, left: -4, backgroundColor: "#090A0E", borderWidth: 1, borderColor: colors.gold, borderRadius: 8, paddingHorizontal: 4, paddingVertical: 1 },
+  bubbleBadgePctText: { color: colors.gold, fontSize: 8.5, fontWeight: "800" },
+  bubbleCloseBtn: { marginTop: -4, marginLeft: -4 },
+  bubbleCard: { width: 220, backgroundColor: "#151722", borderRadius: 12, borderWidth: 1, borderColor: "rgba(229,169,59,0.3)", padding: 10, marginBottom: 8, gap: 6, elevation: 8 },
+  bubbleCardTag: { color: colors.gold, fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
+  bubbleCardTitle: { color: colors.text, fontSize: 12, fontWeight: "700" },
+  bubbleProgressTrack: { height: 4, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 2, overflow: "hidden" },
+  bubbleProgressFill: { height: "100%", backgroundColor: colors.gold },
+  bubbleCardPct: { color: colors.textMuted, fontSize: 10 },
+  bubblePlayBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.gold, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
+  bubblePlayBtnText: { color: colors.onGold, fontSize: 10, fontWeight: "800" },
+});
