@@ -17,45 +17,43 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Logo } from "../src/components/Logo";
 import { colors } from "../src/utils/theme";
 import { useSession } from "../src/store/session";
+import { createM3UUrl, listLists, setActiveListId } from "../src/utils/api";
 
-const REMOTE_SERVERS_URL =
-  "https://raw.githubusercontent.com/anderson009470/GoldCastStreaming/main/servers.json";
 const VALIDATE_CODE_URL =
   "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/validate-code";
-
-interface ServerOption {
-  label: string;
-  url: string;
-}
 
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const login = useSession((s) => s.login);
+  const setSource = useSession((s) => s.setSource);
 
   const [activeTab, setActiveTab] = useState<"license" | "trial">("license");
   const [step, setStep] = useState<"form" | "iptv">("form");
+  const [connectMode, setConnectMode] = useState<"xtream" | "m3u">("xtream");
 
+  // Dados da licença
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+
+  // Dados de conexão Xtream
+  const [server, setServer] = useState("");
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(true);
 
+  // Dados de conexão M3U
+  const [m3uName, setM3uName] = useState("");
+  const [m3uUrl, setM3uUrl] = useState("");
+
   const emailRef = useRef<TextInput>(null);
   const codeRef = useRef<TextInput>(null);
+  const serverRef = useRef<TextInput>(null);
   const userRef = useRef<TextInput>(null);
   const passRef = useRef<TextInput>(null);
-
-  const officialServers: ServerOption[] = [
-    { label: "Servidor Principal", url: "http://natfluxo.store:80" },
-    { label: "Servidor Alternativo", url: "http://newbrtop.online:8080" },
-  ];
-
-  const [serverList, setServerList] = useState<ServerOption[]>(officialServers);
-  const [server, setServer] = useState("http://natfluxo.store:80");
-  const [customServer, setCustomServer] = useState(false);
+  const m3uNameRef = useRef<TextInput>(null);
+  const m3uUrlRef = useRef<TextInput>(null);
 
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -66,26 +64,21 @@ export default function LoginScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const [savedLicensed, savedEmail, savedCode] = await Promise.all([
+        const [savedLicensed, savedEmail, savedCode, savedServer, savedUser] = await Promise.all([
           AsyncStorage.getItem("@goldcast_app_licensed"),
           AsyncStorage.getItem("@goldcast_saved_email"),
           AsyncStorage.getItem("@goldcast_saved_code"),
+          AsyncStorage.getItem("@goldcast_saved_server"),
+          AsyncStorage.getItem("@goldcast_saved_user"),
         ]);
 
         if (savedEmail) setEmail(savedEmail);
         if (savedCode) setCode(savedCode);
+        if (savedServer) setServer(savedServer);
+        if (savedUser) setUser(savedUser);
 
         if (savedLicensed === "true") {
           setStep("iptv");
-        }
-
-        const res = await fetch(`${REMOTE_SERVERS_URL}?t=${Date.now()}`, { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            setServerList(data);
-            setServer(data[0].url);
-          }
         }
       } catch {}
     })();
@@ -101,16 +94,16 @@ export default function LoginScreen() {
 
     setError(null);
     if (!cleanEmail || !cleanEmail.includes("@")) {
-      setError("Informe um endereço de e-mail válido.");
+      setError("Indique um endereço de e-mail válido.");
       return;
     }
     if (!cleanCode) {
-      setError("Informe a sua chave de ativação do reprodutor.");
+      setError("Indique a chave de ativação do reprodutor.");
       return;
     }
 
     setLoading(true);
-    setStatusMsg("Validando licença do reprodutor...");
+    setStatusMsg("A validar licença do reprodutor...");
 
     try {
       const res = await fetch(VALIDATE_CODE_URL, {
@@ -149,16 +142,58 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
-    setStatusMsg("Conectando ao provedor de conteúdo...");
+    setStatusMsg("A ligar ao servidor multimédia...");
 
     try {
+      if (remember) {
+        AsyncStorage.setItem("@goldcast_saved_server", server.trim()).catch(() => {});
+        AsyncStorage.setItem("@goldcast_saved_user", user.trim()).catch(() => {});
+      }
       await login(server.trim(), user.trim(), pass, remember, (s, d) => {
-        if (mounted.current) setStatusMsg(d || "Carregando mídia...");
+        if (mounted.current) setStatusMsg(d || "A carregar conteúdos...");
       });
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha ao conectar ao servidor. Verifique os dados com o seu provedor.");
+        setError(e?.message || "Falha ao ligar ao servidor. Verifique os dados com o seu fornecedor.");
+        setStatusMsg(null);
+      }
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  };
+
+  const handleConnectM3U = async () => {
+    setError(null);
+    if (!m3uUrl.trim()) {
+      setError("Indique o endereço URL da lista M3U.");
+      return;
+    }
+
+    setLoading(true);
+    setStatusMsg("A descarregar e processar lista M3U...");
+
+    try {
+      const listTitle = m3uName.trim() || "Minha Lista M3U";
+      const created = await createM3UUrl({ name: listTitle, url: m3uUrl.trim() });
+      const targetId = (created as any)?.id || (created as any)?.list?.id;
+
+      if (targetId) {
+        await setActiveListId(targetId);
+        await setSource({ kind: "list", listId: targetId });
+      } else {
+        const all = await listLists().catch(() => []);
+        if (all.length > 0) {
+          const last = all[all.length - 1];
+          await setActiveListId(last.id);
+          await setSource({ kind: "list", listId: last.id });
+        }
+      }
+
+      setTimeout(() => router.replace("/(tabs)"), 350);
+    } catch (e: any) {
+      if (mounted.current) {
+        setError(e?.message || "Falha ao processar a lista M3U. Verifique a ligação informada.");
         setStatusMsg(null);
       }
     } finally {
@@ -169,16 +204,16 @@ export default function LoginScreen() {
   const handleConnectTrial = async () => {
     setError(null);
     if (!server.trim() || !user.trim() || !pass) {
-      setError("Preencha o servidor, o utilizador e a senha de avaliação.");
+      setError("Preencha o servidor, o utilizador e a palavra-passe de demonstração.");
       return;
     }
 
     setLoading(true);
-    setStatusMsg("Verificando credenciais temporárias...");
+    setStatusMsg("A verificar credenciais de teste...");
 
     try {
       await login(server.trim(), user.trim(), pass, false, (s, d) => {
-        if (mounted.current) setStatusMsg(d || "Acessando...");
+        if (mounted.current) setStatusMsg(d || "A aceder...");
       });
 
       const currentSession = useSession.getState().session;
@@ -187,14 +222,14 @@ export default function LoginScreen() {
       if (!expDate || expDate === "null" || expDate === "") {
         useSession.getState().logout?.();
         throw new Error(
-          "Esta área é exclusiva para testes temporários (até 24 horas). Para contas permanentes, utilize a chave de software."
+          "Esta área é exclusiva para testes temporários (até 24 horas). Para contas definitivas, ative a chave de software."
         );
       }
 
       const expTimestampMs = Number(expDate) * 1000;
       if (isNaN(expTimestampMs)) {
         useSession.getState().logout?.();
-        throw new Error("Não foi possível validar a validade da conta.");
+        throw new Error("Não foi possível validar o período da conta.");
       }
 
       const nowMs = Date.now();
@@ -202,21 +237,21 @@ export default function LoginScreen() {
 
       if (diffHours <= 0) {
         useSession.getState().logout?.();
-        throw new Error("Este período de demonstração já está expirado.");
+        throw new Error("Este período de demonstração já se encontra expirado.");
       }
 
       if (diffHours > 26) {
         useSession.getState().logout?.();
         const diasRestantes = Math.round(diffHours / 24);
         throw new Error(
-          `Esta área destina-se apenas a períodos de avaliação de até 24h. Sua conta possui validade de ${diasRestantes} dias.`
+          `Esta secção destina-se apenas a períodos de teste até 24h. A conta possui validade de ${diasRestantes} dias.`
         );
       }
 
       setTimeout(() => router.replace("/(tabs)"), 350);
     } catch (e: any) {
       if (mounted.current) {
-        setError(e?.message || "Falha na conexão de demonstração.");
+        setError(e?.message || "Falha na ligação de teste.");
         setStatusMsg(null);
       }
     } finally {
@@ -249,7 +284,7 @@ export default function LoginScreen() {
               }}
             />
             <TVTabButton
-              label="⏱️ Acesso de Avaliação"
+              label="⏱️ Acesso de Demonstração"
               active={activeTab === "trial"}
               onPress={() => {
                 setActiveTab("trial");
@@ -259,15 +294,15 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* 1. FLUXO DE ATIVAÇÃO DO SOFTWARE */}
+        {/* 1. ATIVAÇÃO DO SOFTWARE */}
         {step === "form" && activeTab === "license" && (
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
-              Digite o seu e-mail e chave de software para desbloquear o reprodutor.
+              Introduza o seu e-mail e chave de software para desbloquear o reprodutor.
             </Text>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>SEU E-MAIL</Text>
+              <Text style={styles.fieldLabel}>O SEU E-MAIL</Text>
               <TVInputField
                 inputRef={emailRef}
                 icon="✉️"
@@ -286,10 +321,10 @@ export default function LoginScreen() {
                 icon="🔑"
                 placeholder="Ex: GOLD-VIP-365D"
                 value={code}
-                onChangeText={(t) => setCode(t.toUpperCase())}
+                onChangeText={(t: string) => setCode(t.toUpperCase())}
                 autoCapitalize="characters"
               />
-              <Text style={styles.hintText}>A chave de software será vinculada ao seu e-mail.</Text>
+              <Text style={styles.hintText}>A chave de software será associada ao seu e-mail.</Text>
             </View>
 
             <TVActionButton
@@ -299,7 +334,7 @@ export default function LoginScreen() {
             />
 
             <TVLinkButton
-              label="⚡ Não tem chave? Entrar com período de avaliação →"
+              label="⚡ Não possui chave? Entrar com período de teste →"
               onPress={() => {
                 setActiveTab("trial");
                 setError(null);
@@ -308,58 +343,35 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* 2. ÁREA DE AVALIAÇÃO */}
+        {/* 2. ÁREA DE DEMONSTRAÇÃO (24H) */}
         {step === "form" && activeTab === "trial" && (
           <View style={styles.formWrap}>
             <View style={styles.trialNoticeBox}>
-              <Text style={styles.trialNoticeTitle}>MODO DE AVALIAÇÃO (DEMO)</Text>
+              <Text style={styles.trialNoticeTitle}>MODO DE DEMONSTRAÇÃO (TESTE)</Text>
               <Text style={styles.trialNoticeText}>
-                Esta área permite testar o reprodutor com seu provedor de mídia por até 24 horas antes de ativar a licença.
+                Esta secção permite testar o reprodutor com o seu fornecedor de multimédia por até 24 horas antes de ativar a licença.
               </Text>
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>PROVEDOR / SERVIDOR</Text>
-              <View style={styles.serverChips}>
-                {serverList.map((item, i) => (
-                  <TVServerChip
-                    key={`${item.url}-${i}`}
-                    label={item.label}
-                    active={!customServer && server === item.url}
-                    onPress={() => {
-                      setCustomServer(false);
-                      setServer(item.url);
-                    }}
-                  />
-                ))}
-              </View>
-
-              <TVLinkButton
-                label={customServer ? "▲ Usar lista sugerida" : "▼ Inserir servidor personalizado"}
-                onPress={() => {
-                  setCustomServer((v) => !v);
-                  if (!customServer) setServer("");
-                  else setServer(serverList[0]?.url || "http://natfluxo.store:80");
-                }}
+              <Text style={styles.fieldLabel}>SERVIDOR / URL DO PROVEDOR</Text>
+              <TVInputField
+                inputRef={serverRef}
+                icon="🌐"
+                placeholder="http://servidordoprovedor.com:8080"
+                value={server}
+                onChangeText={setServer}
+                keyboardType="url"
+                autoCapitalize="none"
               />
-
-              {customServer && (
-                <TVInputField
-                  placeholder="http://servidordoprovedor.com:8080"
-                  value={server}
-                  onChangeText={setServer}
-                  keyboardType="url"
-                  autoCapitalize="none"
-                />
-              )}
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>USUÁRIO</Text>
+              <Text style={styles.fieldLabel}>UTILIZADOR</Text>
               <TVInputField
                 inputRef={userRef}
                 icon="👤"
-                placeholder="Nome de usuário do provedor"
+                placeholder="Nome de utilizador"
                 value={user}
                 onChangeText={setUser}
                 autoCapitalize="none"
@@ -367,11 +379,11 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>SENHA</Text>
+              <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
               <TVInputField
                 inputRef={passRef}
                 icon="🔒"
-                placeholder="Senha de acesso"
+                placeholder="Palavra-passe de acesso"
                 value={pass}
                 onChangeText={setPass}
                 secureTextEntry={!showPass}
@@ -385,7 +397,7 @@ export default function LoginScreen() {
             </View>
 
             <TVActionButton
-              label="INICIAR AVALIAÇÃO (24H)"
+              label="INICIAR DEMONSTRAÇÃO (24H)"
               loading={loading}
               onPress={handleConnectTrial}
             />
@@ -400,94 +412,131 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* 3. FLUXO CONECTAR CONTA DEFINITIVA */}
+        {/* 3. LIGAÇÃO DE CONTEÚDOS (XTREAM OU M3U) */}
         {step === "iptv" && (
           <View style={styles.formWrap}>
             <Text style={styles.subtitle}>
-              Reprodutor ativado com sucesso! Insira os dados do seu provedor de conteúdo.
+              Reprodutor ativado com sucesso! Escolha o formato e introduza as fontes de reprodução.
             </Text>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>PROVEDOR DE CONTEÚDO</Text>
-              <View style={styles.serverChips}>
-                {serverList.map((item, i) => (
-                  <TVServerChip
-                    key={`${item.url}-${i}`}
-                    label={item.label}
-                    active={!customServer && server === item.url}
-                    onPress={() => {
-                      setCustomServer(false);
-                      setServer(item.url);
-                    }}
-                  />
-                ))}
-              </View>
-
-              <TVLinkButton
-                label={customServer ? "▲ Usar lista sugerida" : "▼ Inserir servidor personalizado"}
+            {/* SELETOR DE MODO: XTREAM OU M3U */}
+            <View style={styles.tabSelector}>
+              <TVTabButton
+                label="🔑 Servidor Xtream"
+                active={connectMode === "xtream"}
                 onPress={() => {
-                  setCustomServer((v) => !v);
-                  if (!customServer) setServer("");
-                  else setServer(serverList[0]?.url || "http://natfluxo.store:80");
+                  setConnectMode("xtream");
+                  setError(null);
                 }}
               />
+              <TVTabButton
+                label="🔗 Lista M3U (URL)"
+                active={connectMode === "m3u"}
+                onPress={() => {
+                  setConnectMode("m3u");
+                  setError(null);
+                }}
+              />
+            </View>
 
-              {customServer && (
-                <TVInputField
-                  placeholder="http://servidordoprovedor.com:8080"
-                  value={server}
-                  onChangeText={setServer}
-                  keyboardType="url"
-                  autoCapitalize="none"
+            {/* MODO XTREAM */}
+            {connectMode === "xtream" && (
+              <>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>SERVIDOR / URL DO PROVEDOR</Text>
+                  <TVInputField
+                    inputRef={serverRef}
+                    icon="🌐"
+                    placeholder="http://servidordoprovedor.com:8080"
+                    value={server}
+                    onChangeText={setServer}
+                    keyboardType="url"
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>UTILIZADOR</Text>
+                  <TVInputField
+                    inputRef={userRef}
+                    icon="👤"
+                    placeholder="Utilizador fornecido pelo seu provedor"
+                    value={user}
+                    onChangeText={setUser}
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
+                  <TVInputField
+                    inputRef={passRef}
+                    icon="🔒"
+                    placeholder="Palavra-passe de acesso"
+                    value={pass}
+                    onChangeText={setPass}
+                    secureTextEntry={!showPass}
+                    autoCapitalize="none"
+                    rightElement={
+                      <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
+                        <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
+                      </Pressable>
+                    }
+                  />
+                </View>
+
+                <View style={styles.rememberRow}>
+                  <Text style={styles.rememberTitle}>Guardar credenciais</Text>
+                  <Switch
+                    value={remember}
+                    onValueChange={setRemember}
+                    trackColor={{ true: colors.gold, false: "#222" }}
+                    thumbColor="#FFF"
+                  />
+                </View>
+
+                <TVActionButton
+                  label="ENTRAR NO REPRODUTOR"
+                  loading={loading}
+                  onPress={handleConnectIPTV}
                 />
-              )}
-            </View>
+              </>
+            )}
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>USUÁRIO</Text>
-              <TVInputField
-                inputRef={userRef}
-                icon="👤"
-                placeholder="Usuário fornecido pelo seu provedor"
-                value={user}
-                onChangeText={setUser}
-                autoCapitalize="none"
-              />
-            </View>
+            {/* MODO M3U */}
+            {connectMode === "m3u" && (
+              <>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>NOME DA LISTA (OPCIONAL)</Text>
+                  <TVInputField
+                    inputRef={m3uNameRef}
+                    icon="📝"
+                    placeholder="Ex: Minha Lista Principal"
+                    value={m3uName}
+                    onChangeText={setM3uName}
+                  />
+                </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>SENHA</Text>
-              <TVInputField
-                inputRef={passRef}
-                icon="🔒"
-                placeholder="Senha de acesso"
-                value={pass}
-                onChangeText={setPass}
-                secureTextEntry={!showPass}
-                autoCapitalize="none"
-                rightElement={
-                  <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
-                    <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
-                  </Pressable>
-                }
-              />
-            </View>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>URL DA LISTA (M3U / M3U8)</Text>
+                  <TVInputField
+                    inputRef={m3uUrlRef}
+                    icon="🔗"
+                    placeholder="https://exemplo.com/lista.m3u"
+                    value={m3uUrl}
+                    onChangeText={setM3uUrl}
+                    keyboardType="url"
+                    autoCapitalize="none"
+                  />
+                </View>
 
-            <View style={styles.rememberRow}>
-              <Text style={styles.rememberTitle}>Lembrar credenciais</Text>
-              <Switch
-                value={remember}
-                onValueChange={setRemember}
-                trackColor={{ true: colors.gold, false: "#222" }}
-                thumbColor="#FFF"
-              />
-            </View>
-
-            <TVActionButton
-              label="ENTRAR NO REPRODUTOR"
-              loading={loading}
-              onPress={handleConnectIPTV}
-            />
+                <TVActionButton
+                  label="CARREGAR LISTA M3U"
+                  loading={loading}
+                  onPress={handleConnectM3U}
+                />
+              </>
+            )}
 
             <TVLinkButton
               label="← Alterar chave do reprodutor / e-mail"
@@ -496,7 +545,7 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* FEEDBACKS */}
+        {/* FEEDBACKS VISUAIS */}
         {loading && statusMsg && (
           <View style={styles.statusBox}>
             <ActivityIndicator color={colors.gold} size="small" />
@@ -514,7 +563,7 @@ export default function LoginScreen() {
         {/* AVISO DE ISENÇÃO LEGAL */}
         <View style={styles.disclaimerBox}>
           <Text style={styles.disclaimerText}>
-            Aviso: O GoldCast é um reprodutor de mídia neutro e não inclui nenhum canal ou conteúdo audiovisual. O usuário é o responsável pelo conteúdo inserido.
+            Aviso: O GoldCast é um reprodutor de multimédia neutro e não inclui qualquer canal ou conteúdo audiovisual. O utilizador é o único responsável pelo conteúdo inserido.
           </Text>
         </View>
       </ScrollView>
@@ -558,35 +607,6 @@ function TVInputField({
         onBlur={() => setIsFocused(false)}
       />
       {rightElement}
-    </Pressable>
-  );
-}
-
-function TVServerChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  const [isFocused, setIsFocused] = useState(false);
-
-  return (
-    <Pressable
-      focusable={true}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      onPress={onPress}
-      style={[
-        styles.serverChip,
-        active && styles.serverChipActive,
-        isFocused && styles.serverChipFocused,
-      ]}
-    >
-      <Text style={{ fontSize: 13 }}>📡</Text>
-      <Text
-        style={[
-          styles.serverChipText,
-          (active || isFocused) && { color: "#000", fontWeight: "900" },
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
     </Pressable>
   );
 }
@@ -663,7 +683,7 @@ const styles = StyleSheet.create({
   logoWrap: { alignItems: "center" },
   brand: { color: colors.gold, fontSize: 24, fontWeight: "700", textAlign: "center", letterSpacing: 0.5, marginTop: 6, marginBottom: 4 },
   subtitle: { color: "#8E929C", fontSize: 13, textAlign: "center", marginBottom: 16, lineHeight: 18 },
-  tabSelector: { flexDirection: "row", backgroundColor: "#16181E", borderRadius: 12, padding: 4, marginTop: 10, marginBottom: 8, borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.08)" },
+  tabSelector: { flexDirection: "row", backgroundColor: "#16181E", borderRadius: 12, padding: 4, marginTop: 6, marginBottom: 12, borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.08)" },
   tabButton: { flex: 1, paddingVertical: 11, alignItems: "center", borderRadius: 8, borderWidth: 2, borderColor: "transparent" },
   tabButtonActive: { backgroundColor: colors.gold },
   tabButtonFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", transform: [{ scale: 1.04 }], elevation: 8 },
@@ -679,11 +699,6 @@ const styles = StyleSheet.create({
   inputEmoji: { fontSize: 16, marginRight: 10 },
   textInput: { flex: 1, color: "#FFF", fontSize: 15 },
   hintText: { color: "#777", fontSize: 11, marginTop: 4 },
-  serverChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  serverChip: { flex: 1, minWidth: 110, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 46, borderRadius: 10, backgroundColor: "#16181E", borderWidth: 2, borderColor: "rgba(255, 255, 255, 0.1)", paddingHorizontal: 8 },
-  serverChipActive: { backgroundColor: "rgba(229, 169, 59, 0.3)", borderColor: colors.gold },
-  serverChipFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3, elevation: 10, transform: [{ scale: 1.05 }] },
-  serverChipText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
   btnGold: { backgroundColor: colors.gold, height: 52, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 6, borderWidth: 2, borderColor: "transparent" },
   btnGoldFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3, elevation: 14, transform: [{ scale: 1.03 }] },
   btnGoldText: { color: "#000", fontSize: 14, fontWeight: "800", letterSpacing: 0.5 },
