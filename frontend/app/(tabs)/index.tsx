@@ -41,6 +41,12 @@ interface GuiaMatch {
   channels: string;
 }
 
+const MAIN = [
+  { key: "live", label: "TV AO VIVO", sub: "Canais em tempo real", icon: "tv", path: "/(tabs)/live" },
+  { key: "movies", label: "FILMES", sub: "Catálogo On-Demand", icon: "film", path: "/(tabs)/movies" },
+  { key: "series", label: "SÉRIES", sub: "Temporadas completas", icon: "albums", path: "/(tabs)/series" },
+] as const;
+
 const AVATAR_PRESETS = [
   { color: "#E50914", emoji: "🎬" },
   { color: "#1E88E5", emoji: "🙂" },
@@ -413,7 +419,6 @@ export default function HomeTab() {
       .slice(0, 10);
   }, [progressMap]);
 
-  // Filtro de VOD com Modo Criança (Kids) rigoroso e integração correta das categorias reais da lista
   const filteredVod = useMemo(() => {
     if (!catalog.vod?.length) return [];
     let list = catalog.vod.filter((v) => !!v.stream_icon);
@@ -579,7 +584,6 @@ export default function HomeTab() {
                 </Pressable>
               </ScrollView>
 
-              {/* CARROSSEL SUPERIOR COM MÚLTIPLOS ITENS EM ROTAÇÃO */}
               {heroCarrosselItems.length > 0 && (
                 <View style={styles.nfHeroOuter}>
                   <ScrollView
