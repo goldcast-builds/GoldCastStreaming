@@ -1,107 +1,85 @@
 import { useEffect, useRef } from "react";
-import { View, StyleSheet, Animated, Easing } from "react-native";
+import { StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import { Logo } from "../src/components/Logo";
-import { colors } from "../src/utils/theme";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { useSession } from "../src/store/session";
 import { listLists } from "../src/utils/api";
 
-export default function CinemaSplashRoute() {
+export default function VideoSplashRoute() {
   const router = useRouter();
+  const nextRouteRef = useRef<string>("/login");
+  const hasNavigated = useRef(false);
 
-  // Valores de animação
-  const scale = useRef(new Animated.Value(0.6)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const flare = useRef(new Animated.Value(0)).current;
+  const navigateToNext = () => {
+    if (hasNavigated.current) return;
+    hasNavigated.current = true;
+    router.replace(nextRouteRef.current as any);
+  };
+
+  // Carrega e inicializa o arquivo com a letra maiúscula exata
+  const player = useVideoPlayer(require("../assets/Intro.mp4"), (p) => {
+    p.loop = false;
+    p.play();
+  });
 
   useEffect(() => {
-    // Sequência de animação cinematográfica estilo Netflix
-    Animated.sequence([
-      // 1. A logo surge suavemente da escuridão
-      Animated.parallel([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 900,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scale, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]),
-      // 2. Pulso de expansão rápida em direção à tela
-      Animated.parallel([
-        Animated.timing(scale, {
-          toValue: 1.25,
-          duration: 800,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(flare, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
-
-    // Carregamento dos dados em segundo plano
     let cancelled = false;
-    const decide = async () => {
-      const [, lists] = await Promise.all([
-        useSession.getState().restore(),
-        listLists().catch(() => [] as any[]),
-        new Promise((r) => setTimeout(r, 2200)),
-      ]);
-      if (cancelled) return;
 
-      const { session, deviceMode } = useSession.getState();
-      if (!deviceMode) {
-        router.replace("/device");
-        return;
+    // Carrega a sessão e as listas em segundo plano enquanto a intro é reproduzida
+    const prepare = async () => {
+      try {
+        const [, lists] = await Promise.all([
+          useSession.getState().restore(),
+          listLists().catch(() => [] as any[]),
+        ]);
+
+        if (cancelled) return;
+
+        const { session, deviceMode } = useSession.getState();
+        if (!deviceMode) {
+          nextRouteRef.current = "/device";
+        } else {
+          nextRouteRef.current = session || lists.length > 0 ? "/(tabs)" : "/login";
+        }
+      } catch {
+        if (cancelled) return;
+        nextRouteRef.current = "/login";
       }
-      router.replace(session || lists.length > 0 ? "/(tabs)" : "/login");
     };
 
-    decide();
+    prepare();
+
+    // Quando o vídeo terminar de rodar, avança diretamente
+    const statusSubscription = player.addListener("playToEnd", () => {
+      navigateToNext();
+    });
+
+    // Temporizador de segurança: se o vídeo travar ou demorar mais de 6 segundos, avança
+    const fallbackTimer = setTimeout(() => {
+      navigateToNext();
+    }, 6000);
+
     return () => {
       cancelled = true;
+      statusSubscription?.remove();
+      clearTimeout(fallbackTimer);
     };
-  }, []);
+  }, [player]);
 
   return (
-    <View style={styles.root}>
-      {/* Efeito de brilho de fundo expandindo */}
-      <Animated.View
-        style={[
-          styles.glowCircle,
-          {
-            opacity: flare,
-            transform: [
-              {
-                scale: flare.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.5, 3.5],
-                }),
-              },
-            ],
-          },
-        ]}
+    <Pressable
+      style={styles.root}
+      testID="splash-screen"
+      focusable={true}
+      onPress={navigateToNext}
+    >
+      <VideoView
+        player={player}
+        style={styles.video}
+        contentFit="cover"
+        nativeControls={false}
       />
-
-      {/* Logo com zoom e revelação cinematográfica */}
-      <Animated.View
-        style={{
-          opacity,
-          transform: [{ scale }],
-        }}
-      >
-        <Logo size={240} />
-      </Animated.View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -112,11 +90,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  glowCircle: {
-    position: "absolute",
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: "rgba(229, 169, 59, 0.25)",
+  video: {
+    width: "100%",
+    height: "100%",
   },
 });
