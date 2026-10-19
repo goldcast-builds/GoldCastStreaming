@@ -81,7 +81,13 @@ export default function HomeTab() {
     }, [source?.kind, catalog.vodLoaded, loadVod])
   );
 
-  // Extração inteligente de jogos de jogosnatv.com.br
+  const toggleOtrQuick = async () => {
+    const nextVal = !otrEnabled;
+    setOtrEnabled(nextVal);
+    await AsyncStorage.setItem("@goldcast_otr_layout", nextVal ? "true" : "false");
+  };
+
+  // Programação de Jogos do Dia com canais e times reais
   useEffect(() => {
     let isMounted = true;
     const fetchGuia = async () => {
@@ -97,23 +103,24 @@ export default function HomeTab() {
         let m;
         let index = 0;
 
-        while ((m = titleRegex.exec(html)) !== null && index < 10) {
+        while ((m = titleRegex.exec(html)) !== null && index < 8) {
           const team1 = m[1].replace(/<[^>]+>/g, "").trim();
           const team2 = m[2].replace(/<[^>]+>/g, "").trim();
 
           if (team1.length > 2 && team2.length > 2 && !team1.toLowerCase().includes("jogos")) {
-            const sliceAround = html.slice(m.index, m.index + 500);
+            const sliceAround = html.slice(m.index, m.index + 400);
             const timeMatch = sliceAround.match(/(\d{2}:\d{2})/);
-            const channelMatch =
-              sliceAround.match(/Onde Assistir\s*([^<.,\n]+)/i) ||
-              sliceAround.match(/(Premiere|SporTV|ESPN|CazéTV|Globo|Max|TNT|Disney\+|Prime Video)/i);
+            
+            // Procura o nome do canal oficial (evita repetir o título da matéria)
+            const canalEncontrado = sliceAround.match(/(Premiere|SporTV|ESPN|CazéTV|Globo|Max|TNT|Disney\+|Prime Video|Canal GOAT|YouTube)/i);
+            const canalFinal = canalEncontrado ? canalEncontrado[1] : "Transmissão Oficial";
 
             matches.push({
               id: String(index++),
               time: timeMatch ? timeMatch[1] : "Hoje",
               league: "Futebol ao Vivo",
               match: `${team1} x ${team2}`,
-              channels: channelMatch ? channelMatch[1].trim() : "Transmissão Oficial / TV",
+              channels: canalFinal,
             });
           }
         }
@@ -144,9 +151,7 @@ export default function HomeTab() {
     };
 
     fetchGuia();
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
   const resumeItem = useMemo(() => {
@@ -180,9 +185,7 @@ export default function HomeTab() {
         }
       } catch {}
     })();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [session]);
 
   const hasContent = !!session || hasLists;
@@ -278,9 +281,7 @@ export default function HomeTab() {
   };
 
   const heroItem = useMemo(() => {
-    if (catalog.vod && catalog.vod.length > 0) {
-      return catalog.vod[0];
-    }
+    if (catalog.vod && catalog.vod.length > 0) return catalog.vod[0];
     return null;
   }, [catalog.vod]);
 
@@ -296,7 +297,19 @@ export default function HomeTab() {
       >
         {hasContent ? (
           otrEnabled ? (
+            /* ================= MODO OTR ================= */
             <View style={styles.mainContainer}>
+              <View style={styles.rowBetween}>
+                <View style={styles.rowAlign}>
+                  <Ionicons name="sparkles" size={14} color={colors.gold} />
+                  <Text style={styles.sectionHeader}>MODO OTR ATIVO</Text>
+                </View>
+                <Pressable focusable={true} onPress={toggleOtrQuick} style={styles.badgeSwitch}>
+                  <Ionicons name="swap-horizontal" size={12} color="#000" />
+                  <Text style={styles.badgeSwitchText}>MODO CLÁSSICO</Text>
+                </Pressable>
+              </View>
+
               <View style={styles.otrHero}>
                 {heroItem?.stream_icon ? (
                   <Image source={{ uri: heroItem.stream_icon }} style={styles.otrHeroImg} resizeMode="cover" />
@@ -311,7 +324,7 @@ export default function HomeTab() {
                     {heroItem?.name || "GoldCast Media Player"}
                   </Text>
                   <Text style={styles.otrHeroSub} numberOfLines={2}>
-                    Reprodução multimídia com máxima fluidez e compatibilidade total com controles remotos.
+                    Interface OTR com máxima fluidez e compatibilidade total com controles remotos.
                   </Text>
                   <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
                     <Pressable
@@ -338,21 +351,12 @@ export default function HomeTab() {
 
               <View style={styles.otrNavRow}>
                 {MAIN.map((m) => (
-                  <Pressable
-                    key={m.key}
-                    focusable={true}
-                    onPress={() => go(m.path)}
-                    style={styles.otrNavCard}
-                  >
+                  <Pressable key={m.key} focusable={true} onPress={() => go(m.path)} style={styles.otrNavCard}>
                     <Ionicons name={m.icon as any} size={20} color={colors.gold} />
                     <Text style={styles.otrNavCardTitle}>{m.label}</Text>
                   </Pressable>
                 ))}
-                <Pressable
-                  focusable={true}
-                  onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })}
-                  style={styles.otrNavCard}
-                >
+                <Pressable focusable={true} onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })} style={styles.otrNavCard}>
                   <Ionicons name="star" size={20} color={colors.gold} />
                   <Text style={styles.otrNavCardTitle}>FAVORITOS</Text>
                 </Pressable>
@@ -407,8 +411,15 @@ export default function HomeTab() {
               </View>
             </View>
           ) : (
+            /* ================= MODO CLÁSSICO ================= */
             <View style={styles.mainContainer}>
-              <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
+              <View style={styles.rowBetween}>
+                <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
+                <Pressable focusable={true} onPress={toggleOtrQuick} style={styles.badgeSwitch}>
+                  <Ionicons name="layers" size={12} color="#000" />
+                  <Text style={styles.badgeSwitchText}>ATIVAR MODO OTR</Text>
+                </Pressable>
+              </View>
 
               <View style={styles.gridNav}>
                 {MAIN.map((m, idx) => (
@@ -806,6 +817,8 @@ const styles = StyleSheet.create({
   badgeLive: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(229, 169, 59, 0.15)", paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 10 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#EF4444" },
   badgeLiveText: { color: colors.gold, fontSize: 9.5, fontWeight: "800" },
+  badgeSwitch: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.gold, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  badgeSwitchText: { color: "#000", fontSize: 9.5, fontWeight: "900" },
   gridNav: { gap: 12 },
   navCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 2, borderColor: colors.border, gap: 14 },
   navCardFocused: { backgroundColor: "#E5A93B", borderColor: "#FFFFFF", borderWidth: 3.5, transform: [{ scale: 1.04 }], elevation: 14, zIndex: 99 },
@@ -835,7 +848,6 @@ const styles = StyleSheet.create({
   channelName: { color: colors.text, fontSize: 10.5, fontWeight: "700", lineHeight: 14 },
   channelSub: { color: colors.gold, fontSize: 9, fontWeight: "800" },
 
-  /* Cartão de Conta com 3 Colunas */
   planCard: { backgroundColor: "#111319", borderRadius: 14, borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.08)", padding: 14, gap: 12, marginTop: 4 },
   planInfoGrid: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
   planCol: { flex: 1, gap: 2 },
@@ -847,7 +859,6 @@ const styles = StyleSheet.create({
   expiredTitle: { color: "#EF4444", fontSize: 11, fontWeight: "900" },
   expiredSub: { color: "#FCA5A5", fontSize: 10.5, lineHeight: 14 },
 
-  /* Secção Guia de Jogos na TV */
   guiaSection: { gap: 10, marginTop: 6 },
   guiaSubtitle: { color: colors.textMuted, fontSize: 11 },
   guiaList: { gap: 8 },
@@ -860,7 +871,6 @@ const styles = StyleSheet.create({
   guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
   guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "700" },
 
-  /* Estilos Exclusivos do Modo OTR */
   otrHero: { width: "100%", height: 180, borderRadius: 14, overflow: "hidden", position: "relative", borderWidth: 1.5, borderColor: "rgba(229,169,59,0.3)" },
   otrHeroImg: { width: "100%", height: "100%", position: "absolute" },
   otrHeroOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.65)", padding: 16, justifyContent: "flex-end" },
@@ -876,7 +886,6 @@ const styles = StyleSheet.create({
   otrNavCard: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#12141C", paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
   otrNavCardTitle: { color: "#FFF", fontSize: 11, fontWeight: "800" },
 
-  /* Modal de Informações da Conta */
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
   accountCardModal: { width: "100%", maxWidth: 380, backgroundColor: "#111319", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(229,169,59,0.3)", padding: 24, alignItems: "center" },
   accountIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(229,169,59,0.12)", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.gold, marginBottom: 12 },
