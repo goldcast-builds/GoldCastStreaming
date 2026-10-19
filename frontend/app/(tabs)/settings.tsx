@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import Constants from "expo-constants";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Logo } from "../../src/components/Logo";
 import { AccountCard } from "../../src/components/AccountCard";
 import { colors, radius, spacing } from "../../src/utils/theme";
@@ -14,11 +15,12 @@ import { useSession } from "../../src/store/session";
 const CURRENT_APP_VERSION = Constants.expoConfig?.version || "1.0.0";
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/goldcast-builds/goldcast-app/main/version.json";
 
-type SectionKey = "account" | "lists" | "update" | "refresh" | "playback" | "device" | "history" | "cache" | "about";
+type SectionKey = "account" | "lists" | "update" | "layout" | "refresh" | "playback" | "device" | "history" | "cache" | "about";
 
 const TILES: { key: SectionKey | "logout"; label: string; icon: any }[] = [
   { key: "account", label: "Conta", icon: "person-circle-outline" },
   { key: "update", label: "Atualizar App", icon: "arrow-up-circle-outline" },
+  { key: "layout", label: "Layout OTR", icon: "layers-outline" },
   { key: "lists", label: "Listas M3U", icon: "list-outline" },
   { key: "refresh", label: "Atualizar conteúdo", icon: "cloud-download-outline" },
   { key: "playback", label: "Reprodução", icon: "play-circle-outline" },
@@ -36,7 +38,6 @@ function confirm(title: string, msg: string, onOk: () => void) {
   Alert.alert(title, msg, [{ text: "Cancelar", style: "cancel" }, { text: "OK", style: "destructive", onPress: onOk }]);
 }
 
-// Compara versões semânticas (ex: 1.2.0 é maior que 1.0.0)
 function isNewerVersion(remote: string, current: string): boolean {
   try {
     const r = remote.replace(/[^0-9.]/g, "").split(".").map(Number);
@@ -97,6 +98,7 @@ export default function SettingsTab() {
         <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.md }}>
           {section === "account" && <AccountSection />}
           {section === "update" && <UpdateSection />}
+          {section === "layout" && <LayoutSection />}
           {section === "lists" && <ListsSection />}
           {section === "refresh" && <RefreshSection />}
           {section === "playback" && <PlaybackSection />}
@@ -156,9 +158,68 @@ function SettingsTile({
   );
 }
 
-// -------------------------------------------------------------
-// SESSÃO DE ATUALIZAÇÃO DO APLICATIVO
-// -------------------------------------------------------------
+// SESSÃO DO MODO OTR
+function LayoutSection() {
+  const [otrEnabled, setOtrEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    AsyncStorage.getItem("@goldcast_otr_layout").then((val) => {
+      setOtrEnabled(val === "true");
+      setLoading(false);
+    });
+  }, []);
+
+  const toggleOtr = async (val: boolean) => {
+    setOtrEnabled(val);
+    await AsyncStorage.setItem("@goldcast_otr_layout", val ? "true" : "false");
+  };
+
+  return (
+    <Card>
+      <View style={{ padding: spacing.md, gap: 14 }}>
+        <View style={{ gap: 4 }}>
+          <Text style={styles.updateTitle}>ESTILO DE INTERFACE (OTR)</Text>
+          <Text style={styles.updateSub}>
+            Escolha o formato visual da tela inicial do GoldCast Media Player.
+          </Text>
+        </View>
+
+        <Row
+          icon="layers-outline"
+          title="Ativar Layout OTR"
+          sub="Interface moderna com Banner de Destaque e trilhas fluidas estilo Android TV"
+          right={
+            loading ? (
+              <ActivityIndicator size="small" color={colors.gold} />
+            ) : (
+              <Switch
+                value={otrEnabled}
+                onValueChange={toggleOtr}
+                trackColor={{ true: colors.gold, false: colors.surface3 }}
+                thumbColor={colors.text}
+              />
+            )
+          }
+        />
+
+        <View style={[styles.updateBoxStatus, { backgroundColor: otrEnabled ? "rgba(229,169,59,0.12)" : colors.surface3 }]}>
+          <Ionicons
+            name={otrEnabled ? "sparkles" : "grid-outline"}
+            size={20}
+            color={otrEnabled ? colors.gold : colors.textMuted}
+          />
+          <Text style={[styles.updateStatusText, { flex: 1 }]}>
+            {otrEnabled
+              ? "Modo OTR Ativado: A tela inicial exibirá o banner cinematográfico e carrosséis horizontais modernos."
+              : "Modo Clássico Ativado: A tela inicial exibirá o formato padrão com blocos grandes de TV, Filmes e Séries."}
+          </Text>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
 function UpdateSection() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<"idle" | "updated" | "available" | "error">("idle");
@@ -551,7 +612,6 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
   chipText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
   
-  /* Área de Atualização */
   updateTitle: { color: colors.gold, fontSize: 13, fontWeight: "800", letterSpacing: 0.6 },
   updateSub: { color: colors.textMuted, fontSize: 12 },
   updateBoxStatus: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, backgroundColor: "#111319", borderRadius: 10 },
