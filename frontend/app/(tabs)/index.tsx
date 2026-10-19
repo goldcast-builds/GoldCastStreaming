@@ -41,6 +41,12 @@ interface GuiaMatch {
   channels: string;
 }
 
+const MAIN = [
+  { key: "live", label: "TV AO VIVO", sub: "Canais em tempo real", icon: "tv", path: "/(tabs)/live" },
+  { key: "movies", label: "FILMES", sub: "Catálogo On-Demand", icon: "film", path: "/(tabs)/movies" },
+  { key: "series", label: "SÉRIES", sub: "Temporadas completas", icon: "albums", path: "/(tabs)/series" },
+] as const;
+
 const AVATAR_PRESETS = [
   { color: "#E50914", emoji: "🎬" },
   { color: "#1E88E5", emoji: "🙂" },
@@ -87,7 +93,7 @@ export default function HomeTab() {
   const [selectedPreset, setSelectedPreset] = useState(0);
   const [newProfileKids, setNewProfileKids] = useState(false);
 
-  // Estados de Navegação e Categorias Reais da Lista
+  // Estados de Navegação e Categorias Reais
   const [otrEnabled, setOtrEnabled] = useState(true);
   const [vodCategories, setVodCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("Todos os títulos");
@@ -133,7 +139,6 @@ export default function HomeTab() {
     };
   }, [activeProfile, profiles, username]);
 
-  // Carrega dados e categorias reais da lista Xtream
   useFocusEffect(
     useCallback(() => {
       AsyncStorage.getItem("@goldcast_saved_code").then((code) => {
@@ -244,7 +249,6 @@ export default function HomeTab() {
     }
   };
 
-  // Guia de Jogos
   useEffect(() => {
     let isMounted = true;
     const fetchGuia = async () => {
@@ -347,9 +351,73 @@ export default function HomeTab() {
     }
   }, [resumeItem, bubbleDismissed, bubbleAnim]);
 
+  useEffect(() => {
+    if (isExpired) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(blinkAnim, { toValue: 0.25, duration: 650, easing: Easing.linear, useNativeDriver: true }),
+          Animated.timing(blinkAnim, { toValue: 1, duration: 650, easing: Easing.linear, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    } else {
+      blinkAnim.setValue(1);
+    }
+  }, [isExpired, blinkAnim]);
+
   const hasContent = !!session || hasLists;
 
-  // Filtro Rigoroso para Modo Criança (Kids)
+  const statusConfig = useMemo(() => {
+    if (isExpired || daysLeft <= 1) {
+      return {
+        color: "#EF4444",
+        bg: "rgba(239, 68, 68, 0.16)",
+        border: "rgba(239, 68, 68, 0.6)",
+        text: isExpired ? "ACESSO EXPIRADO" : daysLeft === 1 ? "1 DIA RESTANTE" : "EXPIRA HOJE",
+        icon: "alert-circle",
+      };
+    }
+    if (daysLeft >= 2 && daysLeft <= 5) {
+      return {
+        color: "#F59E0B",
+        bg: "rgba(245, 158, 11, 0.16)",
+        border: "rgba(245, 158, 11, 0.6)",
+        text: `${daysLeft} DIAS RESTANTES`,
+        icon: "time",
+      };
+    }
+    return {
+      color: "#10B981",
+      bg: "rgba(16, 185, 129, 0.16)",
+      border: "rgba(16, 185, 129, 0.6)",
+      text: `${daysLeft} DIAS RESTANTES`,
+      icon: "checkmark-circle",
+    };
+  }, [daysLeft, isExpired]);
+
+  const marqueeItems: MarqueeItem[] = useMemo(() => {
+    if (!catalog.vod?.length) return [];
+    return catalog.vod
+      .filter((v) => !!v.stream_icon)
+      .slice(0, 15)
+      .map((v) => ({ id: String(v.stream_id), name: v.name, poster: v.stream_icon, type: "movie" }));
+  }, [catalog.vod]);
+
+  // Continuar assistindo no Modo OTR
+  const continueWatchingList = useMemo(() => {
+    if (!progressMap) return [];
+    return Object.values(progressMap)
+      .filter((p: any) => p && p.duration > 60 && p.position > 15 && p.position < p.duration - 30)
+      .map((p: any) => ({
+        ...p,
+        pct: Math.min(100, Math.round((p.position / p.duration) * 100)),
+      }))
+      .reverse()
+      .slice(0, 10);
+  }, [progressMap]);
+
+  // Filtro de VOD com Modo Criança (Kids)
   const filteredVod = useMemo(() => {
     if (!catalog.vod?.length) return [];
     let list = catalog.vod.filter((v) => !!v.stream_icon);
@@ -375,7 +443,6 @@ export default function HomeTab() {
     return list;
   }, [catalog.vod, catalog.vodByCategory, vodCategories, currentProfile, selectedCategory]);
 
-  // Lista de múltiplos filmes para o carrossel superior (Hero em rotação)
   const heroCarrosselItems = useMemo(() => {
     if (filteredVod.length > 0) return filteredVod.slice(0, 5);
     if (catalog.vod?.length > 0) return catalog.vod.slice(0, 5);
@@ -432,10 +499,9 @@ export default function HomeTab() {
         {hasContent ? (
           otrEnabled ? (
             /* ==============================================================
-               1. MODO OTR (ESTILO NETFLIX COM CARROSSEL MÚLTIPLO E CATEGORIAS REAIS)
+               1. MODO OTR COMPLETO
                ============================================================== */
             <View style={styles.nfContainer}>
-              {/* CABEÇALHO SUPERIOR */}
               <View style={styles.nfHeader}>
                 <View style={styles.rowAlign}>
                   <View style={styles.nfLogoBox}>
@@ -473,7 +539,6 @@ export default function HomeTab() {
                 </View>
               </View>
 
-              {/* BARRA DE PÍLULAS DE NAVEGAÇÃO */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -518,7 +583,7 @@ export default function HomeTab() {
                 </Pressable>
               </ScrollView>
 
-              {/* CARROSSEL DE DESTAQUE SUPERIOR (PASSANDO VÁRIOS FILMES E SÉRIES) */}
+              {/* CARROSSEL SUPERIOR MÚLTIPLO */}
               {heroCarrosselItems.length > 0 && (
                 <View style={styles.nfHeroOuter}>
                   <ScrollView
@@ -596,7 +661,6 @@ export default function HomeTab() {
                 </View>
               )}
 
-              {/* CONTINUAR ASSISTINDO COMO [PERFIL] */}
               {continueWatchingList.length > 0 && (
                 <View style={styles.nfSection}>
                   <Text style={styles.nfSectionTitle}>
@@ -645,7 +709,6 @@ export default function HomeTab() {
                 </View>
               )}
 
-              {/* O PÚBLICO AMA */}
               {rowPopular.length > 0 && (
                 <View style={styles.nfSection}>
                   <Text style={styles.nfSectionTitle}>O público ama</Text>
@@ -670,7 +733,6 @@ export default function HomeTab() {
                 </View>
               )}
 
-              {/* JOGOS DE HOJE NA TV */}
               <View style={styles.nfSection}>
                 <View style={[styles.rowBetween, { paddingRight: 16 }]}>
                   <Text style={styles.nfSectionTitle}>⚽ Jogos de Hoje na TV</Text>
@@ -721,7 +783,6 @@ export default function HomeTab() {
                 </ScrollView>
               </View>
 
-              {/* FILMES DE AÇÃO */}
               {rowAction.length > 0 && (
                 <View style={styles.nfSection}>
                   <Text style={styles.nfSectionTitle}>Filmes de ação e aventura</Text>
@@ -746,7 +807,6 @@ export default function HomeTab() {
                 </View>
               )}
 
-              {/* FILMES DE SUSPENSE */}
               {rowSuspense.length > 0 && (
                 <View style={styles.nfSection}>
                   <Text style={styles.nfSectionTitle}>Filmes repletos de suspense</Text>
@@ -771,7 +831,6 @@ export default function HomeTab() {
                 </View>
               )}
 
-              {/* FILMES DE COMÉDIA */}
               {rowComedy.length > 0 && (
                 <View style={styles.nfSection}>
                   <Text style={styles.nfSectionTitle}>Filmes para toda a família</Text>
@@ -952,6 +1011,71 @@ export default function HomeTab() {
           </View>
         )}
       </ScrollView>
+
+      {/* BALÃO FLUTUANTE DE RETOMAR REPRODUÇÃO (MODO CLÁSSICO) */}
+      {!otrEnabled && resumeItem && !bubbleDismissed && (
+        <Animated.View
+          style={[
+            styles.floatingContainer,
+            {
+              bottom: insets.bottom + 90,
+              transform: [{ scale: bubbleAnim }],
+              opacity: bubbleAnim,
+            },
+          ]}
+        >
+          {bubbleOpen && (
+            <View style={styles.bubbleCard}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.bubbleCardTag}>CONTINUAR A ASSISTIR</Text>
+                <Pressable onPress={() => setBubbleOpen(false)} hitSlop={8}>
+                  <Ionicons name="close" size={16} color={colors.textDim} />
+                </Pressable>
+              </View>
+              <Text style={styles.bubbleCardTitle} numberOfLines={1}>{resumeItem.title}</Text>
+              <View style={styles.bubbleProgressTrack}>
+                <View style={[styles.bubbleProgressFill, { width: `${resumeItem.pct}%` }]} />
+              </View>
+              <View style={styles.rowBetween}>
+                <Text style={styles.bubbleCardPct}>{resumeItem.pct}% concluído</Text>
+                <Pressable onPress={handleResumePlayback} style={styles.bubblePlayBtn}>
+                  <Ionicons name="play" size={13} color={colors.onGold} />
+                  <Text style={styles.bubblePlayBtnText}>RETOMAR</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.bubbleRow}>
+            <Pressable onPress={() => setBubbleOpen(!bubbleOpen)} style={styles.bubbleHead}>
+              {resumeItem.logo ? (
+                <Image source={{ uri: resumeItem.logo }} style={styles.bubbleImage} resizeMode="cover" />
+              ) : (
+                <View style={[styles.bubbleImage, styles.center, { backgroundColor: "#1C180E" }]}>
+                  <Ionicons name="film" size={26} color={colors.gold} />
+                </View>
+              )}
+              <View style={styles.bubbleBadgePlay}>
+                <Ionicons name="play" size={10} color={colors.onGold} />
+              </View>
+              <View style={styles.bubbleBadgePct}>
+                <Text style={styles.bubbleBadgePctText}>{resumeItem.pct}%</Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setBubbleOpen(false);
+                setBubbleDismissed(true);
+              }}
+              style={styles.bubbleCloseBtn}
+              hitSlop={6}
+            >
+              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.7)" />
+            </Pressable>
+          </View>
+        </Animated.View>
+      )}
 
       {/* ====================================================================
           MODAL 1: TELA "ESCOLHA O SEU PERFIL"
