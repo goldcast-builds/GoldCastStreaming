@@ -5,6 +5,8 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  Animated,
+  Easing,
   Image,
   ActivityIndicator,
   Modal,
@@ -15,7 +17,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { colors, spacing } from "../../src/utils/theme";
+import { TrendingMarquee, MarqueeItem } from "../../src/components/TrendingMarquee";
+import { colors, radius, spacing } from "../../src/utils/theme";
 import { listLists } from "../../src/utils/api";
 import { useSession } from "../../src/store/session";
 import { xtream, LiveStream, Category } from "../../src/services/xtream";
@@ -49,27 +52,6 @@ const AVATAR_PRESETS = [
   { color: "#FDD835", emoji: "👑" },
 ];
 
-const GENRE_CATEGORIES = [
-  "Todos os títulos",
-  "Ação",
-  "Anime",
-  "Brasileiros",
-  "Clássicos",
-  "Comédia stand-up",
-  "Comédias",
-  "Documentários",
-  "Drama",
-  "Esportes",
-  "Estrangeiros",
-  "Fantasia",
-  "Fé e espiritualidade",
-  "Ficção científica",
-  "Halloween & Terror",
-  "Hollywood",
-  "Infantil & Família",
-  "Suspense",
-];
-
 export default function HomeTab() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -92,7 +74,7 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
-  // Estados de Perfis (Inicia vazio para o próprio cliente criar)
+  // Estados de Perfis
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [showProfileGate, setShowProfileGate] = useState(false);
@@ -105,13 +87,21 @@ export default function HomeTab() {
   const [selectedPreset, setSelectedPreset] = useState(0);
   const [newProfileKids, setNewProfileKids] = useState(false);
 
-  // Estados de Navegação e Modais
+  // Estados de Navegação e Categorias Reais da Lista
   const [otrEnabled, setOtrEnabled] = useState(true);
-  const [selectedGenre, setSelectedGenre] = useState<string>("Todos os títulos");
+  const [vodCategories, setVodCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("Todos os títulos");
   const [showCategoriesModal, setShowCategoriesModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showGuiaModal, setShowGuiaModal] = useState(false);
   const [myListIds, setMyListIds] = useState<string[]>([]);
+
+  // Balão de retomar no Modo Clássico
+  const [bubbleDismissed, setBubbleDismissed] = useState(false);
+  const [bubbleOpen, setBubbleOpen] = useState(false);
+
+  const blinkAnim = useRef(new Animated.Value(1)).current;
+  const bubbleAnim = useRef(new Animated.Value(0)).current;
 
   const { username, expFormatted, daysLeft, isExpired } = useMemo(() => {
     const user = session?.userInfo?.username || session?.username || "Cliente";
@@ -131,7 +121,6 @@ export default function HomeTab() {
     return { username: user, expFormatted, daysLeft, isExpired: daysLeft <= 0 };
   }, [session]);
 
-  // Perfil seguro para exibição enquanto o cliente ainda não criou o primeiro
   const currentProfile: UserProfile = useMemo(() => {
     if (activeProfile) return activeProfile;
     if (profiles.length > 0) return profiles[0];
@@ -144,7 +133,7 @@ export default function HomeTab() {
     };
   }, [activeProfile, profiles, username]);
 
-  // Carrega dados salvos no dispositivo do cliente
+  // Carrega dados e categorias reais da lista Xtream
   useFocusEffect(
     useCallback(() => {
       AsyncStorage.getItem("@goldcast_saved_code").then((code) => {
@@ -173,9 +162,6 @@ export default function HomeTab() {
           } catch {}
         } else if (loadedProfiles.length > 0) {
           setActiveProfile(loadedProfiles[0]);
-        } else {
-          // Se o cliente ainda não tem nenhum perfil criado, abre a tela de criação/escolha
-          setShowProfileGate(true);
         }
       });
 
@@ -188,14 +174,22 @@ export default function HomeTab() {
       });
 
       listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
-      if (source?.kind === "xtream") {
+      if (source?.kind === "xtream" && session) {
         if (!catalog.vodLoaded) loadVod();
         if (!catalog.seriesLoaded && loadSeries) loadSeries();
+        xtream.vodCategories(session).then((cats) => {
+          if (cats && cats.length > 0) setVodCategories(cats);
+        }).catch(() => {});
       }
-    }, [source?.kind, catalog.vodLoaded, catalog.seriesLoaded, loadVod, loadSeries])
+    }, [source?.kind, catalog.vodLoaded, catalog.seriesLoaded, loadVod, loadSeries, session])
   );
 
-  // Seleciona um perfil
+  const toggleOtrQuick = async () => {
+    const nextVal = !otrEnabled;
+    setOtrEnabled(nextVal);
+    await AsyncStorage.setItem("@goldcast_otr_layout", nextVal ? "true" : "false");
+  };
+
   const handleSelectProfile = async (p: UserProfile) => {
     setActiveProfile(p);
     setShowProfileGate(false);
@@ -204,7 +198,6 @@ export default function HomeTab() {
     await AsyncStorage.setItem("@goldcast_active_profile", JSON.stringify(p));
   };
 
-  // Cria um novo perfil pelo cliente
   const handleCreateProfile = async () => {
     const clean = newProfileName.trim();
     if (!clean) return;
@@ -225,7 +218,6 @@ export default function HomeTab() {
     await handleSelectProfile(created);
   };
 
-  // Exclui um perfil
   const handleDeleteProfile = async (id: string) => {
     const nextList = profiles.filter((p) => p.id !== id);
     setProfiles(nextList);
@@ -240,7 +232,6 @@ export default function HomeTab() {
     }
   };
 
-  // Adicionar/Remover da Minha Lista
   const handleToggleMyList = async (id: string) => {
     const exists = myListIds.includes(id);
     const next = exists ? myListIds.filter((i) => i !== id) : [...myListIds, id];
@@ -253,7 +244,7 @@ export default function HomeTab() {
     }
   };
 
-  // Programação de Jogos do Dia com Horários e Canais Reais
+  // Guia de Jogos
   useEffect(() => {
     let isMounted = true;
     const fetchGuia = async () => {
@@ -339,78 +330,65 @@ export default function HomeTab() {
     };
   }, [session]);
 
-  const hasContent = !!session || hasLists;
-
-  const statusConfig = useMemo(() => {
-    if (isExpired || daysLeft <= 1) {
-      return {
-        color: "#EF4444",
-        bg: "rgba(239, 68, 68, 0.16)",
-        border: "rgba(239, 68, 68, 0.6)",
-        text: isExpired ? "ACESSO EXPIRADO" : "EXPIRA HOJE",
-      };
-    }
-    if (daysLeft >= 2 && daysLeft <= 5) {
-      return {
-        color: "#F59E0B",
-        bg: "rgba(245, 158, 11, 0.16)",
-        border: "rgba(245, 158, 11, 0.6)",
-        text: `${daysLeft} DIAS RESTANTES`,
-      };
-    }
-    return {
-      color: "#10B981",
-      bg: "rgba(16, 185, 129, 0.16)",
-      border: "rgba(16, 185, 129, 0.6)",
-      text: `${daysLeft} DIAS RESTANTES`,
-    };
-  }, [daysLeft, isExpired]);
-
-  // Lista de itens "Continuar assistindo"
-  const continueWatchingList = useMemo(() => {
-    if (!progressMap) return [];
-    return Object.values(progressMap)
-      .filter((p: any) => p && p.duration > 60 && p.position > 15 && p.position < p.duration - 30)
-      .map((p: any) => ({
-        ...p,
-        pct: Math.min(100, Math.round((p.position / p.duration) * 100)),
-      }))
-      .reverse()
-      .slice(0, 10);
+  const resumeItem = useMemo(() => {
+    if (!progressMap) return null;
+    const list = Object.values(progressMap).filter(
+      (p: any) => p && p.duration > 60 && p.position > 25 && p.position < p.duration - 40
+    );
+    if (!list.length) return null;
+    const latest: any = list[list.length - 1];
+    const pct = Math.min(100, Math.round((latest.position / latest.duration) * 100));
+    return { ...latest, pct };
   }, [progressMap]);
 
-  // Filtra catálogo de acordo com Perfil Infantil ou Gênero selecionado
+  useEffect(() => {
+    if (resumeItem && !bubbleDismissed) {
+      Animated.spring(bubbleAnim, { toValue: 1, friction: 6, tension: 40, useNativeDriver: true }).start();
+    }
+  }, [resumeItem, bubbleDismissed, bubbleAnim]);
+
+  const hasContent = !!session || hasLists;
+
+  // Filtro Rigoroso para Modo Criança (Kids)
   const filteredVod = useMemo(() => {
     if (!catalog.vod?.length) return [];
     let list = catalog.vod.filter((v) => !!v.stream_icon);
+
     if (currentProfile?.isKids) {
-      const kidsMatches = list.filter((v) =>
-        /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha/i.test(v.name)
+      list = list.filter((v) =>
+        /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon/i.test(
+          v.name
+        )
       );
-      if (kidsMatches.length >= 6) list = kidsMatches;
     }
-    if (selectedGenre !== "Todos os títulos") {
-      const keyword = selectedGenre.split(" ")[0].toLowerCase();
-      const byGenre = list.filter((v) => v.name.toLowerCase().includes(keyword));
-      if (byGenre.length >= 4) list = byGenre;
+
+    if (selectedCategory !== "Todos os títulos") {
+      const selectedCatObj = vodCategories.find((c) => c.category_name === selectedCategory);
+      if (selectedCatObj && catalog.vodByCategory?.[selectedCatObj.category_id]) {
+        list = catalog.vodByCategory[selectedCatObj.category_id].filter((v) => !!v.stream_icon);
+      } else {
+        const keyword = selectedCategory.toLowerCase();
+        const byName = list.filter((v) => v.name.toLowerCase().includes(keyword));
+        if (byName.length > 0) list = byName;
+      }
     }
     return list;
-  }, [catalog.vod, currentProfile, selectedGenre]);
+  }, [catalog.vod, catalog.vodByCategory, vodCategories, currentProfile, selectedCategory]);
 
-  const heroItem = useMemo(() => {
-    if (filteredVod.length > 0) return filteredVod[0];
-    if (catalog.vod?.length > 0) return catalog.vod[0];
-    return null;
+  // Lista de múltiplos filmes para o carrossel superior (Hero em rotação)
+  const heroCarrosselItems = useMemo(() => {
+    if (filteredVod.length > 0) return filteredVod.slice(0, 5);
+    if (catalog.vod?.length > 0) return catalog.vod.slice(0, 5);
+    return [];
   }, [filteredVod, catalog.vod]);
 
-  const rowPopular = useMemo(() => filteredVod.slice(1, 15), [filteredVod]);
-  const rowAction = useMemo(() => filteredVod.slice(15, 30), [filteredVod]);
-  const rowSuspense = useMemo(() => filteredVod.slice(30, 45), [filteredVod]);
-  const rowComedy = useMemo(() => filteredVod.slice(45, 60), [filteredVod]);
+  const rowPopular = useMemo(() => filteredVod.slice(5, 20), [filteredVod]);
+  const rowAction = useMemo(() => filteredVod.slice(20, 35), [filteredVod]);
+  const rowSuspense = useMemo(() => filteredVod.slice(35, 50), [filteredVod]);
+  const rowComedy = useMemo(() => filteredVod.slice(50, 65), [filteredVod]);
 
   const mosaicPosters = useMemo(() => {
-    const imgs = (catalog.vod || []).filter((v) => !!v.stream_icon).slice(0, 16);
-    return imgs;
+    return (catalog.vod || []).filter((v) => !!v.stream_icon).slice(0, 16);
   }, [catalog.vod]);
 
   const go = async (path: string) => {
@@ -436,12 +414,17 @@ export default function HomeTab() {
     }
   };
 
+  const handleResumePlayback = () => {
+    if (!resumeItem) return;
+    handleResumeItem(resumeItem);
+  };
+
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: otrEnabled ? "#000000" : colors.bg }]}>
       <ScrollView
         style={styles.root}
         contentContainerStyle={{
-          paddingTop: insets.top + 6,
+          paddingTop: insets.top + spacing.sm,
           paddingBottom: insets.bottom + 120,
         }}
         showsVerticalScrollIndicator={false}
@@ -449,21 +432,26 @@ export default function HomeTab() {
         {hasContent ? (
           otrEnabled ? (
             /* ==============================================================
-               ESTILO NETFLIX / STREAMING COMPLETO
+               1. MODO OTR (ESTILO NETFLIX COM CARROSSEL MÚLTIPLO E CATEGORIAS REAIS)
                ============================================================== */
             <View style={styles.nfContainer}>
-              {/* 1. CABEÇALHO SUPERIOR */}
+              {/* CABEÇALHO SUPERIOR */}
               <View style={styles.nfHeader}>
                 <View style={styles.rowAlign}>
                   <View style={styles.nfLogoBox}>
                     <Text style={styles.nfLogoLetter}>G</Text>
                   </View>
                   <Text style={styles.nfHeaderTitle}>
-                    {selectedGenre === "Todos os títulos" ? "Início" : selectedGenre}
+                    {selectedCategory === "Todos os títulos" ? "Início" : selectedCategory}
                   </Text>
                 </View>
 
                 <View style={styles.rowAlign}>
+                  <Pressable focusable={true} onPress={toggleOtrQuick} style={styles.badgeSwitch}>
+                    <Ionicons name="swap-horizontal" size={12} color="#000" />
+                    <Text style={styles.badgeSwitchText}>MODO CLÁSSICO</Text>
+                  </Pressable>
+
                   <Pressable
                     focusable={true}
                     onPress={() => setShowGuiaModal(true)}
@@ -485,21 +473,21 @@ export default function HomeTab() {
                 </View>
               </View>
 
-              {/* 2. BARRA DE PÍLULAS DE NAVEGAÇÃO */}
+              {/* BARRA DE PÍLULAS DE NAVEGAÇÃO */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.nfPillsScroll}
               >
-                {selectedGenre !== "Todos os títulos" && (
+                {selectedCategory !== "Todos os títulos" && (
                   <Pressable
                     focusable={true}
-                    onPress={() => setSelectedGenre("Todos os títulos")}
+                    onPress={() => setSelectedCategory("Todos os títulos")}
                     style={[styles.nfPill, styles.nfPillActive]}
                   >
                     <Ionicons name="close" size={14} color="#000" />
                     <Text style={[styles.nfPillText, { color: "#000", fontWeight: "800" }]}>
-                      {selectedGenre}
+                      {selectedCategory}
                     </Text>
                   </Pressable>
                 )}
@@ -530,87 +518,85 @@ export default function HomeTab() {
                 </Pressable>
               </ScrollView>
 
-              {/* 3. CARD DE DESTAQUE MOLDURADO */}
-              <View style={styles.nfHeroOuter}>
-                <Pressable
-                  focusable={true}
-                  style={styles.nfHeroCard}
-                  onPress={() => {
-                    if (heroItem) {
-                      router.push({ pathname: "/movie/[id]", params: { id: String(heroItem.stream_id) } });
-                    } else {
-                      go("/(tabs)/live");
-                    }
-                  }}
-                >
-                  {heroItem?.stream_icon ? (
-                    <Image
-                      source={{ uri: heroItem.stream_icon }}
-                      style={styles.nfHeroImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={[styles.nfHeroImage, { backgroundColor: "#181B24" }]} />
-                  )}
-
-                  <View style={styles.nfHeroCornerLogo}>
-                    <Text style={styles.nfHeroCornerLogoText}>G</Text>
-                  </View>
-
-                  <View style={styles.nfHeroBottomOverlay}>
-                    <Text style={styles.nfHeroTitle} numberOfLines={2}>
-                      {heroItem?.name || "GOLDCAST PREMIERE"}
-                    </Text>
-
-                    <Text style={styles.nfHeroTags}>
-                      {currentProfile.isKids
-                        ? "Infantil • Família • Dublado • Alta Definição"
-                        : "Destaque • Empolgante • Suspense no ar • Full HD"}
-                    </Text>
-
-                    <View style={styles.nfHeroBtnsRow}>
+              {/* CARROSSEL DE DESTAQUE SUPERIOR (PASSANDO VÁRIOS FILMES E SÉRIES) */}
+              {heroCarrosselItems.length > 0 && (
+                <View style={styles.nfHeroOuter}>
+                  <ScrollView
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 0 }}
+                  >
+                    {heroCarrosselItems.map((item) => (
                       <Pressable
+                        key={item.stream_id}
                         focusable={true}
-                        style={styles.nfBtnWhite}
-                        onPress={() => {
-                          if (heroItem) {
-                            router.push({
-                              pathname: "/movie/[id]",
-                              params: { id: String(heroItem.stream_id) },
-                            });
-                          } else {
-                            go("/(tabs)/live");
-                          }
-                        }}
+                        style={[styles.nfHeroCard, { width: SCREEN_WIDTH - 32 }]}
+                        onPress={() =>
+                          router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })
+                        }
                       >
-                        <Ionicons name="play" size={20} color="#000" />
-                        <Text style={styles.nfBtnWhiteText}>Assistir</Text>
-                      </Pressable>
+                        {item.stream_icon ? (
+                          <Image
+                            source={{ uri: item.stream_icon }}
+                            style={styles.nfHeroImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={[styles.nfHeroImage, { backgroundColor: "#181B24" }]} />
+                        )}
 
-                      <Pressable
-                        focusable={true}
-                        style={styles.nfBtnDark}
-                        onPress={() => {
-                          if (heroItem) handleToggleMyList(String(heroItem.stream_id));
-                        }}
-                      >
-                        <Ionicons
-                          name={
-                            heroItem && myListIds.includes(String(heroItem.stream_id))
-                              ? "checkmark"
-                              : "add"
-                          }
-                          size={22}
-                          color="#FFF"
-                        />
-                        <Text style={styles.nfBtnDarkText}>Minha lista</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                </Pressable>
-              </View>
+                        <View style={styles.nfHeroCornerLogo}>
+                          <Text style={styles.nfHeroCornerLogoText}>G</Text>
+                        </View>
 
-              {/* 4. CONTINUAR ASSISTINDO COMO [PERFIL DO CLIENTE] */}
+                        <View style={styles.nfHeroBottomOverlay}>
+                          <Text style={styles.nfHeroTitle} numberOfLines={2}>
+                            {item.name}
+                          </Text>
+
+                          <Text style={styles.nfHeroTags}>
+                            {currentProfile.isKids
+                              ? "Infantil • Família • Dublado • Alta Definição"
+                              : "Destaque • Empolgante • Lançamento • Full HD"}
+                          </Text>
+
+                          <View style={styles.nfHeroBtnsRow}>
+                            <Pressable
+                              focusable={true}
+                              style={styles.nfBtnWhite}
+                              onPress={() =>
+                                router.push({
+                                  pathname: "/movie/[id]",
+                                  params: { id: String(item.stream_id) },
+                                })
+                              }
+                            >
+                              <Ionicons name="play" size={20} color="#000" />
+                              <Text style={styles.nfBtnWhiteText}>Assistir</Text>
+                            </Pressable>
+
+                            <Pressable
+                              focusable={true}
+                              style={styles.nfBtnDark}
+                              onPress={() => handleToggleMyList(String(item.stream_id))}
+                            >
+                              <Ionicons
+                                name={myListIds.includes(String(item.stream_id)) ? "checkmark" : "add"}
+                                size={22}
+                                color="#FFF"
+                              />
+                              <Text style={styles.nfBtnDarkText}>Minha lista</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* CONTINUAR ASSISTINDO COMO [PERFIL] */}
               {continueWatchingList.length > 0 && (
                 <View style={styles.nfSection}>
                   <Text style={styles.nfSectionTitle}>
@@ -659,7 +645,7 @@ export default function HomeTab() {
                 </View>
               )}
 
-              {/* 5. O PÚBLICO AMA */}
+              {/* O PÚBLICO AMA */}
               {rowPopular.length > 0 && (
                 <View style={styles.nfSection}>
                   <Text style={styles.nfSectionTitle}>O público ama</Text>
@@ -684,7 +670,7 @@ export default function HomeTab() {
                 </View>
               )}
 
-              {/* 6. JOGOS DE HOJE NA TV */}
+              {/* JOGOS DE HOJE NA TV */}
               <View style={styles.nfSection}>
                 <View style={[styles.rowBetween, { paddingRight: 16 }]}>
                   <Text style={styles.nfSectionTitle}>⚽ Jogos de Hoje na TV</Text>
@@ -735,33 +721,7 @@ export default function HomeTab() {
                 </ScrollView>
               </View>
 
-              {/* 7. SÉRIES E PROGRAMAS EM ALTA */}
-              {catalog.series && catalog.series.length > 0 && (
-                <View style={styles.nfSection}>
-                  <Text style={styles.nfSectionTitle}>Descubra suas próximas histórias</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.nfRowScroll}
-                  >
-                    {catalog.series.slice(0, 15).map((s, idx) => (
-                      <NetflixPosterCard
-                        key={s.series_id}
-                        title={s.name}
-                        poster={s.cover}
-                        isTop10={idx < 3}
-                        badgeText={idx % 3 === 0 ? "Nova temporada" : "Novidade"}
-                        isNew={idx % 2 === 1}
-                        onPress={() =>
-                          router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } })
-                        }
-                      />
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* 8. FILMES DE AÇÃO */}
+              {/* FILMES DE AÇÃO */}
               {rowAction.length > 0 && (
                 <View style={styles.nfSection}>
                   <Text style={styles.nfSectionTitle}>Filmes de ação e aventura</Text>
@@ -786,7 +746,7 @@ export default function HomeTab() {
                 </View>
               )}
 
-              {/* 9. FILMES REPLETOS DE SUSPENSE */}
+              {/* FILMES DE SUSPENSE */}
               {rowSuspense.length > 0 && (
                 <View style={styles.nfSection}>
                   <Text style={styles.nfSectionTitle}>Filmes repletos de suspense</Text>
@@ -811,7 +771,7 @@ export default function HomeTab() {
                 </View>
               )}
 
-              {/* 10. FILMES PARA TODA A FAMÍLIA */}
+              {/* FILMES DE COMÉDIA */}
               {rowComedy.length > 0 && (
                 <View style={styles.nfSection}>
                   <Text style={styles.nfSectionTitle}>Filmes para toda a família</Text>
@@ -838,36 +798,151 @@ export default function HomeTab() {
             </View>
           ) : (
             /* ==============================================================
-               MODO CLÁSSICO (SE DESATIVADO NAS CONFIGURAÇÕES)
+               2. MODO CLÁSSICO
                ============================================================== */
-            <View style={{ paddingHorizontal: 16, gap: 16 }}>
+            <View style={styles.mainContainer}>
               <View style={styles.rowBetween}>
-                <Text style={{ color: colors.textDim, fontSize: 11, fontWeight: "800" }}>
-                  MODO CLÁSSICO
-                </Text>
-                <Pressable
-                  onPress={async () => {
-                    setOtrEnabled(true);
-                    await AsyncStorage.setItem("@goldcast_otr_layout", "true");
-                  }}
-                  style={styles.classicSwitchBtn}
-                >
-                  <Text style={styles.classicSwitchBtnText}>ATIVAR MODO NETFLIX / OTR</Text>
-                </Pressable>
+                <Text style={styles.sectionHeader}>O QUE PRETENDE ASSISTIR?</Text>
+                <View style={styles.rowAlign}>
+                  <Pressable focusable={true} onPress={toggleOtrQuick} style={styles.badgeSwitch}>
+                    <Ionicons name="layers" size={12} color="#000" />
+                    <Text style={styles.badgeSwitchText}>ATIVAR MODO OTR</Text>
+                  </Pressable>
+                  <Pressable
+                    focusable={true}
+                    onPress={() => setShowProfileSheet(true)}
+                    style={[styles.nfProfileAvatarSmall, { backgroundColor: currentProfile.color }]}
+                  >
+                    <Text style={{ fontSize: 15 }}>{currentProfile.emoji}</Text>
+                  </Pressable>
+                </View>
               </View>
 
-              <Pressable onPress={() => go("/(tabs)/live")} style={styles.classicNavBox}>
-                <Ionicons name="tv" size={26} color={colors.gold} />
-                <Text style={styles.classicNavTitle}>TV AO VIVO</Text>
-              </Pressable>
-              <Pressable onPress={() => go("/(tabs)/movies")} style={styles.classicNavBox}>
-                <Ionicons name="film" size={26} color={colors.gold} />
-                <Text style={styles.classicNavTitle}>FILMES</Text>
-              </Pressable>
-              <Pressable onPress={() => go("/(tabs)/series")} style={styles.classicNavBox}>
-                <Ionicons name="albums" size={26} color={colors.gold} />
-                <Text style={styles.classicNavTitle}>SÉRIES</Text>
-              </Pressable>
+              <View style={styles.gridNav}>
+                {MAIN.map((m, idx) => (
+                  <NavCardItem key={m.key} item={m} onPress={() => go(m.path)} isFirst={idx === 0} />
+                ))}
+              </View>
+
+              <View style={styles.quickRow}>
+                <SmallTile
+                  icon="star-outline"
+                  label="Favoritos"
+                  onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })}
+                />
+                <SmallTile
+                  icon="person-outline"
+                  label="Conta"
+                  onPress={() => {
+                    if (session) {
+                      setShowAccountModal(true);
+                    } else {
+                      router.push("/login");
+                    }
+                  }}
+                />
+                <SmallTile
+                  icon="settings-outline"
+                  label="Ajustes"
+                  onPress={() => router.push("/(tabs)/settings")}
+                />
+              </View>
+
+              {jogosChannels.length > 0 && (
+                <View style={{ gap: 8 }}>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.sectionTitle}>⚽ CANAIS DE JOGOS AO VIVO</Text>
+                    <View style={styles.badgeLive}>
+                      <View style={styles.liveDot} />
+                      <Text style={styles.badgeLiveText}>NO AR</Text>
+                    </View>
+                  </View>
+                  <JogosMarqueeReverse channels={jogosChannels} onPressChannel={handleOpenChannel} />
+                </View>
+              )}
+
+              {marqueeItems.length > 0 && (
+                <TrendingMarquee
+                  items={marqueeItems}
+                  onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })}
+                />
+              )}
+
+              {session && (
+                <View style={styles.planCard}>
+                  <View style={styles.planInfoGrid}>
+                    <View style={styles.planCol}>
+                      <Text style={styles.planLabel}>UTILIZADOR</Text>
+                      <View style={styles.rowAlign}>
+                        <Ionicons name="person-circle-outline" size={15} color={colors.gold} />
+                        <Text style={styles.planVal} numberOfLines={1}>{username}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.planCol}>
+                      <Text style={styles.planLabel}>CÓDIGO DE ATIVAÇÃO</Text>
+                      <View style={styles.rowAlign}>
+                        <Ionicons name="key-outline" size={14} color={colors.gold} />
+                        <Text style={styles.planVal} numberOfLines={1}>{activationCode}</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.planCol, { alignItems: "flex-end" }]}>
+                      <Text style={styles.planLabel}>VENCIMENTO</Text>
+                      <View style={styles.rowAlign}>
+                        <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
+                        <Text style={styles.planVal}>{expFormatted}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={[styles.daysBadge, { backgroundColor: statusConfig.bg, borderColor: statusConfig.border }]}>
+                    <Ionicons name={statusConfig.icon as any} size={18} color={statusConfig.color} />
+                    <Text style={[styles.daysBadgeText, { color: statusConfig.color }]}>{statusConfig.text}</Text>
+                  </View>
+
+                  {isExpired && (
+                    <Animated.View style={[styles.expiredBanner, { opacity: blinkAnim }]}>
+                      <Ionicons name="warning" size={20} color="#EF4444" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.expiredTitle}>ACESSO EXPIRADO!</Text>
+                        <Text style={styles.expiredSub}>Renove a subscrição com o seu fornecedor de multimédia.</Text>
+                      </View>
+                    </Animated.View>
+                  )}
+                </View>
+              )}
+
+              <View style={styles.guiaSection}>
+                <View style={styles.rowBetween}>
+                  <View style={{ gap: 2 }}>
+                    <Text style={styles.sectionTitle}>📺 GUIA DE JOGOS NA TV</Text>
+                    <Text style={styles.guiaSubtitle}>Programação oficial com horários e canais de transmissão</Text>
+                  </View>
+                  {loadingGuia && <ActivityIndicator size="small" color={colors.gold} />}
+                </View>
+
+                <View style={styles.guiaList}>
+                  {guiaJogos.map((g) => (
+                    <View key={g.id} style={styles.guiaCard}>
+                      <View style={styles.guiaHeaderRow}>
+                        <View style={styles.guiaTimeBadge}>
+                          <Ionicons name="time" size={11} color="#000" />
+                          <Text style={styles.guiaTimeText}>{g.time}</Text>
+                        </View>
+                        <Text style={styles.guiaLeagueText} numberOfLines={1}>{g.league}</Text>
+                      </View>
+
+                      <Text style={styles.guiaMatchTitle} numberOfLines={2}>{g.match}</Text>
+
+                      <View style={styles.guiaChannelsRow}>
+                        <Ionicons name="tv-outline" size={13} color={colors.gold} />
+                        <Text style={styles.guiaChannelsText} numberOfLines={1}>{g.channels}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
             </View>
           )
         ) : (
@@ -879,11 +954,10 @@ export default function HomeTab() {
       </ScrollView>
 
       {/* ====================================================================
-          MODAL 1: TELA "ESCOLHA O SEU PERFIL" (VAZIA PARA O CLIENTE CRIAR)
+          MODAL 1: TELA "ESCOLHA O SEU PERFIL"
          ==================================================================== */}
       <Modal visible={showProfileGate} animationType="fade" transparent={false}>
         <View style={styles.gateRoot}>
-          {/* Mosaico de Pôsteres ao Fundo */}
           <View style={styles.mosaicGrid}>
             {mosaicPosters.map((item, idx) => (
               <Image
@@ -896,7 +970,6 @@ export default function HomeTab() {
             <View style={styles.mosaicDarkOverlay} />
           </View>
 
-          {/* Título Central */}
           <View style={styles.gateCenterBrand}>
             <Text style={styles.gateLogoTitle}>GOLDCAST</Text>
             <View style={styles.rowAlign}>
@@ -907,7 +980,6 @@ export default function HomeTab() {
             </View>
           </View>
 
-          {/* Parte Inferior Curva com os Perfis Criados pelo Cliente */}
           <View style={[styles.gateBottomSheet, { paddingBottom: insets.bottom + 24 }]}>
             <Text style={styles.gateChooseTitle}>
               {profiles.length === 0
@@ -948,7 +1020,6 @@ export default function HomeTab() {
                 </Pressable>
               ))}
 
-              {/* Botão + Adicionar Perfil */}
               {profiles.length < 6 && (
                 <Pressable
                   focusable={true}
@@ -962,7 +1033,6 @@ export default function HomeTab() {
                 </Pressable>
               )}
 
-              {/* Botão Editar Perfis (aparece quando já existe pelo menos 1 perfil criado) */}
               {profiles.length > 0 && (
                 <Pressable
                   focusable={true}
@@ -1001,7 +1071,6 @@ export default function HomeTab() {
               </Pressable>
             </View>
 
-            {/* Card Principal do Perfil Ativo */}
             <View style={styles.activeProfileHighlightCard}>
               <View
                 style={[styles.activeProfileBigAvatar, { backgroundColor: currentProfile.color }]}
@@ -1015,7 +1084,6 @@ export default function HomeTab() {
               </View>
             </View>
 
-            {/* Linha Horizontal para Trocar de Perfil ou Adicionar */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -1059,7 +1127,6 @@ export default function HomeTab() {
               )}
             </ScrollView>
 
-            {/* Botão Gerenciar Perfis */}
             <Pressable
               onPress={() => {
                 setShowProfileSheet(false);
@@ -1070,8 +1137,23 @@ export default function HomeTab() {
               <Text style={styles.manageProfilesPillText}>Gerenciar perfis</Text>
             </Pressable>
 
-            {/* Links de Ação */}
             <View style={styles.sheetMenuList}>
+              <Pressable
+                onPress={() => {
+                  setShowProfileSheet(false);
+                  toggleOtrQuick();
+                }}
+                style={styles.sheetMenuItem}
+              >
+                <View style={styles.rowAlign}>
+                  <Ionicons name="layers-outline" size={22} color={colors.gold} />
+                  <Text style={[styles.sheetMenuText, { color: colors.gold }]}>
+                    {otrEnabled ? "Mudar para Modo Clássico" : "Ativar Modo OTR"}
+                  </Text>
+                </View>
+                <Ionicons name="swap-horizontal" size={18} color={colors.gold} />
+              </Pressable>
+
               <Pressable
                 onPress={() => {
                   setShowProfileSheet(false);
@@ -1163,7 +1245,7 @@ export default function HomeTab() {
             </ScrollView>
 
             <TextInput
-              placeholder="Digite seu nome..."
+              placeholder="Digite o nome do perfil..."
               placeholderTextColor="#777"
               value={newProfileName}
               onChangeText={setNewProfileName}
@@ -1200,24 +1282,41 @@ export default function HomeTab() {
       </Modal>
 
       {/* ====================================================================
-          MODAL 4: MENU VERTICAL DE CATEGORIAS
+          MODAL 4: MENU VERTICAL DE CATEGORIAS REAIS DA LISTA XTREAM
          ==================================================================== */}
       <Modal visible={showCategoriesModal} animationType="fade" transparent={true}>
         <View style={styles.categoriesDrawerOverlay}>
           <View style={[styles.categoriesDrawerBox, { paddingTop: insets.top + 16 }]}>
             <View style={[styles.rowBetween, { paddingHorizontal: 20, marginBottom: 12 }]}>
-              <Text style={styles.categoriesDrawerHeader}>Todas as categorias</Text>
+              <Text style={styles.categoriesDrawerHeader}>Categorias da Lista</Text>
               <Pressable onPress={() => setShowCategoriesModal(false)}>
                 <Ionicons name="close-circle" size={28} color="#FFF" />
               </Pressable>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-              {GENRE_CATEGORIES.map((cat) => (
+              <Pressable
+                onPress={() => {
+                  setSelectedCategory("Todos os títulos");
+                  setShowCategoriesModal(false);
+                }}
+                style={styles.categoryDrawerRow}
+              >
+                <Text
+                  style={[
+                    styles.categoryDrawerText,
+                    selectedCategory === "Todos os títulos" && { color: colors.gold, fontWeight: "900" },
+                  ]}
+                >
+                  Todos os títulos
+                </Text>
+              </Pressable>
+
+              {vodCategories.map((cat) => (
                 <Pressable
-                  key={cat}
+                  key={cat.category_id}
                   onPress={() => {
-                    setSelectedGenre(cat);
+                    setSelectedCategory(cat.category_name);
                     setShowCategoriesModal(false);
                   }}
                   style={styles.categoryDrawerRow}
@@ -1225,10 +1324,10 @@ export default function HomeTab() {
                   <Text
                     style={[
                       styles.categoryDrawerText,
-                      selectedGenre === cat && { color: colors.gold, fontWeight: "900" },
+                      selectedCategory === cat.category_name && { color: colors.gold, fontWeight: "900" },
                     ]}
                   >
-                    {cat}
+                    {cat.category_name}
                   </Text>
                 </Pressable>
               ))}
@@ -1284,8 +1383,11 @@ export default function HomeTab() {
       <Modal visible={showAccountModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.accountCardModal}>
+            <View style={styles.accountIconCircle}>
+              <Ionicons name="person" size={32} color={colors.gold} />
+            </View>
             <Text style={styles.accountModalTitle}>INFORMAÇÕES DA CONTA</Text>
-            <Text style={styles.accountModalSubtitle}>Licença e dados de acesso</Text>
+            <Text style={styles.accountModalSubtitle}>Detalhes da licença e conexão do reprodutor</Text>
 
             <View style={styles.accountInfoList}>
               <View style={styles.accountInfoRow}>
@@ -1297,7 +1399,7 @@ export default function HomeTab() {
                 <Text style={styles.accountRowValue}>{username}</Text>
               </View>
               <View style={styles.accountInfoRow}>
-                <Text style={styles.accountRowLabel}>Código de Ativação:</Text>
+                <Text style={styles.accountRowLabel}>Chave do App:</Text>
                 <Text style={[styles.accountRowValue, { color: colors.gold, fontWeight: "900" }]}>
                   {activationCode}
                 </Text>
@@ -1312,10 +1414,29 @@ export default function HomeTab() {
                   {statusConfig.text}
                 </Text>
               </View>
+              {session?.serverUrl && (
+                <View style={styles.accountInfoRow}>
+                  <Text style={styles.accountRowLabel}>Servidor:</Text>
+                  <Text style={styles.accountRowValue} numberOfLines={1}>
+                    {session.serverUrl.replace(/https?:\/\//, "")}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <Pressable onPress={() => setShowAccountModal(false)} style={styles.btnModalClose}>
               <Text style={styles.btnModalCloseText}>FECHAR</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={async () => {
+                setShowAccountModal(false);
+                logout?.();
+                router.replace("/login");
+              }}
+              style={styles.btnModalLogout}
+            >
+              <Text style={styles.btnModalLogoutText}>Trocar de Conta / Sair</Text>
             </Pressable>
           </View>
         </View>
@@ -1324,6 +1445,9 @@ export default function HomeTab() {
   );
 }
 
+/* ============================================================================
+   COMPONENTES AUXILIARES
+   ============================================================================ */
 function NetflixPosterCard({
   title,
   poster,
@@ -1377,13 +1501,186 @@ function NetflixPosterCard({
   );
 }
 
+function NavCardItem({ item, onPress, isFirst }: { item: (typeof MAIN)[number]; onPress: () => void; isFirst?: boolean }) {
+  const [isFocused, setIsFocused] = useState(false);
+  return (
+    <Pressable
+      focusable={true}
+      hasTVPreferredFocus={isFirst}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[styles.navCard, isFocused && styles.navCardFocused]}
+    >
+      <View style={[styles.navCardIconBox, isFocused && styles.navCardIconBoxFocused]}>
+        <Ionicons name={item.icon as any} size={28} color={isFocused ? "#000000" : colors.gold} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.navCardTitle, isFocused && styles.navCardTitleFocused]}>{item.label}</Text>
+        <Text style={[styles.navCardSub, isFocused && styles.navCardSubFocused]}>{item.sub}</Text>
+      </View>
+      {isFocused && (
+        <View style={styles.focusBadgeSmall}>
+          <Text style={styles.focusBadgeSmallText}>▶ ENTRAR</Text>
+        </View>
+      )}
+      <Ionicons name="chevron-forward" size={18} color={isFocused ? "#000000" : colors.textDim} />
+    </Pressable>
+  );
+}
+
+function SmallTile({ icon, label, onPress }: { icon: any; label: string; onPress: () => void }) {
+  const [isFocused, setIsFocused] = useState(false);
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[styles.tile, isFocused && styles.tileFocused]}
+    >
+      <Ionicons name={icon} size={20} color={isFocused ? "#000000" : colors.gold} />
+      <Text style={[styles.tileLabel, isFocused && styles.tileLabelFocused]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function JogosMarqueeReverse({ channels, onPressChannel }: { channels: LiveStream[]; onPressChannel: (c: LiveStream) => void }) {
+  const STRIDE = 132;
+  const totalBaseWidth = Math.max(channels.length, 1) * STRIDE;
+  const loopItems = useMemo(() => {
+    if (!channels.length) return [];
+    return Array(Math.max(4, Math.ceil(8 / channels.length))).fill(channels).flat();
+  }, [channels]);
+
+  const anim = useRef(new Animated.Value(-totalBaseWidth)).current;
+
+  useEffect(() => {
+    if (!channels.length) return;
+    anim.setValue(-totalBaseWidth);
+    const loop = Animated.loop(
+      Animated.timing(anim, {
+        toValue: 0,
+        duration: Math.max(totalBaseWidth * 34, 9000),
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [channels.length, totalBaseWidth, anim]);
+
+  return (
+    <View style={styles.marqueeOuter}>
+      <Animated.View style={[styles.marqueeTrack, { transform: [{ translateX: anim }] }]}>
+        {loopItems.map((ch, idx) => (
+          <JogosCardItem key={`${ch.stream_id}-${idx}`} ch={ch} onPress={() => onPressChannel(ch)} />
+        ))}
+      </Animated.View>
+    </View>
+  );
+}
+
+function JogosCardItem({ ch, onPress }: { ch: LiveStream; onPress: () => void }) {
+  const [isFocused, setIsFocused] = useState(false);
+  return (
+    <Pressable
+      focusable={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      style={[styles.channelCard, isFocused && styles.channelCardFocused]}
+    >
+      <View style={styles.posterBox}>
+        {ch.stream_icon ? (
+          <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} resizeMode="cover" />
+        ) : (
+          <View style={styles.center}><Text style={{ fontSize: 32 }}>⚽</Text></View>
+        )}
+        <View style={styles.tagFhd}><Text style={styles.tagFhdText}>AO VIVO</Text></View>
+        {isFocused && (
+          <View style={styles.jogosFocusBadge}>
+            <Text style={styles.jogosFocusBadgeText}>▶ ASSISTIR</Text>
+          </View>
+        )}
+      </View>
+      <View style={[styles.jogosMeta, isFocused && { backgroundColor: "#FFD700" }]}>
+        <Text style={[styles.channelName, isFocused && { color: "#000000", fontWeight: "900" }]} numberOfLines={2}>
+          {ch.name}
+        </Text>
+        <Text style={[styles.channelSub, isFocused && { color: "#333333" }]}>TRANSMISSÃO</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000000" },
+  root: { flex: 1 },
+  mainContainer: { gap: spacing.lg, paddingHorizontal: spacing.lg },
   nfContainer: { gap: 18 },
+  sectionHeader: { color: colors.textDim, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
+  sectionTitle: { color: colors.gold, fontSize: 12, fontWeight: "800", letterSpacing: 0.8 },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  rowAlign: { flexDirection: "row", alignItems: "center", gap: 8 },
-  center: { alignItems: "center", justifyContent: "center" },
+  rowAlign: { flexDirection: "row", alignItems: "center", gap: 6 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   fullSize: { width: "100%", height: "100%" },
+
+  badgeLive: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(229, 169, 59, 0.15)", paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 10 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#EF4444" },
+  badgeLiveText: { color: colors.gold, fontSize: 9.5, fontWeight: "800" },
+  badgeSwitch: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.gold, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  badgeSwitchText: { color: "#000", fontSize: 9.5, fontWeight: "900" },
+  gridNav: { gap: 12 },
+  navCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 2, borderColor: colors.border, gap: 14 },
+  navCardFocused: { backgroundColor: "#E5A93B", borderColor: "#FFFFFF", borderWidth: 3.5, transform: [{ scale: 1.04 }], elevation: 14, zIndex: 99 },
+  navCardIconBox: { width: 48, height: 48, borderRadius: 10, backgroundColor: "rgba(229, 169, 59, 0.12)", alignItems: "center", justifyContent: "center" },
+  navCardIconBoxFocused: { backgroundColor: "#FFFFFF" },
+  navCardTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
+  navCardTitleFocused: { color: "#000000", fontWeight: "900" },
+  navCardSub: { color: colors.textMuted, fontSize: 11.5, marginTop: 2 },
+  navCardSubFocused: { color: "#1F232B", fontWeight: "600" },
+  focusBadgeSmall: { backgroundColor: "#000000", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginRight: 4 },
+  focusBadgeSmallText: { color: "#FFD700", fontSize: 9.5, fontWeight: "900" },
+  quickRow: { flexDirection: "row", gap: 10, marginTop: 4 },
+  tile: { flex: 1, flexDirection: "row", height: 46, borderRadius: radius.sm, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 6 },
+  tileFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 2.5, transform: [{ scale: 1.08 }], elevation: 12, zIndex: 99 },
+  tileLabel: { color: colors.text, fontSize: 11.5, fontWeight: "600" },
+  tileLabelFocused: { color: "#000000", fontWeight: "900" },
+  marqueeOuter: { overflow: "hidden", marginHorizontal: -spacing.lg, paddingVertical: 6 },
+  marqueeTrack: { flexDirection: "row", paddingLeft: spacing.lg },
+  channelCard: { width: 122, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1.5, borderColor: "rgba(229, 169, 59, 0.22)", overflow: "hidden", marginRight: 12 },
+  channelCardFocused: { borderWidth: 3.5, borderColor: "#FFD700", transform: [{ scale: 1.08 }], elevation: 16, zIndex: 999 },
+  posterBox: { width: 122, height: 120, backgroundColor: "#161820", position: "relative" },
+  tagFhd: { position: "absolute", top: 6, left: 6, backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
+  tagFhdText: { color: "#FFF", fontSize: 8, fontWeight: "900" },
+  jogosFocusBadge: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "#FFD700", paddingVertical: 3, alignItems: "center" },
+  jogosFocusBadgeText: { color: "#000000", fontSize: 9, fontWeight: "900" },
+  jogosMeta: { padding: 8, gap: 2, backgroundColor: colors.surface },
+  channelName: { color: colors.text, fontSize: 10.5, fontWeight: "700", lineHeight: 14 },
+  channelSub: { color: colors.gold, fontSize: 9, fontWeight: "800" },
+
+  planCard: { backgroundColor: "#111319", borderRadius: 14, borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.08)", padding: 14, gap: 12, marginTop: 4 },
+  planInfoGrid: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  planCol: { flex: 1, gap: 2 },
+  planLabel: { color: colors.textDim, fontSize: 9, fontWeight: "800", letterSpacing: 0.6 },
+  planVal: { color: colors.text, fontSize: 12, fontWeight: "700" },
+  daysBadge: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1.5 },
+  daysBadgeText: { fontSize: 13, fontWeight: "900", letterSpacing: 0.6 },
+  expiredBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(239, 68, 68, 0.18)", borderWidth: 1, borderColor: "#EF4444", padding: 10, borderRadius: 10 },
+  expiredTitle: { color: "#EF4444", fontSize: 11, fontWeight: "900" },
+  expiredSub: { color: "#FCA5A5", fontSize: 10.5, lineHeight: 14 },
+
+  guiaSection: { gap: 10, marginTop: 6 },
+  guiaSubtitle: { color: colors.textMuted, fontSize: 11 },
+  guiaList: { gap: 8 },
+  guiaCard: { backgroundColor: "#12141C", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.07)", gap: 6 },
+  guiaHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  guiaTimeBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.gold, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  guiaTimeText: { color: "#000", fontSize: 10, fontWeight: "900" },
+  guiaLeagueText: { color: colors.textDim, fontSize: 11, fontWeight: "700", flex: 1 },
+  guiaMatchTitle: { color: colors.text, fontSize: 13, fontWeight: "800", letterSpacing: 0.2 },
+  guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "700" },
 
   nfHeader: {
     flexDirection: "row",
@@ -1462,7 +1759,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   nfHeroCard: {
-    width: "100%",
     height: 460,
     borderRadius: 16,
     overflow: "hidden",
@@ -1961,33 +2257,50 @@ const styles = StyleSheet.create({
   accountCardModal: {
     width: "100%",
     maxWidth: 380,
-    backgroundColor: "#161820",
+    backgroundColor: "#111319",
     borderRadius: 20,
-    padding: 22,
+    borderWidth: 1.5,
+    borderColor: "rgba(229,169,59,0.3)",
+    padding: 24,
     alignItems: "center",
   },
-  accountModalTitle: { color: colors.gold, fontSize: 17, fontWeight: "800" },
-  accountModalSubtitle: { color: "#9CA3AF", fontSize: 12, marginTop: 4, marginBottom: 14 },
+  accountIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(229,169,59,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: colors.gold,
+    marginBottom: 12,
+  },
+  accountModalTitle: { color: colors.gold, fontSize: 18, fontWeight: "800", letterSpacing: 0.5 },
+  accountModalSubtitle: { color: colors.textMuted, fontSize: 12, textAlign: "center", marginTop: 4, marginBottom: 16 },
   accountInfoList: {
     width: "100%",
-    backgroundColor: "#1E202B",
+    backgroundColor: "#161822",
     borderRadius: 12,
     padding: 14,
     gap: 10,
-    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    marginBottom: 18,
   },
   accountInfoRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  accountRowLabel: { color: "#9CA3AF", fontSize: 12 },
+  accountRowLabel: { color: colors.textDim, fontSize: 12, fontWeight: "600" },
   accountRowValue: { color: "#FFF", fontSize: 12.5, fontWeight: "700" },
   btnModalClose: {
     backgroundColor: colors.gold,
     width: "100%",
-    height: 44,
+    height: 46,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   btnModalCloseText: { color: "#000", fontSize: 13, fontWeight: "900" },
+  btnModalLogout: { paddingVertical: 10, marginTop: 6 },
+  btnModalLogoutText: { color: "#EF4444", fontSize: 12, fontWeight: "700" },
   guiaModalItem: {
     backgroundColor: "#1E202B",
     borderRadius: 10,
@@ -1995,23 +2308,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
 
-  classicSwitchBtn: {
-    backgroundColor: colors.gold,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-  },
-  classicSwitchBtnText: { color: "#000", fontSize: 10, fontWeight: "900" },
-  classicNavBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    backgroundColor: "#14161E",
-    padding: 16,
-    borderRadius: 12,
-  },
-  classicNavTitle: { color: "#FFF", fontSize: 15, fontWeight: "800" },
-  loggedOutBox: { alignItems: "center", marginTop: 60, gap: 10 },
-  brand: { color: colors.gold, fontSize: 24, fontWeight: "800" },
-  hint: { color: "#9CA3AF", fontSize: 13 },
+  loggedOutBox: { width: "100%", maxWidth: 420, gap: spacing.md, alignItems: "center", alignSelf: "center", marginTop: 40 },
+  brand: { color: colors.gold, fontSize: 26, fontWeight: "800" },
+  hint: { color: colors.textMuted, fontSize: 14, textAlign: "center" },
 });
