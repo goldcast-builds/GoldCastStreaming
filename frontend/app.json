@@ -2,7 +2,7 @@
   "expo": {
     "name": "GoldCast Media Player",
     "slug": "goldcast-media-player",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "goldcast",
@@ -21,6 +21,7 @@
       }
     },
     "android": {
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
