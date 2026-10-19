@@ -41,12 +41,6 @@ interface GuiaMatch {
   channels: string;
 }
 
-const MAIN = [
-  { key: "live", label: "TV AO VIVO", sub: "Canais em tempo real", icon: "tv", path: "/(tabs)/live" },
-  { key: "movies", label: "FILMES", sub: "Catálogo On-Demand", icon: "film", path: "/(tabs)/movies" },
-  { key: "series", label: "SÉRIES", sub: "Temporadas completas", icon: "albums", path: "/(tabs)/series" },
-] as const;
-
 const AVATAR_PRESETS = [
   { color: "#E50914", emoji: "🎬" },
   { color: "#1E88E5", emoji: "🙂" },
@@ -93,7 +87,7 @@ export default function HomeTab() {
   const [selectedPreset, setSelectedPreset] = useState(0);
   const [newProfileKids, setNewProfileKids] = useState(false);
 
-  // Estados de Navegação e Categorias Reais
+  // Estados de Navegação e Categorias Reais da Lista
   const [otrEnabled, setOtrEnabled] = useState(true);
   const [vodCategories, setVodCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("Todos os títulos");
@@ -182,9 +176,12 @@ export default function HomeTab() {
       if (source?.kind === "xtream" && session) {
         if (!catalog.vodLoaded) loadVod();
         if (!catalog.seriesLoaded && loadSeries) loadSeries();
-        xtream.vodCategories(session).then((cats) => {
-          if (cats && cats.length > 0) setVodCategories(cats);
-        }).catch(() => {});
+        xtream
+          .vodCategories(session)
+          .then((cats) => {
+            if (cats && cats.length > 0) setVodCategories(cats);
+          })
+          .catch(() => {});
       }
     }, [source?.kind, catalog.vodLoaded, catalog.seriesLoaded, loadVod, loadSeries, session])
   );
@@ -404,7 +401,6 @@ export default function HomeTab() {
       .map((v) => ({ id: String(v.stream_id), name: v.name, poster: v.stream_icon, type: "movie" }));
   }, [catalog.vod]);
 
-  // Continuar assistindo no Modo OTR
   const continueWatchingList = useMemo(() => {
     if (!progressMap) return [];
     return Object.values(progressMap)
@@ -417,7 +413,7 @@ export default function HomeTab() {
       .slice(0, 10);
   }, [progressMap]);
 
-  // Filtro de VOD com Modo Criança (Kids)
+  // Filtro de VOD com Modo Criança (Kids) rigoroso e integração correta das categorias reais da lista
   const filteredVod = useMemo(() => {
     if (!catalog.vod?.length) return [];
     let list = catalog.vod.filter((v) => !!v.stream_icon);
@@ -583,7 +579,7 @@ export default function HomeTab() {
                 </Pressable>
               </ScrollView>
 
-              {/* CARROSSEL SUPERIOR MÚLTIPLO */}
+              {/* CARROSSEL SUPERIOR COM MÚLTIPLOS ITENS EM ROTAÇÃO */}
               {heroCarrosselItems.length > 0 && (
                 <View style={styles.nfHeroOuter}>
                   <ScrollView
