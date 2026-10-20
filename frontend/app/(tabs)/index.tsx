@@ -24,7 +24,15 @@ import { listLists } from "../../src/utils/api";
 import { useSession } from "../../src/store/session";
 import { xtream, LiveStream, Category } from "../../src/services/xtream";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+interface UserProfile {
+  id: string;
+  name: string;
+  color: string;
+  icon: string; // Ícone sofisticado
+  type: "normal" | "kids" | "adult"; // normal, kids ou adult (+18)
+}
 
 interface GuiaMatch {
   id: string;
@@ -33,6 +41,17 @@ interface GuiaMatch {
   match: string;
   channels: string;
 }
+
+const SOPHISTICATED_AVATARS = [
+  { icon: "film-outline", color: "#E50914", label: "Cinema" },
+  { icon: "rocket-outline", color: "#1E88E5", label: "Espaço" },
+  { icon: "game-controller-outline", color: "#6A1B9A", label: "Gamer" },
+  { icon: "sparkles-outline", color: "#FB8C00", label: "Estrelação" },
+  { icon: "shield-outline", color: "#43A047", label: "Herói" },
+  { icon: "musical-notes-outline", color: "#00ACC1", label: "Música" },
+  { icon: "happy-outline", color: "#FDD835", label: "Alegria" },
+  { icon: "diamond-outline", color: "#D81B60", label: "VIP" },
+];
 
 export default function HomeTab() {
   const router = useRouter();
@@ -43,6 +62,7 @@ export default function HomeTab() {
   const catalog = useSession((s) => s.catalog);
   const loadVod = useSession((s) => s.loadVod);
   const loadSeries = useSession((s) => (s as any).loadSeries);
+  const progressMap = useSession((s) => s.ud?.progress);
   const logout = useSession((s) => s.logout);
 
   const [hasLists, setHasLists] = useState(false);
@@ -51,18 +71,32 @@ export default function HomeTab() {
   const [activationCode, setActivationCode] = useState<string>("LICENÇA ATIVA");
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
-  
-  const [showAccountModal, setShowAccountModal] = useState(false);
-  const [showGuiaModal, setShowGuiaModal] = useState(false);
 
-  // Controle Parental (+18)
-  const [adultLocked, setAdultLocked] = useState(true);
+  // Sistema de Gestão de Perfis (Até 5 perfis)
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
+  const [showProfileGate, setShowProfileGate] = useState(false);
+  const [showProfileSheet, setShowProfileSheet] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+
+  // Novo Perfil Form
+  const [newProfileName, setNewProfileName] = useState("");
+  const [selectedAvatarIdx, setSelectedAvatarIdx] = useState(0);
+  const [newProfileType, setNewProfileType] = useState<"normal" | "kids" | "adult">("normal");
+
+  // Controle Parental Adulto (+18)
   const [adultPin, setAdultPin] = useState("0000");
-  const [showParentalModal, setShowParentalModal] = useState(false);
-  const [newCustomPin, setNewCustomPin] = useState("");
   const [showPinModal, setShowPinModal] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
   const [pendingItemToOpen, setPendingItemToOpen] = useState<any>(null);
+
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showGuiaModal, setShowGuiaModal] = useState(false);
+  const [showParentalModal, setShowParentalModal] = useState(false);
+  const [newCustomPin, setNewCustomPin] = useState("");
+
+  const [profileProgress, setProfileProgress] = useState<Record<string, any>>({});
 
   const { username, expFormatted, daysLeft, isExpired } = useMemo(() => {
     const user = session?.userInfo?.username || session?.username || "Cliente";
@@ -82,25 +116,140 @@ export default function HomeTab() {
     return { username: user, expFormatted, daysLeft, isExpired: daysLeft <= 0 };
   }, [session]);
 
+  const currentProfile: UserProfile = useMemo(() => {
+    if (activeProfile) return activeProfile;
+    if (profiles.length > 0) return profiles[0];
+    return {
+      id: "default",
+      name: username || "Principal",
+      color: "#E50914",
+      icon: "film-outline",
+      type: "normal",
+    };
+  }, [activeProfile, profiles, username]);
+
+  // Carrega progresso específico isolado do perfil ativo
+  useEffect(() => {
+    if (currentProfile?.id) {
+      AsyncStorage.getItem(`@goldcast_progress_${currentProfile.id}`).then((raw) => {
+        if (raw) {
+          try {
+            setProfileProgress(JSON.parse(raw));
+          } catch {
+            setProfileProgress({});
+          }
+        } else {
+          setProfileProgress({});
+        }
+      });
+    }
+  }, [currentProfile?.id, progressMap]);
+
   useFocusEffect(
     useCallback(() => {
+      let isMounted = true;
       AsyncStorage.getItem("@goldcast_saved_code").then((code) => {
-        if (code) setActivationCode(code);
-      });
-      AsyncStorage.getItem("@goldcast_adult_locked").then((val) => {
-        if (val !== null) setAdultLocked(val === "true");
+        if (code && isMounted) setActivationCode(code);
       });
       AsyncStorage.getItem("@goldcast_adult_pin").then((val) => {
-        if (val) setAdultPin(val);
+        if (val && isMounted) setAdultPin(val);
       });
 
-      listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
+      Promise.all([
+        AsyncStorage.getItem("@goldcast_profiles"),
+        AsyncStorage.getItem("@goldcast_active_profile"),
+      ]).then(([rawProfiles, rawActive]) => {
+        if (!isMounted) return;
+        let loadedProfiles: UserProfile[] = [];
+        if (rawProfiles) {
+          try {
+            const parsed = JSON.parse(rawProfiles);
+            if (Array.isArray(parsed)) loadedProfiles = parsed;
+          } catch {}
+        }
+
+        // Se não houver nenhum perfil criado, cria um padrão automaticamente baseado no login
+        if (loadedProfiles.length === 0) {
+          loadedProfiles = [
+            {
+              id: `p_${Date.now()}`,
+              name: username || "Principal",
+              color: "#E50914",
+              icon: "film-outline",
+              type: "normal",
+            },
+          ];
+          AsyncStorage.setItem("@goldcast_profiles", JSON.stringify(loadedProfiles));
+        }
+
+        setProfiles(loadedProfiles);
+
+        if (rawActive) {
+          try {
+            setActiveProfile(JSON.parse(rawActive));
+          } catch {
+            setActiveProfile(loadedProfiles[0]);
+          }
+        } else {
+          setActiveProfile(loadedProfiles[0]);
+        }
+      });
+
+      listLists().then((l) => { if (isMounted) setHasLists(l.length > 0); }).catch(() => {});
       if (session) {
         if (loadVod) loadVod().catch(() => {});
         if (loadSeries) loadSeries().catch(() => {});
       }
-    }, [session, loadVod, loadSeries])
+      return () => { isMounted = false; };
+    }, [session, loadVod, loadSeries, username])
   );
+
+  const handleSelectProfile = async (p: UserProfile) => {
+    setActiveProfile(p);
+    setShowProfileGate(false);
+    setShowProfileSheet(false);
+    setEditMode(false);
+    await AsyncStorage.setItem("@goldcast_active_profile", JSON.stringify(p));
+  };
+
+  const handleCreateProfile = async () => {
+    const clean = newProfileName.trim();
+    if (!clean) return;
+    if (profiles.length >= 5) {
+      Alert.alert("Limite atingido", "Pode criar no máximo 5 perfis por conta.");
+      return;
+    }
+    const avatar = SOPHISTICATED_AVATARS[selectedAvatarIdx] || SOPHISTICATED_AVATARS[0];
+    const created: UserProfile = {
+      id: `p_${Date.now()}`,
+      name: clean,
+      color: avatar.color,
+      icon: avatar.icon,
+      type: newProfileType,
+    };
+    const nextList = [...profiles, created];
+    setProfiles(nextList);
+    await AsyncStorage.setItem("@goldcast_profiles", JSON.stringify(nextList));
+    setNewProfileName("");
+    setNewProfileType("normal");
+    setShowCreateModal(false);
+    await handleSelectProfile(created);
+  };
+
+  const handleDeleteProfile = async (id: string) => {
+    if (profiles.length <= 1) {
+      Alert.alert("Aviso", "A conta precisa ter pelo menos um perfil ativo.");
+      return;
+    }
+    const nextList = profiles.filter((p) => p.id !== id);
+    setProfiles(nextList);
+    await AsyncStorage.setItem("@goldcast_profiles", JSON.stringify(nextList));
+    await AsyncStorage.removeItem(`@goldcast_progress_${id}`);
+
+    if (activeProfile?.id === id) {
+      await handleSelectProfile(nextList[0]);
+    }
+  };
 
   const isAdultContent = (name: string, categoryName: string = "") => {
     const text = (name + " " + categoryName).toLowerCase();
@@ -108,7 +257,14 @@ export default function HomeTab() {
   };
 
   const handleOpenItemWithParentalCheck = (item: any, openAction: () => void) => {
-    if (adultLocked && isAdultContent(item?.name || item?.title || "")) {
+    // Se o perfil ativo for infantil, bloqueia imediatamente conteúdo adulto
+    if (currentProfile.type === "kids" && isAdultContent(item?.name || item?.title || "")) {
+      Alert.alert("Conteúdo Restrito", "Este perfil infantil não tem permissão para aceder a este conteúdo.");
+      return;
+    }
+
+    // Se for perfil normal e tentar aceder a conteúdo adulto, exige PIN se não for perfil +18
+    if (currentProfile.type !== "adult" && isAdultContent(item?.name || item?.title || "")) {
       setPendingItemToOpen(() => openAction);
       setEnteredPin("");
       setShowPinModal(true);
@@ -236,10 +392,27 @@ export default function HomeTab() {
   const marqueeItems: MarqueeItem[] = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod
-      .filter((v) => !!v.stream_icon && (!adultLocked || !isAdultContent(v.name)))
+      .filter((v) => {
+        if (!v.stream_icon) return false;
+        if (currentProfile.type === "kids" && isAdultContent(v.name)) return false;
+        if (currentProfile.type !== "adult" && isAdultContent(v.name)) return false;
+        return true;
+      })
       .slice(0, 15)
       .map((v) => ({ id: String(v.stream_id), name: v.name, poster: v.stream_icon, type: "movie" }));
-  }, [catalog.vod, adultLocked]);
+  }, [catalog.vod, currentProfile.type]);
+
+  const continueWatchingList = useMemo(() => {
+    if (!profileProgress || Object.keys(profileProgress).length === 0) return [];
+    return Object.values(profileProgress)
+      .filter((p: any) => p && p.duration > 60 && p.position > 15 && p.position < p.duration - 30)
+      .map((p: any) => ({
+        ...p,
+        pct: Math.min(100, Math.round((p.position / p.duration) * 100)),
+      }))
+      .reverse()
+      .slice(0, 10);
+  }, [profileProgress]);
 
   const go = async (path: string) => {
     if (session && source?.kind !== "list") await setSource({ kind: "xtream" });
@@ -256,6 +429,14 @@ export default function HomeTab() {
     });
   };
 
+  const handleResumeItem = (entry: any) => {
+    handleOpenItemWithParentalCheck(entry, () => {
+      if (entry.item?.id) {
+        router.push({ pathname: "/movie/[id]", params: { id: String(entry.item.id) } });
+      }
+    });
+  };
+
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <ScrollView
@@ -268,13 +449,20 @@ export default function HomeTab() {
       >
         {hasContent ? (
           <View style={styles.mainContainer}>
-            {/* CABEÇALHO COM UTILIZADOR E CÓDIGO DE ACESSO */}
+            {/* CABEÇALHO COM PERFIL ATIVO E CÓDIGO DE ACESSO */}
             <View style={styles.rowBetween}>
               <View style={{ gap: 2 }}>
-                <Text style={styles.sectionHeader}>BEM-VINDO AO GOLDCAST</Text>
+                <Text style={styles.sectionHeader}>GOLDCAST STREAMING</Text>
                 <View style={styles.rowAlign}>
-                  <Ionicons name="person-circle-outline" size={18} color={colors.gold} />
-                  <Text style={styles.userMainTitle} numberOfLines={1}>{username}</Text>
+                  <Pressable
+                    onPress={() => setShowProfileSheet(true)}
+                    style={[styles.profileTopChip, { borderColor: currentProfile.color }]}
+                  >
+                    <Ionicons name={currentProfile.icon as any} size={16} color={currentProfile.color} />
+                    <Text style={styles.profileTopName} numberOfLines={1}>{currentProfile.name}</Text>
+                    <Ionicons name="chevron-down" size={12} color={colors.textDim} />
+                  </Pressable>
+
                   <View style={styles.codePillBadge}>
                     <Ionicons name="key" size={11} color="#000" />
                     <Text style={styles.codePillText}>{activationCode}</Text>
@@ -339,11 +527,11 @@ export default function HomeTab() {
               </Pressable>
               <Pressable
                 focusable={true}
-                onPress={() => setShowParentalModal(true)}
+                onPress={() => setShowProfileSheet(true)}
                 style={styles.tile}
               >
-                <Ionicons name="lock-closed-outline" size={18} color={colors.gold} />
-                <Text style={styles.tileLabel}>Controle +18</Text>
+                <Ionicons name="people-outline" size={18} color={colors.gold} />
+                <Text style={styles.tileLabel}>Perfis</Text>
               </Pressable>
               <Pressable
                 focusable={true}
@@ -354,6 +542,39 @@ export default function HomeTab() {
                 <Text style={styles.tileLabel}>Conta</Text>
               </Pressable>
             </View>
+
+            {/* CONTINUAR ASSISTIR ESPECÍFICO DO PERFIL */}
+            {continueWatchingList.length > 0 && (
+              <View style={styles.nfSection}>
+                <Text style={styles.sectionTitle}>CONTINUAR A ASSISTIR ({currentProfile.name})</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nfRowScroll}>
+                  {continueWatchingList.map((entry: any, idx: number) => (
+                    <Pressable
+                      key={idx}
+                      focusable={true}
+                      onPress={() => handleResumeItem(entry)}
+                      style={styles.nfContinueCard}
+                    >
+                      <View style={styles.nfContinuePosterWrap}>
+                        {entry.logo ? (
+                          <Image source={{ uri: entry.logo }} style={styles.fullSize} resizeMode="cover" />
+                        ) : (
+                          <View style={[styles.fullSize, styles.center, { backgroundColor: "#1E222D" }]}>
+                            <Ionicons name="film-outline" size={24} color={colors.gold} />
+                          </View>
+                        )}
+                        <View style={styles.nfPlayCircleOverlay}>
+                          <Ionicons name="play" size={18} color="#FFF" style={{ marginLeft: 2 }} />
+                        </View>
+                      </View>
+                      <View style={styles.nfContinueProgressBg}>
+                        <View style={[styles.nfContinueProgressFill, { width: `${entry.pct}%` }]} />
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
             {/* CANAIS DE JOGOS AO VIVO */}
             {jogosChannels.length > 0 && (
@@ -457,6 +678,143 @@ export default function HomeTab() {
         )}
       </ScrollView>
 
+      {/* GAVETA / MODAL DE GESTÃO E SELEÇÃO DE PERFIS */}
+      <Modal visible={showProfileSheet} animationType="slide" transparent={true}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheetContainer, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetHeaderRow}>
+              <Text style={styles.sheetTitle}>Quem está assistindo?</Text>
+              <Pressable onPress={() => setShowProfileSheet(false)} style={styles.sheetCloseBtn}>
+                <Ionicons name="close" size={20} color="#FFF" />
+              </Pressable>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sheetProfilesRow}>
+              {profiles.map((p) => (
+                <Pressable
+                  key={p.id}
+                  onPress={() => {
+                    if (editMode) {
+                      handleDeleteProfile(p.id);
+                    } else {
+                      handleSelectProfile(p);
+                    }
+                  }}
+                  style={styles.sheetProfileMiniItem}
+                >
+                  <View style={[styles.sheetMiniAvatar, { backgroundColor: p.color, borderWidth: currentProfile.id === p.id ? 3 : 0, borderColor: "#FFF" }]}>
+                    <Ionicons name={p.icon as any} size={28} color="#FFF" />
+                    {p.type === "kids" && (
+                      <View style={styles.kidsTagBadge}><Text style={styles.kidsTagText}>KIDS</Text></View>
+                    )}
+                    {p.type === "adult" && (
+                      <View style={styles.adultTagBadge}><Text style={styles.adultTagText}>+18</Text></View>
+                    )}
+                    {editMode && (
+                      <View style={styles.deleteOverlay}>
+                        <Ionicons name="trash" size={20} color="#FFF" />
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.sheetMiniName} numberOfLines={1}>{p.name}</Text>
+                </Pressable>
+              ))}
+
+              {profiles.length < 5 && (
+                <Pressable
+                  onPress={() => {
+                    setShowProfileSheet(false);
+                    setShowCreateModal(true);
+                  }}
+                  style={styles.sheetProfileMiniItem}
+                >
+                  <View style={styles.sheetMiniAddBox}>
+                    <Ionicons name="add" size={28} color="#FFF" />
+                  </View>
+                  <Text style={styles.sheetMiniName}>Adicionar</Text>
+                </Pressable>
+              )}
+            </ScrollView>
+
+            <Pressable
+              onPress={() => setEditMode(!editMode)}
+              style={styles.manageProfilesPill}
+            >
+              <Text style={styles.manageProfilesPillText}>{editMode ? "Concluir edição" : "Gerenciar / Excluir Perfis"}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL DE CRIAÇÃO DE PERFIL */}
+      <Modal visible={showCreateModal} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.createProfileModalCard}>
+            <Text style={styles.createModalTitle}>Criar Novo Perfil</Text>
+            <Text style={styles.createModalSub}>Escolha um avatar sofisticado e o tipo de perfil (Até 5)</Text>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 10 }}>
+              {SOPHISTICATED_AVATARS.map((av, idx) => (
+                <Pressable
+                  key={idx}
+                  onPress={() => setSelectedAvatarIdx(idx)}
+                  style={[
+                    styles.avatarOptionBox,
+                    { backgroundColor: av.color },
+                    selectedAvatarIdx === idx && styles.avatarOptionSelected,
+                  ]}
+                >
+                  <Ionicons name={av.icon as any} size={26} color="#FFF" />
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <TextInput
+              placeholder="Nome do perfil (ex: Família, Kids)..."
+              placeholderTextColor="#777"
+              value={newProfileName}
+              onChangeText={setNewProfileName}
+              style={styles.createInput}
+            />
+
+            <View style={styles.profileTypeRow}>
+              <Pressable
+                onPress={() => setNewProfileType("normal")}
+                style={[styles.typePill, newProfileType === "normal" && styles.typePillActive]}
+              >
+                <Text style={[styles.typePillText, newProfileType === "normal" && { color: "#000", fontWeight: "900" }]}>Normal</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setNewProfileType("kids")}
+                style={[styles.typePill, newProfileType === "kids" && styles.typePillActive]}
+              >
+                <Text style={[styles.typePillText, newProfileType === "kids" && { color: "#000", fontWeight: "900" }]}>Infantil (Kids)</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setNewProfileType("adult")}
+                style={[styles.typePill, newProfileType === "adult" && styles.typePillActive]}
+              >
+                <Text style={[styles.typePillText, newProfileType === "adult" && { color: "#000", fontWeight: "900" }]}>Adulto (+18)</Text>
+              </Pressable>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 10 }}>
+              <Pressable
+                onPress={() => setShowCreateModal(false)}
+                style={[styles.btnModalClose, { flex: 1, backgroundColor: "#262936" }]}
+              >
+                <Text style={[styles.btnModalCloseText, { color: "#FFF" }]}>CANCELAR</Text>
+              </Pressable>
+              <Pressable onPress={handleCreateProfile} style={[styles.btnModalClose, { flex: 1 }]}>
+                <Text style={styles.btnModalCloseText}>CRIAR PERFIL</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* MODAL DE PIN ADULTO (+18) */}
       <Modal visible={showPinModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
@@ -494,69 +852,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* MODAL DE CONFIGURAÇÃO DE CONTROLE ADULTO */}
-      <Modal visible={showParentalModal} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.createProfileModalCard}>
-            <Text style={styles.createModalTitle}>Controle Parental (+18)</Text>
-            <Text style={styles.createModalSub}>Bloquear conteúdo adulto e alterar senha</Text>
-
-            <Pressable
-              onPress={async () => {
-                const next = !adultLocked;
-                setAdultLocked(next);
-                await AsyncStorage.setItem("@goldcast_adult_locked", String(next));
-              }}
-              style={styles.kidsToggleRow}
-            >
-              <Text style={styles.kidsToggleLabel}>Bloquear Conteúdo Adulto</Text>
-              <Ionicons
-                name={adultLocked ? "checkbox" : "square-outline"}
-                size={24}
-                color={colors.gold}
-              />
-            </Pressable>
-
-            <TextInput
-              secureTextEntry
-              keyboardType="numeric"
-              maxLength={4}
-              placeholder="Nova senha (ex: 1234)"
-              placeholderTextColor="#777"
-              value={newCustomPin}
-              onChangeText={setNewCustomPin}
-              style={[styles.createInput, { textAlign: "center" }]}
-            />
-
-            <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 10 }}>
-              <Pressable
-                onPress={() => setShowParentalModal(false)}
-                style={[styles.btnModalClose, { flex: 1, backgroundColor: "#262936" }]}
-              >
-                <Text style={[styles.btnModalCloseText, { color: "#FFF" }]}>FECHAR</Text>
-              </Pressable>
-              <Pressable
-                onPress={async () => {
-                  if (newCustomPin.trim().length === 4) {
-                    setAdultPin(newCustomPin.trim());
-                    await AsyncStorage.setItem("@goldcast_adult_pin", newCustomPin.trim());
-                    Alert.alert("Sucesso", "Senha alterada com sucesso!");
-                    setNewCustomPin("");
-                    setShowParentalModal(false);
-                  } else {
-                    Alert.alert("Erro", "A senha deve ter exatamente 4 dígitos numéricos.");
-                  }
-                }}
-                style={[styles.btnModalClose, { flex: 1 }]}
-              >
-                <Text style={styles.btnModalCloseText}>SALVAR SENHA</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* MODAL DE CONTA */}
+      {/* MODAL DE CONTA E CONFIGURAÇÕES DE SENHA +18 */}
       <Modal visible={showAccountModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.accountCardModal}>
@@ -564,7 +860,7 @@ export default function HomeTab() {
               <Ionicons name="person" size={32} color={colors.gold} />
             </View>
             <Text style={styles.accountModalTitle}>INFORMAÇÕES DA CONTA</Text>
-            <Text style={styles.accountModalSubtitle}>Detalhes da licença e conexão do reprodutor</Text>
+            <Text style={styles.accountModalSubtitle}>Gestão de perfis e segurança</Text>
 
             <View style={styles.accountInfoList}>
               <View style={styles.accountInfoRow}>
@@ -584,11 +880,11 @@ export default function HomeTab() {
             <Pressable
               onPress={() => {
                 setShowAccountModal(false);
-                setShowParentalModal(true);
+                setShowProfileSheet(true);
               }}
-              style={[styles.btnModalClose, { backgroundColor: "#262936", marginBottom: 10 }]}
+              style={[styles.btnModalClose, { backgroundColor: "#262936", marginBottom: 8 }]}
             >
-              <Text style={[styles.btnModalCloseText, { color: colors.gold }]}>CONFIGURAR CONTROLE +18</Text>
+              <Text style={[styles.btnModalCloseText, { color: colors.gold }]}>GERENCIAR PERFIS ({profiles.length}/5)</Text>
             </Pressable>
 
             <Pressable onPress={() => setShowAccountModal(false)} style={styles.btnModalClose}>
@@ -680,8 +976,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   mainContainer: { gap: spacing.lg, paddingHorizontal: spacing.lg },
   sectionHeader: { color: colors.textDim, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
-  userMainTitle: { color: colors.text, fontSize: 16, fontWeight: "800", marginLeft: 4, marginRight: 8, maxWidth: 160 },
-  codePillBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.gold, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  profileTopChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1.5 },
+  profileTopName: { color: "#FFF", fontSize: 13, fontWeight: "800", maxWidth: 110 },
+  codePillBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.gold, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, marginLeft: 8 },
   codePillText: { color: "#000", fontSize: 10.5, fontWeight: "900" },
   accountIconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   sectionTitle: { color: colors.gold, fontSize: 12, fontWeight: "800", letterSpacing: 0.8 },
@@ -700,6 +997,13 @@ const styles = StyleSheet.create({
   quickRow: { flexDirection: "row", gap: 10, marginTop: 4 },
   tile: { flex: 1, flexDirection: "row", height: 46, borderRadius: radius.sm, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 6 },
   tileLabel: { color: colors.text, fontSize: 11.5, fontWeight: "600" },
+  nfSection: { gap: 8 },
+  nfRowScroll: { gap: 10 },
+  nfContinueCard: { width: 116, backgroundColor: "#14161D", borderRadius: 8, overflow: "hidden" },
+  nfContinuePosterWrap: { width: 116, height: 80, position: "relative", alignItems: "center", justifyContent: "center" },
+  nfPlayCircleOverlay: { position: "absolute", width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.65)", borderWidth: 2, borderColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  nfContinueProgressBg: { height: 3.5, backgroundColor: "#374151", width: "100%" },
+  nfContinueProgressFill: { height: "100%", backgroundColor: "#E50914" },
   marqueeOuter: { overflow: "hidden", marginHorizontal: -spacing.lg, paddingVertical: 6 },
   marqueeTrack: { flexDirection: "row", paddingLeft: spacing.lg },
   channelCard: { width: 122, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1.5, borderColor: "rgba(229, 169, 59, 0.22)", overflow: "hidden", marginRight: 12 },
@@ -728,13 +1032,39 @@ const styles = StyleSheet.create({
   guiaMatchTitle: { color: colors.text, fontSize: 13, fontWeight: "800", letterSpacing: 0.2 },
   guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
   guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "700" },
+
+  sheetOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "flex-end" },
+  sheetContainer: { backgroundColor: "#181818", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 18, paddingTop: 10, gap: 14 },
+  sheetHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: "#4B5563", alignSelf: "center" },
+  sheetHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sheetTitle: { color: "#FFF", fontSize: 18, fontWeight: "800" },
+  sheetCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: "#2B2B2B", alignItems: "center", justifyContent: "center" },
+  sheetProfilesRow: { gap: 14, paddingVertical: 10 },
+  sheetProfileMiniItem: { alignItems: "center", gap: 6, width: 72 },
+  sheetMiniAvatar: { width: 64, height: 64, borderRadius: 16, alignItems: "center", justifyContent: "center", position: "relative" },
+  sheetMiniName: { color: "#E5E7EB", fontSize: 11, fontWeight: "600" },
+  sheetMiniAddBox: { width: 64, height: 64, borderRadius: 16, backgroundColor: "#2B2B2B", alignItems: "center", justifyContent: "center" },
+  manageProfilesPill: { alignSelf: "center", backgroundColor: "#2B2B2B", paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20 },
+  manageProfilesPillText: { color: "#FFF", fontSize: 12.5, fontWeight: "700" },
+
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
   createProfileModalCard: { width: "100%", maxWidth: 380, backgroundColor: "#181818", borderRadius: 20, padding: 22, alignItems: "center", gap: 12 },
   createModalTitle: { color: "#FFF", fontSize: 18, fontWeight: "800" },
   createModalSub: { color: "#9CA3AF", fontSize: 12, textAlign: "center" },
+  avatarOptionBox: { width: 54, height: 54, borderRadius: 12, alignItems: "center", justifyContent: "center", opacity: 0.6 },
+  avatarOptionSelected: { opacity: 1, borderWidth: 3, borderColor: "#FFFFFF", transform: [{ scale: 1.08 }] },
   createInput: { width: "100%", height: 48, backgroundColor: "#262626", borderRadius: 10, paddingHorizontal: 14, color: "#FFF", fontSize: 14 },
-  kidsToggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", paddingVertical: 6 },
-  kidsToggleLabel: { color: "#E5E7EB", fontSize: 13.5, fontWeight: "600" },
+  profileTypeRow: { flexDirection: "row", gap: 8, width: "100%", marginVertical: 4 },
+  typePill: { flex: 1, paddingVertical: 10, backgroundColor: "#262626", borderRadius: 8, alignItems: "center" },
+  typePillActive: { backgroundColor: colors.gold },
+  typePillText: { color: "#9CA3AF", fontSize: 12, fontWeight: "700" },
+
+  kidsTagBadge: { position: "absolute", bottom: 2, right: 2, backgroundColor: "#1E88E5", paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 },
+  kidsTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
+  adultTagBadge: { position: "absolute", bottom: 2, right: 2, backgroundColor: "#E50914", paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 },
+  adultTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
+  deleteOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(229, 9, 20, 0.75)", borderRadius: 16, alignItems: "center", justifyContent: "center" },
+
   accountCardModal: { width: "100%", maxWidth: 380, backgroundColor: "#111319", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(229,169,59,0.3)", padding: 24, alignItems: "center" },
   accountIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(229,169,59,0.12)", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.gold, marginBottom: 12 },
   accountModalTitle: { color: colors.gold, fontSize: 18, fontWeight: "800", letterSpacing: 0.5 },
