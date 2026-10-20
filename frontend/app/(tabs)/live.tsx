@@ -38,17 +38,18 @@ export default function LiveTab() {
     }, [session, loadLive])
   );
 
+  const isKidsContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|spider|herói|hero|frozen|princesa|sonic|pokemon|minions/i.test(
+      text
+    );
+  };
+
   const liveList = useMemo(() => {
     let list = catalog.live || [];
 
     if (activeProfile?.isKids) {
-      list = list.filter((ch) => {
-        const title = (ch.name || "").toLowerCase();
-        const catName = (ch.category_name || "").toLowerCase();
-        return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|spider|herói|hero|frozen|princesa|sonic|pokemon|minions/i.test(
-          title + " " + catName
-        );
-      });
+      list = list.filter((ch) => isKidsContent(ch.name, ch.category_name));
     }
 
     if (selectedCatName !== "Todos os canais") {
