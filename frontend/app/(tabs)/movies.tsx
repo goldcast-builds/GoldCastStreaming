@@ -24,18 +24,24 @@ export default function MoviesTab() {
 
   useFocusEffect(
     useCallback(() => {
-      loadVod();
+      let active = true;
+      if (session && !catalog.vodLoaded) {
+        loadVod().catch(() => {});
+      }
       AsyncStorage.getItem("@goldcast_active_profile").then((raw) => {
-        if (raw) {
+        if (raw && active) {
           try {
             setActiveProfile(JSON.parse(raw));
           } catch {}
         }
       });
       if (session) {
-        xtream.vodCategories(session).then(setVodCategories).catch(() => {});
+        xtream.vodCategories(session).then((cats) => {
+          if (active && cats) setVodCategories(cats);
+        }).catch(() => {});
       }
-    }, [session, loadVod])
+      return () => { active = false; };
+    }, [session, catalog.vodLoaded, loadVod])
   );
 
   const isKidsContent = (name: string, categoryName: string = "") => {
