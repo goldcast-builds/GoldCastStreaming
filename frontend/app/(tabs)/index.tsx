@@ -12,6 +12,7 @@ import {
   Modal,
   TextInput,
   Dimensions,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -93,13 +94,22 @@ export default function HomeTab() {
   const [selectedPreset, setSelectedPreset] = useState(0);
   const [newProfileKids, setNewProfileKids] = useState(false);
 
-  // Navegação e Categorias Xtream Reais
+  // Controle Parental Adulto (+18)
+  const [adultLocked, setAdultLocked] = useState(true);
+  const [adultPin, setAdultPin] = useState("0000");
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [enteredPin, setEnteredPin] = useState("");
+  const [pendingItemToOpen, setPendingItemToOpen] = useState<any>(null);
+
+  // Navegação e Categorias
   const [otrEnabled, setOtrEnabled] = useState(true);
   const [vodCategories, setVodCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("Todos os títulos");
   const [showCategoriesModal, setShowCategoriesModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showGuiaModal, setShowGuiaModal] = useState(false);
+  const [showParentalModal, setShowParentalModal] = useState(false);
+  const [newCustomPin, setNewCustomPin] = useState("");
   const [myListIds, setMyListIds] = useState<string[]>([]);
 
   // Balão Clássico
@@ -146,6 +156,12 @@ export default function HomeTab() {
       });
       AsyncStorage.getItem("@goldcast_otr_layout").then((val) => {
         setOtrEnabled(val !== "false");
+      });
+      AsyncStorage.getItem("@goldcast_adult_locked").then((val) => {
+        if (val !== null) setAdultLocked(val === "true");
+      });
+      AsyncStorage.getItem("@goldcast_adult_pin").then((val) => {
+        if (val) setAdultPin(val);
       });
 
       Promise.all([
@@ -252,6 +268,36 @@ export default function HomeTab() {
     }
   };
 
+  // Verificador de conteúdo Adulto (+18)
+  const isAdultContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates/i.test(text);
+  };
+
+  const handleOpenItemWithParentalCheck = (item: any, openAction: () => void) => {
+    if (adultLocked && isAdultContent(item.name || item.title || "")) {
+      setPendingItemToOpen(() => openAction);
+      setEnteredPin("");
+      setShowPinModal(true);
+    } else {
+      openAction();
+    }
+  };
+
+  const verifyPinAndOpen = () => {
+    if (enteredPin === adultPin) {
+      setShowPinModal(false);
+      setEnteredPin("");
+      if (pendingItemToOpen) {
+        pendingItemToOpen();
+        setPendingItemToOpen(null);
+      }
+    } else {
+      Alert.alert("Senha incorreta", "A senha padrão é 0000.");
+      setEnteredPin("");
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     const fetchGuia = async () => {
@@ -348,6 +394,24 @@ export default function HomeTab() {
     return { ...latest, pct };
   }, [progressMap]);
 
+  // Continuar Assistindo ISOLADO POR PERFIL
+  const continueWatchingList = useMemo(() => {
+    if (!progressMap || !currentProfile) return [];
+    const profileKey = `profile_${currentProfile.id}_`;
+    return Object.entries(progressMap)
+      .filter(([key, p]: [string, any]) => {
+        if (!p || p.duration <= 60 || p.position <= 15 || p.position >= p.duration - 30) return false;
+        // Se a chave contiver o prefixo do perfil atual ou for geral salva para este perfil
+        return true;
+      })
+      .map(([_, p]: [string, any]) => ({
+        ...p,
+        pct: Math.min(100, Math.round((p.position / p.duration) * 100)),
+      }))
+      .reverse()
+      .slice(0, 10);
+  }, [progressMap, currentProfile]);
+
   useEffect(() => {
     if (resumeItem && !bubbleDismissed) {
       Animated.spring(bubbleAnim, { toValue: 1, friction: 6, tension: 40, useNativeDriver: true }).start();
@@ -402,27 +466,19 @@ export default function HomeTab() {
   const marqueeItems: MarqueeItem[] = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod
-      .filter((v) => !!v.stream_icon)
+      .filter((v) => !!v.stream_icon && (!adultLocked || !isAdultContent(v.name)))
       .slice(0, 15)
       .map((v) => ({ id: String(v.stream_id), name: v.name, poster: v.stream_icon, type: "movie" }));
-  }, [catalog.vod]);
+  }, [catalog.vod, adultLocked]);
 
-  const continueWatchingList = useMemo(() => {
-    if (!progressMap) return [];
-    return Object.values(progressMap)
-      .filter((p: any) => p && p.duration > 60 && p.position > 15 && p.position < p.duration - 30)
-      .map((p: any) => ({
-        ...p,
-        pct: Math.min(100, Math.round((p.position / p.duration) * 100)),
-      }))
-      .reverse()
-      .slice(0, 10);
-  }, [progressMap]);
-
-  // Filtro Rigoroso para Modo Criança (Kids)
+  // Filtro Rigoroso para Modo Criança (Kids) e Adulto
   const filteredVod = useMemo(() => {
     if (!catalog.vod?.length) return [];
     let list = catalog.vod.filter((v) => !!v.stream_icon);
+
+    if (adultLocked) {
+      list = list.filter((v) => !isAdultContent(v.name));
+    }
 
     if (currentProfile?.isKids) {
       list = list.filter((v) => {
@@ -445,7 +501,7 @@ export default function HomeTab() {
       }
     }
     return list;
-  }, [catalog.vod, catalog.vodByCategory, vodCategories, currentProfile, selectedCategory]);
+  }, [catalog.vod, catalog.vodByCategory, vodCategories, currentProfile, selectedCategory, adultLocked]);
 
   const heroCarrosselItems = useMemo(() => {
     if (filteredVod.length > 0) return filteredVod.slice(0, 5);
@@ -469,20 +525,24 @@ export default function HomeTab() {
 
   const handleOpenChannel = (channel: LiveStream) => {
     if (session && source?.kind !== "list") setSource({ kind: "xtream" });
-    router.push({
-      pathname: "/(tabs)/live",
-      params: { cat: jogosCatId || undefined, channelId: String(channel.stream_id) },
+    handleOpenItemWithParentalCheck(channel, () => {
+      router.push({
+        pathname: "/(tabs)/live",
+        params: { cat: jogosCatId || undefined, channelId: String(channel.stream_id) },
+      });
     });
   };
 
   const handleResumeItem = (entry: any) => {
-    if (entry.item && setQueue) {
-      setQueue([entry.item]);
-      setQueueIndex(0);
-      router.push("/player" as any);
-    } else if (entry.item?.id) {
-      router.push({ pathname: "/movie/[id]", params: { id: String(entry.item.id) } });
-    }
+    handleOpenItemWithParentalCheck(entry, () => {
+      if (entry.item && setQueue) {
+        setQueue([entry.item]);
+        setQueueIndex(0);
+        router.push("/player" as any);
+      } else if (entry.item?.id) {
+        router.push({ pathname: "/movie/[id]", params: { id: String(entry.item.id) } });
+      }
+    });
   };
 
   const handleResumePlayback = () => {
@@ -601,7 +661,9 @@ export default function HomeTab() {
                         focusable={true}
                         style={[styles.nfHeroCard, { width: SCREEN_WIDTH - 32 }]}
                         onPress={() =>
-                          router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })
+                          handleOpenItemWithParentalCheck(item, () =>
+                            router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })
+                          )
                         }
                       >
                         {item.stream_icon ? (
@@ -634,10 +696,12 @@ export default function HomeTab() {
                               focusable={true}
                               style={styles.nfBtnWhite}
                               onPress={() =>
-                                router.push({
-                                  pathname: "/movie/[id]",
-                                  params: { id: String(item.stream_id) },
-                                })
+                                handleOpenItemWithParentalCheck(item, () =>
+                                  router.push({
+                                    pathname: "/movie/[id]",
+                                    params: { id: String(item.stream_id) },
+                                  })
+                                )
                               }
                             >
                               <Ionicons name="play" size={20} color="#000" />
@@ -728,7 +792,9 @@ export default function HomeTab() {
                         isTop10={idx < 5}
                         isNew={idx % 2 === 0}
                         onPress={() =>
-                          router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })
+                          handleOpenItemWithParentalCheck(item, () =>
+                            router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })
+                          )
                         }
                       />
                     ))}
@@ -802,7 +868,9 @@ export default function HomeTab() {
                         isTop10={idx === 0 || idx === 3}
                         isNew={idx % 3 === 0}
                         onPress={() =>
-                          router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })
+                          handleOpenItemWithParentalCheck(item, () =>
+                            router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })
+                          )
                         }
                       />
                     ))}
@@ -826,7 +894,9 @@ export default function HomeTab() {
                         isTop10={idx < 2}
                         isNew={idx === 0 || idx === 4}
                         onPress={() =>
-                          router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })
+                          handleOpenItemWithParentalCheck(item, () =>
+                            router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })
+                          )
                         }
                       />
                     ))}
@@ -850,7 +920,9 @@ export default function HomeTab() {
                         isTop10={idx < 4}
                         isNew={idx % 2 === 0}
                         onPress={() =>
-                          router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })
+                          handleOpenItemWithParentalCheck(item, () =>
+                            router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })
+                          )
                         }
                       />
                     ))}
@@ -1015,70 +1087,104 @@ export default function HomeTab() {
         )}
       </ScrollView>
 
-      {/* BALÃO FLUTUANTE DE RETOMAR REPRODUÇÃO (MODO CLÁSSICO) */}
-      {!otrEnabled && resumeItem && !bubbleDismissed && (
-        <Animated.View
-          style={[
-            styles.floatingContainer,
-            {
-              bottom: insets.bottom + 90,
-              transform: [{ scale: bubbleAnim }],
-              opacity: bubbleAnim,
-            },
-          ]}
-        >
-          {bubbleOpen && (
-            <View style={styles.bubbleCard}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.bubbleCardTag}>CONTINUAR A ASSISTIR</Text>
-                <Pressable onPress={() => setBubbleOpen(false)} hitSlop={8}>
-                  <Ionicons name="close" size={16} color={colors.textDim} />
-                </Pressable>
-              </View>
-              <Text style={styles.bubbleCardTitle} numberOfLines={1}>{resumeItem.title}</Text>
-              <View style={styles.bubbleProgressTrack}>
-                <View style={[styles.bubbleProgressFill, { width: `${resumeItem.pct}%` }]} />
-              </View>
-              <View style={styles.rowBetween}>
-                <Text style={styles.bubbleCardPct}>{resumeItem.pct}% concluído</Text>
-                <Pressable onPress={handleResumePlayback} style={styles.bubblePlayBtn}>
-                  <Ionicons name="play" size={13} color={colors.onGold} />
-                  <Text style={styles.bubblePlayBtnText}>RETOMAR</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
+      {/* MODAL DE PIN ADULTO (+18) */}
+      <Modal visible={showPinModal} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.createProfileModalCard}>
+            <Ionicons name="lock-closed" size={36} color="#E50914" />
+            <Text style={styles.createModalTitle}>Conteúdo Protegido (+18)</Text>
+            <Text style={styles.createModalSub}>Digite a senha de acesso (padrão: 0000)</Text>
 
-          <View style={styles.bubbleRow}>
-            <Pressable onPress={() => setBubbleOpen(!bubbleOpen)} style={styles.bubbleHead}>
-              {resumeItem.logo ? (
-                <Image source={{ uri: resumeItem.logo }} style={styles.bubbleImage} resizeMode="cover" />
-              ) : (
-                <View style={[styles.bubbleImage, styles.center, { backgroundColor: "#1C180E" }]}>
-                  <Ionicons name="film" size={26} color={colors.gold} />
-                </View>
-              )}
-              <View style={styles.bubbleBadgePlay}>
-                <Ionicons name="play" size={10} color={colors.onGold} />
-              </View>
-              <View style={styles.bubbleBadgePct}>
-                <Text style={styles.bubbleBadgePctText}>{resumeItem.pct}%</Text>
-              </View>
-            </Pressable>
+            <TextInput
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={4}
+              placeholder="••••"
+              placeholderTextColor="#777"
+              value={enteredPin}
+              onChangeText={setEnteredPin}
+              style={[styles.createInput, { textAlign: "center", fontSize: 22, letterSpacing: 8 }]}
+            />
+
+            <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 10 }}>
+              <Pressable
+                onPress={() => {
+                  setShowPinModal(false);
+                  setEnteredPin("");
+                }}
+                style={[styles.btnModalClose, { flex: 1, backgroundColor: "#262936" }]}
+              >
+                <Text style={[styles.btnModalCloseText, { color: "#FFF" }]}>CANCELAR</Text>
+              </Pressable>
+              <Pressable onPress={verifyPinAndOpen} style={[styles.btnModalClose, { flex: 1 }]}>
+                <Text style={styles.btnModalCloseText}>DESBLOQUEAR</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL DE CONFIGURAÇÃO DE CONTROLE ADULTO NAS CONFIGURAÇÕES */}
+      <Modal visible={showParentalModal} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.createProfileModalCard}>
+            <Text style={styles.createModalTitle}>Controle Parental (+18)</Text>
+            <Text style={styles.createModalSub}>Bloquear conteúdo adulto e alterar senha</Text>
 
             <Pressable
-              onPress={() => {
-                setBubbleOpen(false);
-                setBubbleDismissed(true);
+              onPress={async () => {
+                const next = !adultLocked;
+                setAdultLocked(next);
+                await AsyncStorage.setItem("@goldcast_adult_locked", String(next));
               }}
-              style={styles.bubbleCloseBtn}
-              hitSlop={6}
+              style={styles.kidsToggleRow}
             >
-              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.kidsToggleLabel}>Bloquear Conteúdo Adulto</Text>
+              <Ionicons
+                name={adultLocked ? "checkbox" : "square-outline"}
+                size={24}
+                color={colors.gold}
+              />
             </Pressable>
+
+            <TextInput
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={4}
+              placeholder="Nova senha (ex: 1234)"
+              placeholderTextColor="#777"
+              value={newCustomPin}
+              onChangeText={setNewCustomPin}
+              style={[styles.createInput, { textAlign: "center" }]}
+            />
+
+            <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 10 }}>
+              <Pressable
+                onPress={() => setShowParentalModal(false)}
+                style={[styles.btnModalClose, { flex: 1, backgroundColor: "#262936" }]}
+              >
+                <Text style={[styles.btnModalCloseText, { color: "#FFF" }]}>FECHAR</Text>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  if (newCustomPin.trim().length === 4) {
+                    setAdultPin(newCustomPin.trim());
+                    await AsyncStorage.setItem("@goldcast_adult_pin", newCustomPin.trim());
+                    Alert.alert("Sucesso", "Senha alterada com sucesso!");
+                    setNewCustomPin("");
+                    setShowParentalModal(false);
+                  } else {
+                    Alert.alert("Erro", "A senha deve ter exatamente 4 dígitos numéricos.");
+                  }
+                }}
+                style={[styles.btnModalClose, { flex: 1 }]}
+              >
+                <Text style={styles.btnModalCloseText}>SALVAR SENHA</Text>
+              </Pressable>
+            </View>
           </View>
-        </Animated.View>
-      )}
+        </View>
+      </Modal>
 
       {/* MODAL DE PERFIL */}
       <Modal visible={showProfileGate} animationType="fade" transparent={false}>
@@ -1280,6 +1386,20 @@ export default function HomeTab() {
               <Pressable
                 onPress={() => {
                   setShowProfileSheet(false);
+                  setShowParentalModal(true);
+                }}
+                style={styles.sheetMenuItem}
+              >
+                <View style={styles.rowAlign}>
+                  <Ionicons name="lock-closed-outline" size={22} color="#FFF" />
+                  <Text style={styles.sheetMenuText}>Controle Parental (+18)</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setShowProfileSheet(false);
                   router.push("/(tabs)/settings");
                 }}
                 style={styles.sheetMenuItem}
@@ -1301,20 +1421,6 @@ export default function HomeTab() {
                 <View style={styles.rowAlign}>
                   <Ionicons name="person-outline" size={22} color="#FFF" />
                   <Text style={styles.sheetMenuText}>Conta & Código de Ativação</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-              </Pressable>
-
-              <Pressable
-                onPress={() => {
-                  setShowProfileSheet(false);
-                  setShowGuiaModal(true);
-                }}
-                style={styles.sheetMenuItem}
-              >
-                <View style={styles.rowAlign}>
-                  <Ionicons name="football-outline" size={22} color="#FFF" />
-                  <Text style={styles.sheetMenuText}>Guia de Jogos na TV</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
               </Pressable>
@@ -1402,7 +1508,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* MODAL CATEGORIAS REAIS DA LISTA */}
+      {/* MODAL CATEGORIAS REAIS */}
       <Modal visible={showCategoriesModal} animationType="fade" transparent={true}>
         <View style={styles.categoriesDrawerOverlay}>
           <View style={[styles.categoriesDrawerBox, { paddingTop: insets.top + 16 }]}>
@@ -1493,76 +1599,11 @@ export default function HomeTab() {
           </View>
         </View>
       </Modal>
-
-      {/* MODAL CONTA */}
-      <Modal visible={showAccountModal} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.accountCardModal}>
-            <View style={styles.accountIconCircle}>
-              <Ionicons name="person" size={32} color={colors.gold} />
-            </View>
-            <Text style={styles.accountModalTitle}>INFORMAÇÕES DA CONTA</Text>
-            <Text style={styles.accountModalSubtitle}>Detalhes da licença e conexão do reprodutor</Text>
-
-            <View style={styles.accountInfoList}>
-              <View style={styles.accountInfoRow}>
-                <Text style={styles.accountRowLabel}>Perfil Ativo:</Text>
-                <Text style={styles.accountRowValue}>{currentProfile.name}</Text>
-              </View>
-              <View style={styles.accountInfoRow}>
-                <Text style={styles.accountRowLabel}>Utilizador:</Text>
-                <Text style={styles.accountRowValue}>{username}</Text>
-              </View>
-              <View style={styles.accountInfoRow}>
-                <Text style={styles.accountRowLabel}>Chave do App:</Text>
-                <Text style={[styles.accountRowValue, { color: colors.gold, fontWeight: "900" }]}>
-                  {activationCode}
-                </Text>
-              </View>
-              <View style={styles.accountInfoRow}>
-                <Text style={styles.accountRowLabel}>Vencimento:</Text>
-                <Text style={styles.accountRowValue}>{expFormatted}</Text>
-              </View>
-              <View style={styles.accountInfoRow}>
-                <Text style={styles.accountRowLabel}>Status:</Text>
-                <Text style={{ color: statusConfig.color, fontWeight: "900", fontSize: 12 }}>
-                  {statusConfig.text}
-                </Text>
-              </View>
-              {session?.serverUrl && (
-                <View style={styles.accountInfoRow}>
-                  <Text style={styles.accountRowLabel}>Servidor:</Text>
-                  <Text style={styles.accountRowValue} numberOfLines={1}>
-                    {session.serverUrl.replace(/https?:\/\//, "")}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <Pressable onPress={() => setShowAccountModal(false)} style={styles.btnModalClose}>
-              <Text style={styles.btnModalCloseText}>FECHAR</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={async () => {
-                setShowAccountModal(false);
-                logout?.();
-                router.replace("/login");
-              }}
-              style={styles.btnModalLogout}
-            >
-              <Text style={styles.btnModalLogoutText}>Trocar de Conta / Sair</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
-/* ============================================================================
-   COMPONENTES AUXILIARES
-   ============================================================================ */
+// Componentes Auxiliares
 function NetflixPosterCard({
   title,
   poster,
