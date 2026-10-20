@@ -81,7 +81,6 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
-  // Perfis
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [showProfileGate, setShowProfileGate] = useState(false);
@@ -89,19 +88,16 @@ export default function HomeTab() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
-  // Novo Perfil
   const [newProfileName, setNewProfileName] = useState("");
   const [selectedPreset, setSelectedPreset] = useState(0);
   const [newProfileKids, setNewProfileKids] = useState(false);
 
-  // Controle Parental Adulto (+18)
   const [adultLocked, setAdultLocked] = useState(true);
   const [adultPin, setAdultPin] = useState("0000");
   const [showPinModal, setShowPinModal] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
   const [pendingItemToOpen, setPendingItemToOpen] = useState<any>(null);
 
-  // Navegação e Categorias
   const [otrEnabled, setOtrEnabled] = useState(true);
   const [vodCategories, setVodCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("Todos os títulos");
@@ -111,11 +107,8 @@ export default function HomeTab() {
   const [showParentalModal, setShowParentalModal] = useState(false);
   const [newCustomPin, setNewCustomPin] = useState("");
   const [myListIds, setMyListIds] = useState<string[]>([]);
-
-  // Histórico de progresso específico por perfil
   const [profileProgress, setProfileProgress] = useState<Record<string, any>>({});
 
-  // Balão Clássico
   const [bubbleDismissed, setBubbleDismissed] = useState(false);
   const [bubbleOpen, setBubbleOpen] = useState(false);
 
@@ -215,8 +208,8 @@ export default function HomeTab() {
 
       listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
       if (session) {
-        loadVod();
-        if (loadSeries) loadSeries();
+        if (loadVod) loadVod().catch(() => {});
+        if (loadSeries) loadSeries().catch(() => {});
         xtream
           .vodCategories(session)
           .then((cats) => {
@@ -301,7 +294,7 @@ export default function HomeTab() {
   };
 
   const handleOpenItemWithParentalCheck = (item: any, openAction: () => void) => {
-    if (adultLocked && isAdultContent(item.name || item.title || "")) {
+    if (adultLocked && isAdultContent(item?.name || item?.title || "")) {
       setPendingItemToOpen(() => openAction);
       setEnteredPin("");
       setShowPinModal(true);
