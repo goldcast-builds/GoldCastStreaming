@@ -38,17 +38,18 @@ export default function SeriesTab() {
     }, [session, loadSeries])
   );
 
+  const isKidsContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|spider|herói|hero|frozen|princesa|sonic|pokemon|minions/i.test(
+      text
+    );
+  };
+
   const seriesList = useMemo(() => {
     let list = catalog.series || [];
 
     if (activeProfile?.isKids) {
-      list = list.filter((s) => {
-        const title = (s.name || "").toLowerCase();
-        const catName = (s.category_name || "").toLowerCase();
-        return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|spider|herói|hero|frozen|princesa|sonic|pokemon|minions/i.test(
-          title + " " + catName
-        );
-      });
+      list = list.filter((s) => isKidsContent(s.name, s.category_name));
     }
 
     if (selectedCatName !== "Todas as séries") {
