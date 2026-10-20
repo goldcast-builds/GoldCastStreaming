@@ -31,7 +31,7 @@ interface UserProfile {
   name: string;
   color: string;
   icon: string;
-  type: "normal" | "kids" | "adult";
+  type: "normal" | "kids" | "adult" | "football";
 }
 
 interface GuiaMatch {
@@ -44,13 +44,11 @@ interface GuiaMatch {
 
 const SOPHISTICATED_AVATARS = [
   { icon: "film-outline", color: "#E50914", label: "Cinema" },
+  { icon: "football-outline", color: "#2E7D32", label: "Futebol" },
   { icon: "rocket-outline", color: "#1E88E5", label: "Espaço" },
   { icon: "game-controller-outline", color: "#6A1B9A", label: "Gamer" },
-  { icon: "sparkles-outline", color: "#FB8C00", label: "Estrelação" },
-  { icon: "shield-outline", color: "#43A047", label: "Herói" },
-  { icon: "musical-notes-outline", color: "#00ACC1", label: "Música" },
-  { icon: "happy-outline", color: "#FDD835", label: "Alegria" },
-  { icon: "diamond-outline", color: "#D81B60", label: "VIP" },
+  { icon: "sparkles-outline", color: "#FB8C00", label: "Infantil" },
+  { icon: "heart-outline", color: "#D81B60", label: "Kids" },
 ];
 
 export default function HomeTab() {
@@ -72,7 +70,7 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
-  // Perfis
+  // Perfis com suporte a Futebol
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
@@ -81,7 +79,7 @@ export default function HomeTab() {
 
   const [newProfileName, setNewProfileName] = useState("");
   const [selectedAvatarIdx, setSelectedAvatarIdx] = useState(0);
-  const [newProfileType, setNewProfileType] = useState<"normal" | "kids" | "adult">("normal");
+  const [newProfileType, setNewProfileType] = useState<"normal" | "kids" | "adult" | "football">("normal");
 
   // Controle Parental Adulto (+18)
   const [adultPin, setAdultPin] = useState("0000");
@@ -125,6 +123,20 @@ export default function HomeTab() {
       type: "normal",
     };
   }, [activeProfile, profiles, username]);
+
+  // Cores dinâmicas do layout baseadas no perfil ativo
+  const themeStyles = useMemo(() => {
+    if (currentProfile.type === "kids") {
+      return { bg: "#0F172A", accent: "#38BDF8", cardBg: "#1E293B", badge: "#0284C7" }; // Azul vibrante infantil
+    }
+    if (currentProfile.type === "adult") {
+      return { bg: "#140A0A", accent: "#DC2626", cardBg: "#1F1212", badge: "#991B1B" }; // Vermelho escuro +18
+    }
+    if (currentProfile.type === "football") {
+      return { bg: "#051C0D", accent: "#10B981", cardBg: "#0F2E18", badge: "#047857" }; // Verde gramado para Futebol
+    }
+    return { bg: colors.bg, accent: colors.gold, cardBg: colors.surface, badge: colors.gold }; // Normal padrão
+  }, [currentProfile.type]);
 
   useEffect(() => {
     if (currentProfile?.id) {
@@ -254,13 +266,31 @@ export default function HomeTab() {
     return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates/i.test(text);
   };
 
+  const isKidsContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|spider|herói|hero|frozen|princesa|sonic|pokemon|minions/i.test(text);
+  };
+
+  const isFootballContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    return /futebol|futebol ao vivo|brasileirão|copa|libertadores|champions|premier|esporte|sportv|premiere|espn|cazé|futebol na tv/i.test(text);
+  };
+
+  // Filtro inteligente executado no Index baseado estritamente no tipo de perfil selecionado
   const handleOpenItemWithParentalCheck = (item: any, openAction: () => void) => {
-    if (currentProfile.type === "kids" && isAdultContent(item?.name || item?.title || "")) {
-      Alert.alert("Conteúdo Restrito", "Este perfil infantil não tem permissão para aceder a este conteúdo.");
+    const itemName = item?.name || item?.title || "";
+    const itemCat = item?.category_name || "";
+
+    if (currentProfile.type === "kids" && (isAdultContent(itemName, itemCat) || !isKidsContent(itemName, itemCat))) {
+      Alert.alert("Conteúdo Restrito", "Este perfil infantil exibe apenas conteúdos recomendados para crianças.");
       return;
     }
 
-    if (adultLocked && currentProfile.type !== "adult" && isAdultContent(item?.name || item?.title || "")) {
+    if (currentProfile.type === "football" && !isFootballContent(itemName, itemCat)) {
+      Alert.alert("Modo Futebol", "Este perfil está otimizado exclusivamente para canais e conteúdos de futebol e esportes.");
+    }
+
+    if (adultLocked && currentProfile.type !== "adult" && isAdultContent(itemName, itemCat)) {
       setPendingItemToOpen(() => openAction);
       setEnteredPin("");
       setShowPinModal(true);
@@ -283,7 +313,7 @@ export default function HomeTab() {
     }
   };
 
-  // Busca do Guia de Jogos Real em Tempo Real
+  // Busca do Guia de Jogos
   useEffect(() => {
     let isMounted = true;
     const fetchGuia = async () => {
@@ -320,12 +350,8 @@ export default function HomeTab() {
 
         if (matches.length === 0) {
           matches = [
-            { id: "1", time: "13:45", league: "Champions League", match: "Fenerbahçe x Slavia Praha", channels: "Space • HBO Max" },
-            { id: "2", time: "15:00", league: "Campeonato Saudita", match: "Al-Nassr x Neom", channels: "SportV 2 • Canal GOAT" },
-            { id: "3", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
-            { id: "4", time: "16:00", league: "Champions League", match: "Manchester City x AEK Athens", channels: "YouTube • Max" },
-            { id: "5", time: "19:30", league: "Brasileirão Série B", match: "Londrina x Cuiabá", channels: "Disney+" },
-            { id: "6", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
+            { id: "1", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
+            { id: "2", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
           ];
         }
 
@@ -334,7 +360,6 @@ export default function HomeTab() {
         if (isMounted) {
           setGuiaJogos([
             { id: "1", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
-            { id: "2", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
           ]);
         }
       } finally {
@@ -388,13 +413,21 @@ export default function HomeTab() {
     };
   }, [daysLeft, isExpired]);
 
+  // Filtragem estrita dos destaques/novidades de acordo com o perfil (Kids, Adulto, Futebol ou Normal)
   const marqueeItems: MarqueeItem[] = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod
       .filter((v) => {
         if (!v.stream_icon) return false;
-        if (currentProfile.type === "kids" && isAdultContent(v.name)) return false;
-        if (adultLocked && currentProfile.type !== "adult" && isAdultContent(v.name)) return false;
+        const name = v.name || "";
+        const cat = v.category_name || "";
+
+        if (currentProfile.type === "kids") return isKidsContent(name, cat);
+        if (currentProfile.type === "adult") return isAdultContent(name, cat);
+        if (currentProfile.type === "football") return isFootballContent(name, cat);
+        
+        // Perfil Normal (filtra adulto se bloqueado)
+        if (adultLocked && isAdultContent(name, cat)) return false;
         return true;
       })
       .slice(0, 15)
@@ -437,7 +470,7 @@ export default function HomeTab() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+    <View style={[styles.root, { backgroundColor: themeStyles.bg }]}>
       <ScrollView
         style={styles.root}
         contentContainerStyle={{
@@ -451,40 +484,40 @@ export default function HomeTab() {
             {/* CABEÇALHO COM PERFIL E CÓDIGO DE ATIVAÇÃO */}
             <View style={styles.rowBetween}>
               <View style={{ gap: 2 }}>
-                <Text style={styles.sectionHeader}>GOLDCAST STREAMING</Text>
+                <Text style={[styles.sectionHeader, { color: themeStyles.accent }]}>
+                  {currentProfile.type === "kids" ? "🌟 MODO INFANTIL (KIDS)" : currentProfile.type === "football" ? "⚽ MODO FUTEBOL & ESPORTES" : "GOLDCAST STREAMING"}
+                </Text>
                 <View style={styles.rowAlign}>
-                  {/* BOTÃO DO PERFIL (CHIP SUPERIOR ESQUERDO) */}
                   <Pressable
                     onPress={() => setShowProfileSheet(true)}
-                    style={[styles.profileTopChip, { borderColor: currentProfile.color }]}
+                    style={[styles.profileTopChip, { borderColor: currentProfile.color, backgroundColor: themeStyles.cardBg }]}
                   >
                     <Ionicons name={currentProfile.icon as any} size={16} color={currentProfile.color} />
                     <Text style={styles.profileTopName} numberOfLines={1}>{currentProfile.name}</Text>
                     <Ionicons name="chevron-down" size={12} color={colors.textDim} />
                   </Pressable>
 
-                  <View style={styles.codePillBadge}>
+                  <View style={[styles.codePillBadge, { backgroundColor: themeStyles.accent }]}>
                     <Ionicons name="key" size={11} color="#000" />
                     <Text style={styles.codePillText}>{activationCode}</Text>
                   </View>
                 </View>
               </View>
 
-              {/* BOTÃO DE CONFIGURAÇÕES (ENGRENAGEM NO CANTO SUPERIOR DIREITO) */}
               <Pressable
                 focusable={true}
                 onPress={() => router.push("/(tabs)/settings")}
-                style={styles.accountIconBtn}
+                style={[styles.accountIconBtn, { backgroundColor: themeStyles.cardBg }]}
               >
-                <Ionicons name="settings-outline" size={22} color={colors.gold} />
+                <Ionicons name="settings-outline" size={22} color={themeStyles.accent} />
               </Pressable>
             </View>
 
             {/* BOTÕES DE NAVEGAÇÃO PRINCIPAL */}
             <View style={styles.gridNav}>
-              <Pressable focusable={true} onPress={() => go("/(tabs)/live")} style={styles.navCard}>
-                <View style={styles.navCardIconBox}>
-                  <Ionicons name="tv" size={26} color={colors.gold} />
+              <Pressable focusable={true} onPress={() => go("/(tabs)/live")} style={[styles.navCard, { backgroundColor: themeStyles.cardBg }]}>
+                <View style={[styles.navCardIconBox, { backgroundColor: `${themeStyles.accent}20` }]}>
+                  <Ionicons name="tv" size={26} color={themeStyles.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.navCardTitle}>TV AO VIVO</Text>
@@ -493,9 +526,9 @@ export default function HomeTab() {
                 <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
               </Pressable>
 
-              <Pressable focusable={true} onPress={() => go("/(tabs)/movies")} style={styles.navCard}>
-                <View style={styles.navCardIconBox}>
-                  <Ionicons name="film" size={26} color={colors.gold} />
+              <Pressable focusable={true} onPress={() => go("/(tabs)/movies")} style={[styles.navCard, { backgroundColor: themeStyles.cardBg }]}>
+                <View style={[styles.navCardIconBox, { backgroundColor: `${themeStyles.accent}20` }]}>
+                  <Ionicons name="film" size={26} color={themeStyles.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.navCardTitle}>FILMES</Text>
@@ -504,9 +537,9 @@ export default function HomeTab() {
                 <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
               </Pressable>
 
-              <Pressable focusable={true} onPress={() => go("/(tabs)/series")} style={styles.navCard}>
-                <View style={styles.navCardIconBox}>
-                  <Ionicons name="albums" size={26} color={colors.gold} />
+              <Pressable focusable={true} onPress={() => go("/(tabs)/series")} style={[styles.navCard, { backgroundColor: themeStyles.cardBg }]}>
+                <View style={[styles.navCardIconBox, { backgroundColor: `${themeStyles.accent}20` }]}>
+                  <Ionicons name="albums" size={26} color={themeStyles.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.navCardTitle}>SÉRIES</Text>
@@ -521,34 +554,33 @@ export default function HomeTab() {
               <Pressable
                 focusable={true}
                 onPress={() => router.push({ pathname: "/(tabs)/live", params: { cat: "__fav" } })}
-                style={styles.tile}
+                style={[styles.tile, { backgroundColor: themeStyles.cardBg }]}
               >
-                <Ionicons name="star-outline" size={18} color={colors.gold} />
+                <Ionicons name="star-outline" size={18} color={themeStyles.accent} />
                 <Text style={styles.tileLabel}>Favoritos</Text>
               </Pressable>
               <Pressable
                 focusable={true}
                 onPress={() => setShowProfileSheet(true)}
-                style={styles.tile}
+                style={[styles.tile, { backgroundColor: themeStyles.cardBg }]}
               >
-                <Ionicons name="people-outline" size={18} color={colors.gold} />
+                <Ionicons name="people-outline" size={18} color={themeStyles.accent} />
                 <Text style={styles.tileLabel}>Perfis</Text>
               </Pressable>
-              {/* BOTÃO CONTA (ABRE AS INFORMAÇÕES DA CONTA) */}
               <Pressable
                 focusable={true}
                 onPress={() => setShowAccountModal(true)}
-                style={styles.tile}
+                style={[styles.tile, { backgroundColor: themeStyles.cardBg }]}
               >
-                <Ionicons name="person-outline" size={18} color={colors.gold} />
+                <Ionicons name="person-outline" size={18} color={themeStyles.accent} />
                 <Text style={styles.tileLabel}>Conta</Text>
               </Pressable>
             </View>
 
-            {/* CONTINUAR A ASSISTIR ESPECÍFICO DO PERFIL */}
+            {/* CONTINUAR A ASSISTIR */}
             {continueWatchingList.length > 0 && (
               <View style={styles.nfSection}>
-                <Text style={styles.sectionTitle}>CONTINUAR A ASSISTIR ({currentProfile.name})</Text>
+                <Text style={[styles.sectionTitle, { color: themeStyles.accent }]}>CONTINUAR A ASSISTIR ({currentProfile.name})</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nfRowScroll}>
                   {continueWatchingList.map((entry: any, idx: number) => (
                     <Pressable
@@ -562,7 +594,7 @@ export default function HomeTab() {
                           <Image source={{ uri: entry.logo }} style={styles.fullSize} resizeMode="cover" />
                         ) : (
                           <View style={[styles.fullSize, styles.center, { backgroundColor: "#1E222D" }]}>
-                            <Ionicons name="film-outline" size={24} color={colors.gold} />
+                            <Ionicons name="film-outline" size={24} color={themeStyles.accent} />
                           </View>
                         )}
                         <View style={styles.nfPlayCircleOverlay}>
@@ -570,7 +602,7 @@ export default function HomeTab() {
                         </View>
                       </View>
                       <View style={styles.nfContinueProgressBg}>
-                        <View style={[styles.nfContinueProgressFill, { width: `${entry.pct}%` }]} />
+                        <View style={[styles.nfContinueProgressFill, { backgroundColor: themeStyles.accent, width: `${entry.pct}%` }]} />
                       </View>
                     </Pressable>
                   ))}
@@ -582,7 +614,7 @@ export default function HomeTab() {
             {jogosChannels.length > 0 && (
               <View style={{ gap: 8 }}>
                 <View style={styles.rowBetween}>
-                  <Text style={styles.sectionTitle}>⚽ CANAIS DE JOGOS AO VIVO</Text>
+                  <Text style={[styles.sectionTitle, { color: themeStyles.accent }]}>⚽ CANAIS DE JOGOS AO VIVO</Text>
                   <View style={styles.badgeLive}>
                     <View style={styles.liveDot} />
                     <Text style={styles.badgeLiveText}>NO AR</Text>
@@ -592,7 +624,7 @@ export default function HomeTab() {
               </View>
             )}
 
-            {/* TRENDING MARQUEE */}
+            {/* TRENDING MARQUEE (FILTRADO POR PERFIL) */}
             {marqueeItems.length > 0 && (
               <TrendingMarquee
                 items={marqueeItems}
@@ -606,12 +638,12 @@ export default function HomeTab() {
 
             {/* STATUS DO PLANO */}
             {session && (
-              <View style={styles.planCard}>
+              <View style={[styles.planCard, { backgroundColor: themeStyles.cardBg }]}>
                 <View style={styles.planInfoGrid}>
                   <View style={styles.planCol}>
                     <Text style={styles.planLabel}>UTILIZADOR</Text>
                     <View style={styles.rowAlign}>
-                      <Ionicons name="person-circle-outline" size={15} color={colors.gold} />
+                      <Ionicons name="person-circle-outline" size={15} color={themeStyles.accent} />
                       <Text style={styles.planVal} numberOfLines={1}>{username}</Text>
                     </View>
                   </View>
@@ -619,7 +651,7 @@ export default function HomeTab() {
                   <View style={styles.planCol}>
                     <Text style={styles.planLabel}>CÓDIGO DE ATIVAÇÃO</Text>
                     <View style={styles.rowAlign}>
-                      <Ionicons name="key-outline" size={14} color={colors.gold} />
+                      <Ionicons name="key-outline" size={14} color={themeStyles.accent} />
                       <Text style={styles.planVal} numberOfLines={1}>{activationCode}</Text>
                     </View>
                   </View>
@@ -644,17 +676,17 @@ export default function HomeTab() {
             <View style={styles.guiaSection}>
               <View style={styles.rowBetween}>
                 <View style={{ gap: 2 }}>
-                  <Text style={styles.sectionTitle}>📺 GUIA DE JOGOS NA TV</Text>
+                  <Text style={[styles.sectionTitle, { color: themeStyles.accent }]}>📺 GUIA DE JOGOS NA TV</Text>
                   <Text style={styles.guiaSubtitle}>Programação oficial com horários e canais de transmissão</Text>
                 </View>
-                {loadingGuia && <ActivityIndicator size="small" color={colors.gold} />}
+                {loadingGuia && <ActivityIndicator size="small" color={themeStyles.accent} />}
               </View>
 
               <View style={styles.guiaList}>
                 {guiaJogos.map((g) => (
-                  <View key={g.id} style={styles.guiaCard}>
+                  <View key={g.id} style={[styles.guiaCard, { backgroundColor: themeStyles.cardBg }]}>
                     <View style={styles.guiaHeaderRow}>
-                      <View style={styles.guiaTimeBadge}>
+                      <View style={[styles.guiaTimeBadge, { backgroundColor: themeStyles.accent }]}>
                         <Ionicons name="time" size={11} color="#000" />
                         <Text style={styles.guiaTimeText}>{g.time}</Text>
                       </View>
@@ -664,7 +696,7 @@ export default function HomeTab() {
                     <Text style={styles.guiaMatchTitle} numberOfLines={2}>{g.match}</Text>
 
                     <View style={styles.guiaChannelsRow}>
-                      <Ionicons name="tv-outline" size={13} color={colors.gold} />
+                      <Ionicons name="tv-outline" size={13} color={themeStyles.accent} />
                       <Text style={styles.guiaChannelsText} numberOfLines={1}>{g.channels}</Text>
                     </View>
                   </View>
@@ -674,13 +706,13 @@ export default function HomeTab() {
           </View>
         ) : (
           <View style={styles.loggedOutBox}>
-            <Text style={styles.brand}>GoldCast Media Player</Text>
+            <Text style={[styles.brand, { color: themeStyles.accent }]}>GoldCast Media Player</Text>
             <Text style={styles.hint}>Inicie sessão para carregar a programação.</Text>
           </View>
         )}
       </ScrollView>
 
-      {/* GAVETA DE SELEÇÃO E GERENCIAMENTO DE PERFIS */}
+      {/* GAVETA DE PERFIS */}
       <Modal visible={showProfileSheet} animationType="slide" transparent={true}>
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheetContainer, { paddingBottom: insets.bottom + 20 }]}>
@@ -713,6 +745,9 @@ export default function HomeTab() {
                     )}
                     {p.type === "adult" && (
                       <View style={styles.adultTagBadge}><Text style={styles.adultTagText}>+18</Text></View>
+                    )}
+                    {p.type === "football" && (
+                      <View style={styles.footballTagBadge}><Text style={styles.footballTagText}>⚽</Text></View>
                     )}
                     {editMode && (
                       <View style={styles.deleteOverlay}>
@@ -752,7 +787,7 @@ export default function HomeTab() {
         <View style={styles.modalOverlay}>
           <View style={styles.createProfileModalCard}>
             <Text style={styles.createModalTitle}>Criar Novo Perfil</Text>
-            <Text style={styles.createModalSub}>Escolha um avatar sofisticado e o tipo de perfil (Até 5)</Text>
+            <Text style={styles.createModalSub}>Escolha um avatar e o modo de conteúdo (Normal, Kids, +18 ou Futebol)</Text>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 10 }}>
               {SOPHISTICATED_AVATARS.map((av, idx) => (
@@ -771,7 +806,7 @@ export default function HomeTab() {
             </ScrollView>
 
             <TextInput
-              placeholder="Nome do perfil (ex: Família, Kids)..."
+              placeholder="Nome do perfil (ex: Família, Esportes)..."
               placeholderTextColor="#777"
               value={newProfileName}
               onChangeText={setNewProfileName}
@@ -789,13 +824,19 @@ export default function HomeTab() {
                 onPress={() => setNewProfileType("kids")}
                 style={[styles.typePill, newProfileType === "kids" && styles.typePillActive]}
               >
-                <Text style={[styles.typePillText, newProfileType === "kids" && { color: "#000", fontWeight: "900" }]}>Infantil (Kids)</Text>
+                <Text style={[styles.typePillText, newProfileType === "kids" && { color: "#000", fontWeight: "900" }]}>Kids</Text>
               </Pressable>
               <Pressable
                 onPress={() => setNewProfileType("adult")}
                 style={[styles.typePill, newProfileType === "adult" && styles.typePillActive]}
               >
-                <Text style={[styles.typePillText, newProfileType === "adult" && { color: "#000", fontWeight: "900" }]}>Adulto (+18)</Text>
+                <Text style={[styles.typePillText, newProfileType === "adult" && { color: "#000", fontWeight: "900" }]}>+18</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setNewProfileType("football")}
+                style={[styles.typePill, newProfileType === "football" && styles.typePillActive]}
+              >
+                <Text style={[styles.typePillText, newProfileType === "football" && { color: "#000", fontWeight: "900" }]}>Futebol</Text>
               </Pressable>
             </View>
 
@@ -851,7 +892,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* MODAL DE CONTA E CONTROLE PARENTAL */}
+      {/* MODAL DE CONTA */}
       <Modal visible={showAccountModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.accountCardModal}>
@@ -893,7 +934,7 @@ export default function HomeTab() {
               }}
               style={[styles.btnModalClose, { backgroundColor: "#262936", marginBottom: 8 }]}
             >
-              <Text style={[styles.btnModalCloseText, { color: colors.gold }]}>ALTERAR SENHA +18 (PADRÃO: 0000)</Text>
+              <Text style={[styles.btnModalCloseText, { color: colors.gold }]}>ALTERAR SENHA +18 (0000)</Text>
             </Pressable>
 
             <Pressable onPress={() => setShowAccountModal(false)} style={styles.btnModalClose}>
@@ -1134,6 +1175,8 @@ const styles = StyleSheet.create({
   kidsTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
   adultTagBadge: { position: "absolute", bottom: 2, right: 2, backgroundColor: "#E50914", paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 },
   adultTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
+  footballTagBadge: { position: "absolute", bottom: 2, right: 2, backgroundColor: "#10B981", paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 },
+  footballTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
   deleteOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(229, 9, 20, 0.75)", borderRadius: 16, alignItems: "center", justifyContent: "center" },
 
   accountCardModal: { width: "100%", maxWidth: 380, backgroundColor: "#111319", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(229,169,59,0.3)", padding: 24, alignItems: "center" },
