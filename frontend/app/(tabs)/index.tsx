@@ -152,7 +152,6 @@ export default function HomeTab() {
     };
   }, [activeProfile, profiles, username]);
 
-  // Carrega o progresso específico do perfil ativo
   useEffect(() => {
     if (currentProfile?.id) {
       AsyncStorage.getItem(`@goldcast_progress_${currentProfile.id}`).then((raw) => {
@@ -378,7 +377,7 @@ export default function HomeTab() {
             { id: "2", time: "19:30", league: "Brasileirão Série B", match: "Goiás x Náutico", channels: "ESPN • Premiere" },
             { id: "3", time: "20:00", league: "Brasileirão Série A", match: "Corinthians x Vitória", channels: "SporTV • Premiere" },
             { id: "4", time: "21:30", league: "Copa do Brasil", match: "Cruzeiro x São Paulo", channels: "Globo • SporTV • Premiere" },
-          ];
+          ]);
         }
       } finally {
         if (isMounted) setLoadingGuia(false);
@@ -575,9 +574,6 @@ export default function HomeTab() {
       >
         {hasContent ? (
           otrEnabled ? (
-            /* ==============================================================
-               1. MODO OTR COMPLETO
-               ============================================================== */
             <View style={styles.nfContainer}>
               <View style={styles.nfHeader}>
                 <View style={styles.rowAlign}>
