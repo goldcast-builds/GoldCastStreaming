@@ -90,6 +90,9 @@ export default function HomeTab() {
   const [pendingItemToOpen, setPendingItemToOpen] = useState<any>(null);
 
   const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showParentalModal, setShowParentalModal] = useState(false);
+  const [newCustomPin, setNewCustomPin] = useState("");
+  const [adultLocked, setAdultLocked] = useState(true);
 
   const [profileProgress, setProfileProgress] = useState<Record<string, any>>({});
 
@@ -147,6 +150,9 @@ export default function HomeTab() {
       });
       AsyncStorage.getItem("@goldcast_adult_pin").then((val) => {
         if (val && isMounted) setAdultPin(val);
+      });
+      AsyncStorage.getItem("@goldcast_adult_locked").then((val) => {
+        if (val !== null && isMounted) setAdultLocked(val === "true");
       });
 
       Promise.all([
@@ -254,7 +260,7 @@ export default function HomeTab() {
       return;
     }
 
-    if (currentProfile.type !== "adult" && isAdultContent(item?.name || item?.title || "")) {
+    if (adultLocked && currentProfile.type !== "adult" && isAdultContent(item?.name || item?.title || "")) {
       setPendingItemToOpen(() => openAction);
       setEnteredPin("");
       setShowPinModal(true);
@@ -388,12 +394,12 @@ export default function HomeTab() {
       .filter((v) => {
         if (!v.stream_icon) return false;
         if (currentProfile.type === "kids" && isAdultContent(v.name)) return false;
-        if (currentProfile.type !== "adult" && isAdultContent(v.name)) return false;
+        if (adultLocked && currentProfile.type !== "adult" && isAdultContent(v.name)) return false;
         return true;
       })
       .slice(0, 15)
       .map((v) => ({ id: String(v.stream_id), name: v.name, poster: v.stream_icon, type: "movie" }));
-  }, [catalog.vod, currentProfile.type]);
+  }, [catalog.vod, currentProfile.type, adultLocked]);
 
   const continueWatchingList = useMemo(() => {
     if (!profileProgress || Object.keys(profileProgress).length === 0) return [];
@@ -447,6 +453,7 @@ export default function HomeTab() {
               <View style={{ gap: 2 }}>
                 <Text style={styles.sectionHeader}>GOLDCAST STREAMING</Text>
                 <View style={styles.rowAlign}>
+                  {/* BOTÃO DO PERFIL (CHIP SUPERIOR ESQUERDO) */}
                   <Pressable
                     onPress={() => setShowProfileSheet(true)}
                     style={[styles.profileTopChip, { borderColor: currentProfile.color }]}
@@ -463,9 +470,10 @@ export default function HomeTab() {
                 </View>
               </View>
 
+              {/* BOTÃO DE CONFIGURAÇÕES (ENGRENAGEM NO CANTO SUPERIOR DIREITO) */}
               <Pressable
                 focusable={true}
-                onPress={() => setShowAccountModal(true)}
+                onPress={() => router.push("/(tabs)/settings")}
                 style={styles.accountIconBtn}
               >
                 <Ionicons name="settings-outline" size={22} color={colors.gold} />
@@ -526,6 +534,7 @@ export default function HomeTab() {
                 <Ionicons name="people-outline" size={18} color={colors.gold} />
                 <Text style={styles.tileLabel}>Perfis</Text>
               </Pressable>
+              {/* BOTÃO CONTA (ABRE AS INFORMAÇÕES DA CONTA) */}
               <Pressable
                 focusable={true}
                 onPress={() => setShowAccountModal(true)}
@@ -583,7 +592,7 @@ export default function HomeTab() {
               </View>
             )}
 
-            {/* TRENDING MARQUEE (SEM DUPLICAÇÃO) */}
+            {/* TRENDING MARQUEE */}
             {marqueeItems.length > 0 && (
               <TrendingMarquee
                 items={marqueeItems}
@@ -631,7 +640,7 @@ export default function HomeTab() {
               </View>
             )}
 
-            {/* GUIA DE JOGOS ATUALIZADO */}
+            {/* GUIA DE JOGOS DA WEB */}
             <View style={styles.guiaSection}>
               <View style={styles.rowBetween}>
                 <View style={{ gap: 2 }}>
@@ -842,7 +851,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* MODAL DE CONTA */}
+      {/* MODAL DE CONTA E CONTROLE PARENTAL */}
       <Modal visible={showAccountModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.accountCardModal}>
@@ -850,7 +859,7 @@ export default function HomeTab() {
               <Ionicons name="person" size={32} color={colors.gold} />
             </View>
             <Text style={styles.accountModalTitle}>INFORMAÇÕES DA CONTA</Text>
-            <Text style={styles.accountModalSubtitle}>Gestão de perfis e licença</Text>
+            <Text style={styles.accountModalSubtitle}>Gestão de perfis e segurança</Text>
 
             <View style={styles.accountInfoList}>
               <View style={styles.accountInfoRow}>
@@ -877,6 +886,16 @@ export default function HomeTab() {
               <Text style={[styles.btnModalCloseText, { color: colors.gold }]}>GERENCIAR PERFIS ({profiles.length}/5)</Text>
             </Pressable>
 
+            <Pressable
+              onPress={() => {
+                setShowAccountModal(false);
+                setShowParentalModal(true);
+              }}
+              style={[styles.btnModalClose, { backgroundColor: "#262936", marginBottom: 8 }]}
+            >
+              <Text style={[styles.btnModalCloseText, { color: colors.gold }]}>ALTERAR SENHA +18 (PADRÃO: 0000)</Text>
+            </Pressable>
+
             <Pressable onPress={() => setShowAccountModal(false)} style={styles.btnModalClose}>
               <Text style={styles.btnModalCloseText}>FECHAR</Text>
             </Pressable>
@@ -891,6 +910,68 @@ export default function HomeTab() {
             >
               <Text style={styles.btnModalLogoutText}>Trocar de Conta / Sair</Text>
             </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL DE ALTERAÇÃO DE SENHA +18 */}
+      <Modal visible={showParentalModal} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.createProfileModalCard}>
+            <Text style={styles.createModalTitle}>Controle Parental (+18)</Text>
+            <Text style={styles.createModalSub}>Bloquear conteúdo adulto e alterar senha</Text>
+
+            <Pressable
+              onPress={async () => {
+                const next = !adultLocked;
+                setAdultLocked(next);
+                await AsyncStorage.setItem("@goldcast_adult_locked", String(next));
+              }}
+              style={styles.kidsToggleRow}
+            >
+              <Text style={styles.kidsToggleLabel}>Bloquear Conteúdo Adulto</Text>
+              <Ionicons
+                name={adultLocked ? "checkbox" : "square-outline"}
+                size={24}
+                color={colors.gold}
+              />
+            </Pressable>
+
+            <TextInput
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={4}
+              placeholder="Nova senha (ex: 1234)"
+              placeholderTextColor="#777"
+              value={newCustomPin}
+              onChangeText={setNewCustomPin}
+              style={[styles.createInput, { textAlign: "center" }]}
+            />
+
+            <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 10 }}>
+              <Pressable
+                onPress={() => setShowParentalModal(false)}
+                style={[styles.btnModalClose, { flex: 1, backgroundColor: "#262936" }]}
+              >
+                <Text style={[styles.btnModalCloseText, { color: "#FFF" }]}>FECHAR</Text>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  if (newCustomPin.trim().length === 4) {
+                    setAdultPin(newCustomPin.trim());
+                    await AsyncStorage.setItem("@goldcast_adult_pin", newCustomPin.trim());
+                    Alert.alert("Sucesso", "Senha alterada com sucesso!");
+                    setNewCustomPin("");
+                    setShowParentalModal(false);
+                  } else {
+                    Alert.alert("Erro", "A senha deve ter exatamente 4 dígitos numéricos.");
+                  }
+                }}
+                style={[styles.btnModalClose, { flex: 1 }]}
+              >
+                <Text style={styles.btnModalCloseText}>SALVAR</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
