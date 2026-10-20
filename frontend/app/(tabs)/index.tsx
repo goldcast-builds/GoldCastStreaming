@@ -51,10 +51,18 @@ export default function HomeTab() {
   const [activationCode, setActivationCode] = useState<string>("LICENÇA ATIVA");
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
+  
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showGuiaModal, setShowGuiaModal] = useState(false);
 
-  const blinkAnim = useRef(new Animated.Value(1)).current;
+  // Controle Parental (+18)
+  const [adultLocked, setAdultLocked] = useState(true);
+  const [adultPin, setAdultPin] = useState("0000");
+  const [showParentalModal, setShowParentalModal] = useState(false);
+  const [newCustomPin, setNewCustomPin] = useState("");
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [enteredPin, setEnteredPin] = useState("");
+  const [pendingItemToOpen, setPendingItemToOpen] = useState<any>(null);
 
   const { username, expFormatted, daysLeft, isExpired } = useMemo(() => {
     const user = session?.userInfo?.username || session?.username || "Cliente";
@@ -79,6 +87,13 @@ export default function HomeTab() {
       AsyncStorage.getItem("@goldcast_saved_code").then((code) => {
         if (code) setActivationCode(code);
       });
+      AsyncStorage.getItem("@goldcast_adult_locked").then((val) => {
+        if (val !== null) setAdultLocked(val === "true");
+      });
+      AsyncStorage.getItem("@goldcast_adult_pin").then((val) => {
+        if (val) setAdultPin(val);
+      });
+
       listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
       if (session) {
         if (loadVod) loadVod().catch(() => {});
@@ -87,7 +102,36 @@ export default function HomeTab() {
     }, [session, loadVod, loadSeries])
   );
 
-  // Busca do Guia de Jogos Atualizado da Web
+  const isAdultContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates/i.test(text);
+  };
+
+  const handleOpenItemWithParentalCheck = (item: any, openAction: () => void) => {
+    if (adultLocked && isAdultContent(item?.name || item?.title || "")) {
+      setPendingItemToOpen(() => openAction);
+      setEnteredPin("");
+      setShowPinModal(true);
+    } else {
+      openAction();
+    }
+  };
+
+  const verifyPinAndOpen = () => {
+    if (enteredPin === adultPin) {
+      setShowPinModal(false);
+      setEnteredPin("");
+      if (pendingItemToOpen) {
+        pendingItemToOpen();
+        setPendingItemToOpen(null);
+      }
+    } else {
+      Alert.alert("Senha incorreta", "A senha padrão é 0000.");
+      setEnteredPin("");
+    }
+  };
+
+  // Busca do Guia de Jogos
   useEffect(() => {
     let isMounted = true;
     const fetchGuia = async () => {
@@ -192,10 +236,10 @@ export default function HomeTab() {
   const marqueeItems: MarqueeItem[] = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod
-      .filter((v) => !!v.stream_icon)
+      .filter((v) => !!v.stream_icon && (!adultLocked || !isAdultContent(v.name)))
       .slice(0, 15)
       .map((v) => ({ id: String(v.stream_id), name: v.name, poster: v.stream_icon, type: "movie" }));
-  }, [catalog.vod]);
+  }, [catalog.vod, adultLocked]);
 
   const go = async (path: string) => {
     if (session && source?.kind !== "list") await setSource({ kind: "xtream" });
@@ -204,9 +248,11 @@ export default function HomeTab() {
 
   const handleOpenChannel = (channel: LiveStream) => {
     if (session && source?.kind !== "list") setSource({ kind: "xtream" });
-    router.push({
-      pathname: "/(tabs)/live",
-      params: { cat: jogosCatId || undefined, channelId: String(channel.stream_id) },
+    handleOpenItemWithParentalCheck(channel, () => {
+      router.push({
+        pathname: "/(tabs)/live",
+        params: { cat: jogosCatId || undefined, channelId: String(channel.stream_id) },
+      });
     });
   };
 
@@ -222,7 +268,7 @@ export default function HomeTab() {
       >
         {hasContent ? (
           <View style={styles.mainContainer}>
-            {/* CABEÇALHO COM NOME DE UTILIZADOR E CÓDIGO DE ACESSO INTEGRADOS */}
+            {/* CABEÇALHO COM UTILIZADOR E CÓDIGO DE ACESSO */}
             <View style={styles.rowBetween}>
               <View style={{ gap: 2 }}>
                 <Text style={styles.sectionHeader}>BEM-VINDO AO GOLDCAST</Text>
@@ -245,7 +291,7 @@ export default function HomeTab() {
               </Pressable>
             </View>
 
-            {/* BOTÕES DE NAVEGAÇÃO PRINCIPAL (EXATAMENTE COMO O ORIGINAL) */}
+            {/* BOTÕES DE NAVEGAÇÃO PRINCIPAL */}
             <View style={styles.gridNav}>
               <Pressable focusable={true} onPress={() => go("/(tabs)/live")} style={styles.navCard}>
                 <View style={styles.navCardIconBox}>
@@ -293,19 +339,19 @@ export default function HomeTab() {
               </Pressable>
               <Pressable
                 focusable={true}
+                onPress={() => setShowParentalModal(true)}
+                style={styles.tile}
+              >
+                <Ionicons name="lock-closed-outline" size={18} color={colors.gold} />
+                <Text style={styles.tileLabel}>Controle +18</Text>
+              </Pressable>
+              <Pressable
+                focusable={true}
                 onPress={() => setShowAccountModal(true)}
                 style={styles.tile}
               >
                 <Ionicons name="person-outline" size={18} color={colors.gold} />
                 <Text style={styles.tileLabel}>Conta</Text>
-              </Pressable>
-              <Pressable
-                focusable={true}
-                onPress={() => router.push("/(tabs)/settings")}
-                style={styles.tile}
-              >
-                <Ionicons name="settings-outline" size={18} color={colors.gold} />
-                <Text style={styles.tileLabel}>Ajustes</Text>
               </Pressable>
             </View>
 
@@ -323,11 +369,15 @@ export default function HomeTab() {
               </View>
             )}
 
-            {/* TRENDING MARQUEE (DUPLICAÇÃO DE NOVIDADES REMOVIDA) */}
+            {/* TRENDING MARQUEE */}
             {marqueeItems.length > 0 && (
               <TrendingMarquee
                 items={marqueeItems}
-                onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })}
+                onPressItem={(item) =>
+                  handleOpenItemWithParentalCheck(item, () =>
+                    router.push({ pathname: "/movie/[id]", params: { id: item.id } })
+                  )
+                }
               />
             )}
 
@@ -367,7 +417,7 @@ export default function HomeTab() {
               </View>
             )}
 
-            {/* GUIA DE JOGOS DA WEB (FUTEBOL NA TV) */}
+            {/* GUIA DE JOGOS DA WEB */}
             <View style={styles.guiaSection}>
               <View style={styles.rowBetween}>
                 <View style={{ gap: 2 }}>
@@ -407,6 +457,105 @@ export default function HomeTab() {
         )}
       </ScrollView>
 
+      {/* MODAL DE PIN ADULTO (+18) */}
+      <Modal visible={showPinModal} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.createProfileModalCard}>
+            <Ionicons name="lock-closed" size={36} color="#E50914" />
+            <Text style={styles.createModalTitle}>Conteúdo Protegido (+18)</Text>
+            <Text style={styles.createModalSub}>Digite a senha de acesso (padrão: 0000)</Text>
+
+            <TextInput
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={4}
+              placeholder="••••"
+              placeholderTextColor="#777"
+              value={enteredPin}
+              onChangeText={setEnteredPin}
+              style={[styles.createInput, { textAlign: "center", fontSize: 22, letterSpacing: 8 }]}
+            />
+
+            <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 10 }}>
+              <Pressable
+                onPress={() => {
+                  setShowPinModal(false);
+                  setEnteredPin("");
+                }}
+                style={[styles.btnModalClose, { flex: 1, backgroundColor: "#262936" }]}
+              >
+                <Text style={[styles.btnModalCloseText, { color: "#FFF" }]}>CANCELAR</Text>
+              </Pressable>
+              <Pressable onPress={verifyPinAndOpen} style={[styles.btnModalClose, { flex: 1 }]}>
+                <Text style={styles.btnModalCloseText}>DESBLOQUEAR</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL DE CONFIGURAÇÃO DE CONTROLE ADULTO */}
+      <Modal visible={showParentalModal} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.createProfileModalCard}>
+            <Text style={styles.createModalTitle}>Controle Parental (+18)</Text>
+            <Text style={styles.createModalSub}>Bloquear conteúdo adulto e alterar senha</Text>
+
+            <Pressable
+              onPress={async () => {
+                const next = !adultLocked;
+                setAdultLocked(next);
+                await AsyncStorage.setItem("@goldcast_adult_locked", String(next));
+              }}
+              style={styles.kidsToggleRow}
+            >
+              <Text style={styles.kidsToggleLabel}>Bloquear Conteúdo Adulto</Text>
+              <Ionicons
+                name={adultLocked ? "checkbox" : "square-outline"}
+                size={24}
+                color={colors.gold}
+              />
+            </Pressable>
+
+            <TextInput
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={4}
+              placeholder="Nova senha (ex: 1234)"
+              placeholderTextColor="#777"
+              value={newCustomPin}
+              onChangeText={setNewCustomPin}
+              style={[styles.createInput, { textAlign: "center" }]}
+            />
+
+            <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 10 }}>
+              <Pressable
+                onPress={() => setShowParentalModal(false)}
+                style={[styles.btnModalClose, { flex: 1, backgroundColor: "#262936" }]}
+              >
+                <Text style={[styles.btnModalCloseText, { color: "#FFF" }]}>FECHAR</Text>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  if (newCustomPin.trim().length === 4) {
+                    setAdultPin(newCustomPin.trim());
+                    await AsyncStorage.setItem("@goldcast_adult_pin", newCustomPin.trim());
+                    Alert.alert("Sucesso", "Senha alterada com sucesso!");
+                    setNewCustomPin("");
+                    setShowParentalModal(false);
+                  } else {
+                    Alert.alert("Erro", "A senha deve ter exatamente 4 dígitos numéricos.");
+                  }
+                }}
+                style={[styles.btnModalClose, { flex: 1 }]}
+              >
+                <Text style={styles.btnModalCloseText}>SALVAR SENHA</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* MODAL DE CONTA */}
       <Modal visible={showAccountModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
@@ -431,6 +580,16 @@ export default function HomeTab() {
                 <Text style={styles.accountRowValue}>{expFormatted}</Text>
               </View>
             </View>
+
+            <Pressable
+              onPress={() => {
+                setShowAccountModal(false);
+                setShowParentalModal(true);
+              }}
+              style={[styles.btnModalClose, { backgroundColor: "#262936", marginBottom: 10 }]}
+            >
+              <Text style={[styles.btnModalCloseText, { color: colors.gold }]}>CONFIGURAR CONTROLE +18</Text>
+            </Pressable>
 
             <Pressable onPress={() => setShowAccountModal(false)} style={styles.btnModalClose}>
               <Text style={styles.btnModalCloseText}>FECHAR</Text>
@@ -570,6 +729,12 @@ const styles = StyleSheet.create({
   guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
   guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "700" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
+  createProfileModalCard: { width: "100%", maxWidth: 380, backgroundColor: "#181818", borderRadius: 20, padding: 22, alignItems: "center", gap: 12 },
+  createModalTitle: { color: "#FFF", fontSize: 18, fontWeight: "800" },
+  createModalSub: { color: "#9CA3AF", fontSize: 12, textAlign: "center" },
+  createInput: { width: "100%", height: 48, backgroundColor: "#262626", borderRadius: 10, paddingHorizontal: 14, color: "#FFF", fontSize: 14 },
+  kidsToggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", paddingVertical: 6 },
+  kidsToggleLabel: { color: "#E5E7EB", fontSize: 13.5, fontWeight: "600" },
   accountCardModal: { width: "100%", maxWidth: 380, backgroundColor: "#111319", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(229,169,59,0.3)", padding: 24, alignItems: "center" },
   accountIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(229,169,59,0.12)", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.gold, marginBottom: 12 },
   accountModalTitle: { color: colors.gold, fontSize: 18, fontWeight: "800", letterSpacing: 0.5 },
