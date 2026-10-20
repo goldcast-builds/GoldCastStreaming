@@ -24,18 +24,24 @@ export default function LiveTab() {
 
   useFocusEffect(
     useCallback(() => {
-      loadLive();
+      let active = true;
+      if (session && !catalog.liveLoaded) {
+        loadLive().catch(() => {});
+      }
       AsyncStorage.getItem("@goldcast_active_profile").then((raw) => {
-        if (raw) {
+        if (raw && active) {
           try {
             setActiveProfile(JSON.parse(raw));
           } catch {}
         }
       });
       if (session) {
-        xtream.liveCategories(session).then(setLiveCategories).catch(() => {});
+        xtream.liveCategories(session).then((cats) => {
+          if (active && cats) setLiveCategories(cats);
+        }).catch(() => {});
       }
-    }, [session, loadLive])
+      return () => { active = false; };
+    }, [session, catalog.liveLoaded, loadLive])
   );
 
   const isKidsContent = (name: string, categoryName: string = "") => {
