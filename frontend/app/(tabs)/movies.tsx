@@ -38,17 +38,18 @@ export default function MoviesTab() {
     }, [session, loadVod])
   );
 
+  const isKidsContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|spider|herói|hero|frozen|princesa|sonic|pokemon|minions/i.test(
+      text
+    );
+  };
+
   const moviesList = useMemo(() => {
     let list = catalog.vod || [];
 
     if (activeProfile?.isKids) {
-      list = list.filter((v) => {
-        const title = (v.name || "").toLowerCase();
-        const catName = (v.category_name || "").toLowerCase();
-        return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|spider|herói|hero|frozen|princesa|sonic|pokemon|minions/i.test(
-          title + " " + catName
-        );
-      });
+      list = list.filter((v) => isKidsContent(v.name, v.category_name));
     }
 
     if (selectedCatName !== "Todos os filmes") {
