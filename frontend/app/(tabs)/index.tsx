@@ -30,8 +30,8 @@ interface UserProfile {
   id: string;
   name: string;
   color: string;
-  icon: string; // Ícone sofisticado
-  type: "normal" | "kids" | "adult"; // normal, kids ou adult (+18)
+  icon: string;
+  type: "normal" | "kids" | "adult";
 }
 
 interface GuiaMatch {
@@ -72,15 +72,13 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
-  // Sistema de Gestão de Perfis (Até 5 perfis)
+  // Perfis
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
-  const [showProfileGate, setShowProfileGate] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
-  // Novo Perfil Form
   const [newProfileName, setNewProfileName] = useState("");
   const [selectedAvatarIdx, setSelectedAvatarIdx] = useState(0);
   const [newProfileType, setNewProfileType] = useState<"normal" | "kids" | "adult">("normal");
@@ -92,9 +90,6 @@ export default function HomeTab() {
   const [pendingItemToOpen, setPendingItemToOpen] = useState<any>(null);
 
   const [showAccountModal, setShowAccountModal] = useState(false);
-  const [showGuiaModal, setShowGuiaModal] = useState(false);
-  const [showParentalModal, setShowParentalModal] = useState(false);
-  const [newCustomPin, setNewCustomPin] = useState("");
 
   const [profileProgress, setProfileProgress] = useState<Record<string, any>>({});
 
@@ -128,7 +123,6 @@ export default function HomeTab() {
     };
   }, [activeProfile, profiles, username]);
 
-  // Carrega progresso específico isolado do perfil ativo
   useEffect(() => {
     if (currentProfile?.id) {
       AsyncStorage.getItem(`@goldcast_progress_${currentProfile.id}`).then((raw) => {
@@ -168,7 +162,6 @@ export default function HomeTab() {
           } catch {}
         }
 
-        // Se não houver nenhum perfil criado, cria um padrão automaticamente baseado no login
         if (loadedProfiles.length === 0) {
           loadedProfiles = [
             {
@@ -206,7 +199,6 @@ export default function HomeTab() {
 
   const handleSelectProfile = async (p: UserProfile) => {
     setActiveProfile(p);
-    setShowProfileGate(false);
     setShowProfileSheet(false);
     setEditMode(false);
     await AsyncStorage.setItem("@goldcast_active_profile", JSON.stringify(p));
@@ -257,13 +249,11 @@ export default function HomeTab() {
   };
 
   const handleOpenItemWithParentalCheck = (item: any, openAction: () => void) => {
-    // Se o perfil ativo for infantil, bloqueia imediatamente conteúdo adulto
     if (currentProfile.type === "kids" && isAdultContent(item?.name || item?.title || "")) {
       Alert.alert("Conteúdo Restrito", "Este perfil infantil não tem permissão para aceder a este conteúdo.");
       return;
     }
 
-    // Se for perfil normal e tentar aceder a conteúdo adulto, exige PIN se não for perfil +18
     if (currentProfile.type !== "adult" && isAdultContent(item?.name || item?.title || "")) {
       setPendingItemToOpen(() => openAction);
       setEnteredPin("");
@@ -287,7 +277,7 @@ export default function HomeTab() {
     }
   };
 
-  // Busca do Guia de Jogos
+  // Busca do Guia de Jogos Real em Tempo Real
   useEffect(() => {
     let isMounted = true;
     const fetchGuia = async () => {
@@ -303,12 +293,12 @@ export default function HomeTab() {
           const fnRegex = /Onde assistir\s+([^x\n\r<]+)\s*x\s*([^<:\n\r?]+)[^⏱\n]*⏱\s*(\d{1,2}:\d{2})h?\.?\s*([^<\n\r]*)/gi;
           let m;
           let idx = 0;
-          while ((m = fnRegex.exec(html)) !== null && idx < 10) {
+          while ((m = fnRegex.exec(html)) !== null && idx < 12) {
             const team1 = m[1].replace(/<[^>]+>/g, "").trim();
             const team2 = m[2].replace(/<[^>]+>/g, "").trim();
             const time = m[3].trim();
             let channels = m[4].replace(/Ver detalhes/gi, "").replace(/<[^>]+>/g, "").trim();
-            if (!channels || channels.length < 3) channels = "SporTV • Premiere • ESPN";
+            if (!channels || channels.length < 3) channels = "SporTV • Premiere • ESPN • Disney+";
 
             if (team1.length > 2 && team2.length > 2) {
               matches.push({
@@ -324,10 +314,12 @@ export default function HomeTab() {
 
         if (matches.length === 0) {
           matches = [
-            { id: "1", time: "16:00", league: "Premier League", match: "Tottenham x Coventry", channels: "ESPN • Disney+" },
-            { id: "2", time: "19:30", league: "Brasileirão Série B", match: "Goiás x Náutico", channels: "ESPN • Premiere" },
-            { id: "3", time: "20:00", league: "Brasileirão Série A", match: "Corinthians x Vitória", channels: "SporTV • Premiere" },
-            { id: "4", time: "21:30", league: "Libertadores", match: "Flamengo x Palmeiras", channels: "Globo • ESPN • Disney+" },
+            { id: "1", time: "13:45", league: "Champions League", match: "Fenerbahçe x Slavia Praha", channels: "Space • HBO Max" },
+            { id: "2", time: "15:00", league: "Campeonato Saudita", match: "Al-Nassr x Neom", channels: "SportV 2 • Canal GOAT" },
+            { id: "3", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
+            { id: "4", time: "16:00", league: "Champions League", match: "Manchester City x AEK Athens", channels: "YouTube • Max" },
+            { id: "5", time: "19:30", league: "Brasileirão Série B", match: "Londrina x Cuiabá", channels: "Disney+" },
+            { id: "6", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
           ];
         }
 
@@ -335,7 +327,8 @@ export default function HomeTab() {
       } catch {
         if (isMounted) {
           setGuiaJogos([
-            { id: "1", time: "20:00", league: "Brasileirão Série A", match: "Corinthians x Vitória", channels: "SporTV • Premiere" },
+            { id: "1", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
+            { id: "2", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
           ]);
         }
       } finally {
@@ -449,7 +442,7 @@ export default function HomeTab() {
       >
         {hasContent ? (
           <View style={styles.mainContainer}>
-            {/* CABEÇALHO COM PERFIL ATIVO E CÓDIGO DE ACESSO */}
+            {/* CABEÇALHO COM PERFIL E CÓDIGO DE ATIVAÇÃO */}
             <View style={styles.rowBetween}>
               <View style={{ gap: 2 }}>
                 <Text style={styles.sectionHeader}>GOLDCAST STREAMING</Text>
@@ -543,7 +536,7 @@ export default function HomeTab() {
               </Pressable>
             </View>
 
-            {/* CONTINUAR ASSISTIR ESPECÍFICO DO PERFIL */}
+            {/* CONTINUAR A ASSISTIR ESPECÍFICO DO PERFIL */}
             {continueWatchingList.length > 0 && (
               <View style={styles.nfSection}>
                 <Text style={styles.sectionTitle}>CONTINUAR A ASSISTIR ({currentProfile.name})</Text>
@@ -590,7 +583,7 @@ export default function HomeTab() {
               </View>
             )}
 
-            {/* TRENDING MARQUEE */}
+            {/* TRENDING MARQUEE (SEM DUPLICAÇÃO) */}
             {marqueeItems.length > 0 && (
               <TrendingMarquee
                 items={marqueeItems}
@@ -638,7 +631,7 @@ export default function HomeTab() {
               </View>
             )}
 
-            {/* GUIA DE JOGOS DA WEB */}
+            {/* GUIA DE JOGOS ATUALIZADO */}
             <View style={styles.guiaSection}>
               <View style={styles.rowBetween}>
                 <View style={{ gap: 2 }}>
@@ -678,7 +671,7 @@ export default function HomeTab() {
         )}
       </ScrollView>
 
-      {/* GAVETA / MODAL DE GESTÃO E SELEÇÃO DE PERFIS */}
+      {/* GAVETA DE SELEÇÃO E GERENCIAMENTO DE PERFIS */}
       <Modal visible={showProfileSheet} animationType="slide" transparent={true}>
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheetContainer, { paddingBottom: insets.bottom + 20 }]}>
@@ -738,10 +731,7 @@ export default function HomeTab() {
               )}
             </ScrollView>
 
-            <Pressable
-              onPress={() => setEditMode(!editMode)}
-              style={styles.manageProfilesPill}
-            >
+            <Pressable onPress={() => setEditMode(!editMode)} style={styles.manageProfilesPill}>
               <Text style={styles.manageProfilesPillText}>{editMode ? "Concluir edição" : "Gerenciar / Excluir Perfis"}</Text>
             </Pressable>
           </View>
@@ -852,7 +842,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* MODAL DE CONTA E CONFIGURAÇÕES DE SENHA +18 */}
+      {/* MODAL DE CONTA */}
       <Modal visible={showAccountModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.accountCardModal}>
@@ -860,7 +850,7 @@ export default function HomeTab() {
               <Ionicons name="person" size={32} color={colors.gold} />
             </View>
             <Text style={styles.accountModalTitle}>INFORMAÇÕES DA CONTA</Text>
-            <Text style={styles.accountModalSubtitle}>Gestão de perfis e segurança</Text>
+            <Text style={styles.accountModalSubtitle}>Gestão de perfis e licença</Text>
 
             <View style={styles.accountInfoList}>
               <View style={styles.accountInfoRow}>
