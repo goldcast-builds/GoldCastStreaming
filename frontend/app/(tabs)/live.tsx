@@ -1,5 +1,5 @@
 import { useCallback, useState, useMemo } from "react";
-import { View, Text, StyleSheet, FlatList, Pressable, Image, TextInput, Modal, Dimensions } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, TextInput, Modal, Dimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
@@ -77,7 +77,10 @@ export default function LiveTab() {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.headerContainer, { paddingTop: insets.top + 10 }]}>
+      <ScrollView
+        contentContainerStyle={{ paddingTop: insets.top + 10, paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.headerRow}>
           <Text style={styles.title}>TV ao Vivo</Text>
           <Pressable onPress={() => setShowCatModal(true)} style={styles.catPickerBtn}>
@@ -96,38 +99,30 @@ export default function LiveTab() {
             style={styles.input}
           />
         </View>
-      </View>
 
-      <FlatList
-        data={liveList}
-        keyExtractor={(item) => String(item.stream_id)}
-        numColumns={3}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120, paddingTop: 10 }}
-        columnWrapperStyle={{ gap: 12, marginBottom: 12 }}
-        initialNumToRender={15}
-        maxToRenderPerBatch={15}
-        windowSize={5}
-        removeClippedSubviews={true}
-        renderItem={({ item: ch }) => (
-          <Pressable
-            style={styles.card}
-            onPress={() =>
-              router.push({ pathname: "/player", params: { channelId: String(ch.stream_id) } })
-            }
-          >
-            <View style={styles.posterBox}>
-              {ch.stream_icon ? (
-                <Image source={{ uri: ch.stream_icon }} style={styles.poster} resizeMode="contain" />
-              ) : (
-                <Ionicons name="tv" size={32} color="#E50914" />
-              )}
-            </View>
-            <Text style={styles.cardTitle} numberOfLines={2}>
-              {ch.name}
-            </Text>
-          </Pressable>
-        )}
-      />
+        <View style={styles.grid}>
+          {liveList.map((ch) => (
+            <Pressable
+              key={ch.stream_id}
+              style={styles.card}
+              onPress={() =>
+                router.push({ pathname: "/player", params: { channelId: String(ch.stream_id) } })
+              }
+            >
+              <View style={styles.posterBox}>
+                {ch.stream_icon ? (
+                  <Image source={{ uri: ch.stream_icon }} style={styles.poster} resizeMode="contain" />
+                ) : (
+                  <Ionicons name="tv" size={32} color="#E50914" />
+                )}
+              </View>
+              <Text style={styles.cardTitle} numberOfLines={2}>
+                {ch.name}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
 
       <Modal visible={showCatModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
@@ -184,13 +179,13 @@ export default function LiveTab() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000000" },
-  headerContainer: { backgroundColor: "#000000" },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, marginBottom: 10 },
   title: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
   catPickerBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#181A20", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.15)", maxWidth: 180 },
   catPickerBtnText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
-  searchBox: { flexDirection: "row", alignItems: "center", backgroundColor: "#181A20", marginHorizontal: 16, paddingHorizontal: 12, borderRadius: 10, height: 44, marginBottom: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
+  searchBox: { flexDirection: "row", alignItems: "center", backgroundColor: "#181A20", marginHorizontal: 16, paddingHorizontal: 12, borderRadius: 10, height: 44, marginBottom: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
   input: { flex: 1, color: "#FFF", fontSize: 14, marginLeft: 8 },
+  grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, gap: 12 },
   card: { width: "30%", aspectRatio: 1, backgroundColor: "#14161D", borderRadius: 10, overflow: "hidden", marginBottom: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
   posterBox: { width: "100%", height: "72%", alignItems: "center", justifyContent: "center", backgroundColor: "#101218" },
   poster: { width: "80%", height: "80%" },
