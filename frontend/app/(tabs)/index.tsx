@@ -44,11 +44,11 @@ interface GuiaMatch {
 
 const SOPHISTICATED_AVATARS = [
   { icon: "film-outline", color: "#E50914", label: "Cinema" },
-  { icon: "football-outline", color: "#2E7D32", label: "Futebol" },
+  { icon: "football-outline", color: "#10B981", label: "Futebol" },
   { icon: "rocket-outline", color: "#1E88E5", label: "Espaço" },
   { icon: "game-controller-outline", color: "#6A1B9A", label: "Gamer" },
-  { icon: "sparkles-outline", color: "#FB8C00", label: "Infantil" },
-  { icon: "heart-outline", color: "#D81B60", label: "Kids" },
+  { icon: "sparkles-outline", color: "#0284C7", label: "Kids" },
+  { icon: "heart-outline", color: "#D81B60", label: "Família" },
 ];
 
 export default function HomeTab() {
@@ -70,7 +70,7 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
-  // Perfis com suporte a Futebol
+  // Perfis
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
@@ -124,18 +124,18 @@ export default function HomeTab() {
     };
   }, [activeProfile, profiles, username]);
 
-  // Cores dinâmicas do layout baseadas no perfil ativo
+  // Temas dinâmicos baseados no tipo de perfil
   const themeStyles = useMemo(() => {
     if (currentProfile.type === "kids") {
-      return { bg: "#0F172A", accent: "#38BDF8", cardBg: "#1E293B", badge: "#0284C7" }; // Azul vibrante infantil
+      return { bg: "#0C1B2A", accent: "#38BDF8", cardBg: "#172A45", badge: "#0284C7" }; // Azul Kids
     }
     if (currentProfile.type === "adult") {
-      return { bg: "#140A0A", accent: "#DC2626", cardBg: "#1F1212", badge: "#991B1B" }; // Vermelho escuro +18
+      return { bg: "#140808", accent: "#EF4444", cardBg: "#1F1111", badge: "#DC2626" }; // Vermelho +18
     }
     if (currentProfile.type === "football") {
-      return { bg: "#051C0D", accent: "#10B981", cardBg: "#0F2E18", badge: "#047857" }; // Verde gramado para Futebol
+      return { bg: "#041C0F", accent: "#10B981", cardBg: "#0D2E1A", badge: "#059669" }; // Verde Esportivo / Futebol
     }
-    return { bg: colors.bg, accent: colors.gold, cardBg: colors.surface, badge: colors.gold }; // Normal padrão
+    return { bg: colors.bg, accent: colors.gold, cardBg: colors.surface, badge: colors.gold };
   }, [currentProfile.type]);
 
   useEffect(() => {
@@ -263,31 +263,31 @@ export default function HomeTab() {
 
   const isAdultContent = (name: string, categoryName: string = "") => {
     const text = (name + " " + categoryName).toLowerCase();
-    return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates/i.test(text);
+    return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates|canal adulto|filmes xxx/i.test(text);
   };
 
   const isKidsContent = (name: string, categoryName: string = "") => {
     const text = (name + " " + categoryName).toLowerCase();
-    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|spider|herói|hero|frozen|princesa|sonic|pokemon|minions/i.test(text);
+    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|akame|dragon ball|naruto|one piece|sword art/i.test(text);
   };
 
   const isFootballContent = (name: string, categoryName: string = "") => {
     const text = (name + " " + categoryName).toLowerCase();
-    return /futebol|futebol ao vivo|brasileirão|copa|libertadores|champions|premier|esporte|sportv|premiere|espn|cazé|futebol na tv/i.test(text);
+    return /futebol|brasileirão|copa|libertadores|champions|premier|esporte|sportv|premiere|espn|cazé|combate|band sports|nfl|nba|futebol na tv|jogos|esporte|ppv/i.test(text);
   };
 
-  // Filtro inteligente executado no Index baseado estritamente no tipo de perfil selecionado
   const handleOpenItemWithParentalCheck = (item: any, openAction: () => void) => {
     const itemName = item?.name || item?.title || "";
     const itemCat = item?.category_name || "";
 
     if (currentProfile.type === "kids" && (isAdultContent(itemName, itemCat) || !isKidsContent(itemName, itemCat))) {
-      Alert.alert("Conteúdo Restrito", "Este perfil infantil exibe apenas conteúdos recomendados para crianças.");
+      Alert.alert("Perfil Infantil", "Este perfil exibe apenas conteúdos recomendados para crianças e animes/desenhos.");
       return;
     }
 
     if (currentProfile.type === "football" && !isFootballContent(itemName, itemCat)) {
-      Alert.alert("Modo Futebol", "Este perfil está otimizado exclusivamente para canais e conteúdos de futebol e esportes.");
+      Alert.alert("Modo Futebol", "Este perfil é exclusivo para canais e partidas de futebol e esportes.");
+      return;
     }
 
     if (adultLocked && currentProfile.type !== "adult" && isAdultContent(itemName, itemCat)) {
@@ -313,7 +313,7 @@ export default function HomeTab() {
     }
   };
 
-  // Busca do Guia de Jogos
+  // BUSCA DO GUIA DE JOGOS
   useEffect(() => {
     let isMounted = true;
     const fetchGuia = async () => {
@@ -329,7 +329,7 @@ export default function HomeTab() {
           const fnRegex = /Onde assistir\s+([^x\n\r<]+)\s*x\s*([^<:\n\r?]+)[^⏱\n]*⏱\s*(\d{1,2}:\d{2})h?\.?\s*([^<\n\r]*)/gi;
           let m;
           let idx = 0;
-          while ((m = fnRegex.exec(html)) !== null && idx < 12) {
+          while ((m = fnRegex.exec(html)) !== null && idx < 10) {
             const team1 = m[1].replace(/<[^>]+>/g, "").trim();
             const team2 = m[2].replace(/<[^>]+>/g, "").trim();
             const time = m[3].trim();
@@ -351,7 +351,8 @@ export default function HomeTab() {
         if (matches.length === 0) {
           matches = [
             { id: "1", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
-            { id: "2", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
+            { id: "2", time: "19:30", league: "Brasileirão Série B", match: "Londrina x Cuiabá", channels: "Disney+ • Premiere" },
+            { id: "3", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
           ];
         }
 
@@ -413,7 +414,7 @@ export default function HomeTab() {
     };
   }, [daysLeft, isExpired]);
 
-  // Filtragem estrita dos destaques/novidades de acordo com o perfil (Kids, Adulto, Futebol ou Normal)
+  // FILTRAGEM RIGOROSA DE CONTEÚDO NA TELA INICIAL
   const marqueeItems: MarqueeItem[] = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod
@@ -424,9 +425,8 @@ export default function HomeTab() {
 
         if (currentProfile.type === "kids") return isKidsContent(name, cat);
         if (currentProfile.type === "adult") return isAdultContent(name, cat);
-        if (currentProfile.type === "football") return isFootballContent(name, cat);
-        
-        // Perfil Normal (filtra adulto se bloqueado)
+        if (currentProfile.type === "football") return false; // Perfil de futebol é focado em canais de TV ao vivo
+
         if (adultLocked && isAdultContent(name, cat)) return false;
         return true;
       })
@@ -435,6 +435,7 @@ export default function HomeTab() {
   }, [catalog.vod, currentProfile.type, adultLocked]);
 
   const continueWatchingList = useMemo(() => {
+    if (currentProfile.type === "football") return []; // Futebol foca apenas em canais ao vivo
     if (!profileProgress || Object.keys(profileProgress).length === 0) return [];
     return Object.values(profileProgress)
       .filter((p: any) => p && p.duration > 60 && p.position > 15 && p.position < p.duration - 30)
@@ -444,7 +445,7 @@ export default function HomeTab() {
       }))
       .reverse()
       .slice(0, 10);
-  }, [profileProgress]);
+  }, [profileProgress, currentProfile.type]);
 
   const go = async (path: string) => {
     if (session && source?.kind !== "list") await setSource({ kind: "xtream" });
@@ -481,11 +482,11 @@ export default function HomeTab() {
       >
         {hasContent ? (
           <View style={styles.mainContainer}>
-            {/* CABEÇALHO COM PERFIL E CÓDIGO DE ATIVAÇÃO */}
+            {/* CABEÇALHO COM PERFIL E CONFIGURAÇÕES */}
             <View style={styles.rowBetween}>
               <View style={{ gap: 2 }}>
                 <Text style={[styles.sectionHeader, { color: themeStyles.accent }]}>
-                  {currentProfile.type === "kids" ? "🌟 MODO INFANTIL (KIDS)" : currentProfile.type === "football" ? "⚽ MODO FUTEBOL & ESPORTES" : "GOLDCAST STREAMING"}
+                  {currentProfile.type === "kids" ? "🌟 MODO INFANTIL & KIDs" : currentProfile.type === "football" ? "⚽ MODO FUTEBOL & CANAIS AO VIVO" : currentProfile.type === "adult" ? "🔥 MODO ADULTO (+18)" : "GOLDCAST STREAMING"}
                 </Text>
                 <View style={styles.rowAlign}>
                   <Pressable
@@ -504,6 +505,7 @@ export default function HomeTab() {
                 </View>
               </View>
 
+              {/* BOTÃO DE CONFIGURAÇÕES (ENGRENAGEM NO CANTO SUPERIOR DIREITO) */}
               <Pressable
                 focusable={true}
                 onPress={() => router.push("/(tabs)/settings")}
@@ -513,40 +515,44 @@ export default function HomeTab() {
               </Pressable>
             </View>
 
-            {/* BOTÕES DE NAVEGAÇÃO PRINCIPAL */}
+            {/* BOTÕES DE NAVEGAÇÃO PRINCIPAL (Futebol foca direto em TV ao Vivo) */}
             <View style={styles.gridNav}>
               <Pressable focusable={true} onPress={() => go("/(tabs)/live")} style={[styles.navCard, { backgroundColor: themeStyles.cardBg }]}>
                 <View style={[styles.navCardIconBox, { backgroundColor: `${themeStyles.accent}20` }]}>
                   <Ionicons name="tv" size={26} color={themeStyles.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.navCardTitle}>TV AO VIVO</Text>
-                  <Text style={styles.navCardSub}>Canais em tempo real</Text>
+                  <Text style={styles.navCardTitle}>TV AO VIVO & FUTEBOL</Text>
+                  <Text style={styles.navCardSub}>Canais esportivos em tempo real</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
               </Pressable>
 
-              <Pressable focusable={true} onPress={() => go("/(tabs)/movies")} style={[styles.navCard, { backgroundColor: themeStyles.cardBg }]}>
-                <View style={[styles.navCardIconBox, { backgroundColor: `${themeStyles.accent}20` }]}>
-                  <Ionicons name="film" size={26} color={themeStyles.accent} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.navCardTitle}>FILMES</Text>
-                  <Text style={styles.navCardSub}>Catálogo On-Demand</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
-              </Pressable>
+              {currentProfile.type !== "football" && (
+                <>
+                  <Pressable focusable={true} onPress={() => go("/(tabs)/movies")} style={[styles.navCard, { backgroundColor: themeStyles.cardBg }]}>
+                    <View style={[styles.navCardIconBox, { backgroundColor: `${themeStyles.accent}20` }]}>
+                      <Ionicons name="film" size={26} color={themeStyles.accent} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.navCardTitle}>FILMES</Text>
+                      <Text style={styles.navCardSub}>Catálogo On-Demand</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
+                  </Pressable>
 
-              <Pressable focusable={true} onPress={() => go("/(tabs)/series")} style={[styles.navCard, { backgroundColor: themeStyles.cardBg }]}>
-                <View style={[styles.navCardIconBox, { backgroundColor: `${themeStyles.accent}20` }]}>
-                  <Ionicons name="albums" size={26} color={themeStyles.accent} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.navCardTitle}>SÉRIES</Text>
-                  <Text style={styles.navCardSub}>Temporadas completas</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
-              </Pressable>
+                  <Pressable focusable={true} onPress={() => go("/(tabs)/series")} style={[styles.navCard, { backgroundColor: themeStyles.cardBg }]}>
+                    <View style={[styles.navCardIconBox, { backgroundColor: `${themeStyles.accent}20` }]}>
+                      <Ionicons name="albums" size={26} color={themeStyles.accent} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.navCardTitle}>SÉRIES</Text>
+                      <Text style={styles.navCardSub}>Animes e Temporadas</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
+                  </Pressable>
+                </>
+              )}
             </View>
 
             {/* ATALHOS RÁPIDOS */}
@@ -577,8 +583,8 @@ export default function HomeTab() {
               </Pressable>
             </View>
 
-            {/* CONTINUAR A ASSISTIR */}
-            {continueWatchingList.length > 0 && (
+            {/* CONTINUAR A ASSISTIR (Omitido no modo futebol) */}
+            {currentProfile.type !== "football" && continueWatchingList.length > 0 && (
               <View style={styles.nfSection}>
                 <Text style={[styles.sectionTitle, { color: themeStyles.accent }]}>CONTINUAR A ASSISTIR ({currentProfile.name})</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nfRowScroll}>
@@ -624,8 +630,8 @@ export default function HomeTab() {
               </View>
             )}
 
-            {/* TRENDING MARQUEE (FILTRADO POR PERFIL) */}
-            {marqueeItems.length > 0 && (
+            {/* TRENDING MARQUEE (Omitido no modo futebol) */}
+            {currentProfile.type !== "football" && marqueeItems.length > 0 && (
               <TrendingMarquee
                 items={marqueeItems}
                 onPressItem={(item) =>
