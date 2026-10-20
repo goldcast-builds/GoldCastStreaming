@@ -183,7 +183,6 @@ const styles = StyleSheet.create({
   card: { width: "30%", aspectRatio: 2/3, backgroundColor: "#14161D", borderRadius: 8, overflow: "hidden", marginBottom: 8 },
   poster: { width: "100%", height: "82%" },
   cardTitle: { color: "#D1D5DB", fontSize: 11, fontWeight: "700", padding: 4, textAlign: "center" },
-
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
   modalBox: { width: "100%", maxWidth: 380, backgroundColor: "#181818", borderRadius: 20, padding: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
