@@ -112,6 +112,9 @@ export default function HomeTab() {
   const [newCustomPin, setNewCustomPin] = useState("");
   const [myListIds, setMyListIds] = useState<string[]>([]);
 
+  // Histórico de progresso específico por perfil
+  const [profileProgress, setProfileProgress] = useState<Record<string, any>>({});
+
   // Balão Clássico
   const [bubbleDismissed, setBubbleDismissed] = useState(false);
   const [bubbleOpen, setBubbleOpen] = useState(false);
@@ -148,6 +151,23 @@ export default function HomeTab() {
       isKids: false,
     };
   }, [activeProfile, profiles, username]);
+
+  // Carrega o progresso específico do perfil ativo
+  useEffect(() => {
+    if (currentProfile?.id) {
+      AsyncStorage.getItem(`@goldcast_progress_${currentProfile.id}`).then((raw) => {
+        if (raw) {
+          try {
+            setProfileProgress(JSON.parse(raw));
+          } catch {
+            setProfileProgress({});
+          }
+        } else {
+          setProfileProgress({});
+        }
+      });
+    }
+  }, [currentProfile?.id, progressMap]);
 
   useFocusEffect(
     useCallback(() => {
@@ -195,9 +215,9 @@ export default function HomeTab() {
       });
 
       listLists().then((l) => setHasLists(l.length > 0)).catch(() => {});
-      if (source?.kind === "xtream" && session) {
-        if (!catalog.vodLoaded) loadVod();
-        if (!catalog.seriesLoaded && loadSeries) loadSeries();
+      if (session) {
+        loadVod();
+        if (loadSeries) loadSeries();
         xtream
           .vodCategories(session)
           .then((cats) => {
@@ -205,7 +225,7 @@ export default function HomeTab() {
           })
           .catch(() => {});
       }
-    }, [source?.kind, catalog.vodLoaded, catalog.seriesLoaded, loadVod, loadSeries, session])
+    }, [session, loadVod, loadSeries])
   );
 
   const toggleOtrQuick = async () => {
@@ -246,6 +266,7 @@ export default function HomeTab() {
     const nextList = profiles.filter((p) => p.id !== id);
     setProfiles(nextList);
     await AsyncStorage.setItem("@goldcast_profiles", JSON.stringify(nextList));
+    await AsyncStorage.removeItem(`@goldcast_progress_${id}`);
 
     if (nextList.length === 0) {
       setActiveProfile(null);
@@ -268,10 +289,16 @@ export default function HomeTab() {
     }
   };
 
-  // Verificador de conteúdo Adulto (+18)
   const isAdultContent = (name: string, categoryName: string = "") => {
     const text = (name + " " + categoryName).toLowerCase();
     return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates/i.test(text);
+  };
+
+  const isKidsContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|spider|herói|hero|frozen|princesa|sonic|pokemon|minions/i.test(
+      text
+    );
   };
 
   const handleOpenItemWithParentalCheck = (item: any, openAction: () => void) => {
@@ -384,33 +411,27 @@ export default function HomeTab() {
   }, [session]);
 
   const resumeItem = useMemo(() => {
-    if (!progressMap) return null;
-    const list = Object.values(progressMap).filter(
+    if (!profileProgress || Object.keys(profileProgress).length === 0) return null;
+    const list = Object.values(profileProgress).filter(
       (p: any) => p && p.duration > 60 && p.position > 25 && p.position < p.duration - 40
     );
     if (!list.length) return null;
     const latest: any = list[list.length - 1];
     const pct = Math.min(100, Math.round((latest.position / latest.duration) * 100));
     return { ...latest, pct };
-  }, [progressMap]);
+  }, [profileProgress]);
 
-  // Continuar Assistindo ISOLADO POR PERFIL
   const continueWatchingList = useMemo(() => {
-    if (!progressMap || !currentProfile) return [];
-    const profileKey = `profile_${currentProfile.id}_`;
-    return Object.entries(progressMap)
-      .filter(([key, p]: [string, any]) => {
-        if (!p || p.duration <= 60 || p.position <= 15 || p.position >= p.duration - 30) return false;
-        // Se a chave contiver o prefixo do perfil atual ou for geral salva para este perfil
-        return true;
-      })
-      .map(([_, p]: [string, any]) => ({
+    if (!profileProgress || Object.keys(profileProgress).length === 0) return [];
+    return Object.values(profileProgress)
+      .filter((p: any) => p && p.duration > 60 && p.position > 15 && p.position < p.duration - 30)
+      .map((p: any) => ({
         ...p,
         pct: Math.min(100, Math.round((p.position / p.duration) * 100)),
       }))
       .reverse()
       .slice(0, 10);
-  }, [progressMap, currentProfile]);
+  }, [profileProgress]);
 
   useEffect(() => {
     if (resumeItem && !bubbleDismissed) {
@@ -471,7 +492,6 @@ export default function HomeTab() {
       .map((v) => ({ id: String(v.stream_id), name: v.name, poster: v.stream_icon, type: "movie" }));
   }, [catalog.vod, adultLocked]);
 
-  // Filtro Rigoroso para Modo Criança (Kids) e Adulto
   const filteredVod = useMemo(() => {
     if (!catalog.vod?.length) return [];
     let list = catalog.vod.filter((v) => !!v.stream_icon);
@@ -481,13 +501,7 @@ export default function HomeTab() {
     }
 
     if (currentProfile?.isKids) {
-      list = list.filter((v) => {
-        const title = (v.name || "").toLowerCase();
-        const catName = (v.category_name || "").toLowerCase();
-        return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|spider|herói|hero|frozen|princesa|sonic|pokemon|minions/i.test(
-          title + " " + catName
-        );
-      });
+      list = list.filter((v) => isKidsContent(v.name, v.category_name));
     }
 
     if (selectedCategory !== "Todos os títulos") {
@@ -562,9 +576,6 @@ export default function HomeTab() {
       >
         {hasContent ? (
           otrEnabled ? (
-            /* ==============================================================
-               1. MODO OTR COMPLETO
-               ============================================================== */
             <View style={styles.nfContainer}>
               <View style={styles.nfHeader}>
                 <View style={styles.rowAlign}>
@@ -1087,6 +1098,71 @@ export default function HomeTab() {
         )}
       </ScrollView>
 
+      {/* BALÃO FLUTUANTE DE RETOMAR REPRODUÇÃO (MODO CLÁSSICO) */}
+      {!otrEnabled && resumeItem && !bubbleDismissed && (
+        <Animated.View
+          style={[
+            styles.floatingContainer,
+            {
+              bottom: insets.bottom + 90,
+              transform: [{ scale: bubbleAnim }],
+              opacity: bubbleAnim,
+            },
+          ]}
+        >
+          {bubbleOpen && (
+            <View style={styles.bubbleCard}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.bubbleCardTag}>CONTINUAR A ASSISTIR</Text>
+                <Pressable onPress={() => setBubbleOpen(false)} hitSlop={8}>
+                  <Ionicons name="close" size={16} color={colors.textDim} />
+                </Pressable>
+              </View>
+              <Text style={styles.bubbleCardTitle} numberOfLines={1}>{resumeItem.title}</Text>
+              <View style={styles.bubbleProgressTrack}>
+                <View style={[styles.bubbleProgressFill, { width: `${resumeItem.pct}%` }]} />
+              </View>
+              <View style={styles.rowBetween}>
+                <Text style={styles.bubbleCardPct}>{resumeItem.pct}% concluído</Text>
+                <Pressable onPress={handleResumePlayback} style={styles.bubblePlayBtn}>
+                  <Ionicons name="play" size={13} color={colors.onGold} />
+                  <Text style={styles.bubblePlayBtnText}>RETOMAR</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.bubbleRow}>
+            <Pressable onPress={() => setBubbleOpen(!bubbleOpen)} style={styles.bubbleHead}>
+              {resumeItem.logo ? (
+                <Image source={{ uri: resumeItem.logo }} style={styles.bubbleImage} resizeMode="cover" />
+              ) : (
+                <View style={[styles.bubbleImage, styles.center, { backgroundColor: "#1C180E" }]}>
+                  <Ionicons name="film" size={26} color={colors.gold} />
+                </View>
+              )}
+              <View style={styles.bubbleBadgePlay}>
+                <Ionicons name="play" size={10} color={colors.onGold} />
+              </View>
+              <View style={styles.bubbleBadgePct}>
+                <Text style={styles.bubbleBadgePctText}>{resumeItem.pct}%</Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setBubbleOpen(false);
+                setBubbleDismissed(true);
+              }}
+              style={styles.bubbleCloseBtn}
+              hitSlop={6}
+            >
+              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.7)" />
+            </Pressable>
+          </View>
+        </Animated.View>
+      )}
+
       {/* MODAL DE PIN ADULTO (+18) */}
       <Modal visible={showPinModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
@@ -1124,7 +1200,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* MODAL DE CONFIGURAÇÃO DE CONTROLE ADULTO NAS CONFIGURAÇÕES */}
+      {/* MODAL DE CONTROLE PARENTAL */}
       <Modal visible={showParentalModal} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.createProfileModalCard}>
@@ -1426,6 +1502,20 @@ export default function HomeTab() {
               </Pressable>
 
               <Pressable
+                onPress={() => {
+                  setShowProfileSheet(false);
+                  setShowGuiaModal(true);
+                }}
+                style={styles.sheetMenuItem}
+              >
+                <View style={styles.rowAlign}>
+                  <Ionicons name="football-outline" size={22} color="#FFF" />
+                  <Text style={styles.sheetMenuText}>Guia de Jogos na TV</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+              </Pressable>
+
+              <Pressable
                 onPress={async () => {
                   setShowProfileSheet(false);
                   logout?.();
@@ -1599,11 +1689,73 @@ export default function HomeTab() {
           </View>
         </View>
       </Modal>
+
+      {/* MODAL CONTA */}
+      <Modal visible={showAccountModal} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.accountCardModal}>
+            <View style={styles.accountIconCircle}>
+              <Ionicons name="person" size={32} color={colors.gold} />
+            </View>
+            <Text style={styles.accountModalTitle}>INFORMAÇÕES DA CONTA</Text>
+            <Text style={styles.accountModalSubtitle}>Detalhes da licença e conexão do reprodutor</Text>
+
+            <View style={styles.accountInfoList}>
+              <View style={styles.accountInfoRow}>
+                <Text style={styles.accountRowLabel}>Perfil Ativo:</Text>
+                <Text style={styles.accountRowValue}>{currentProfile.name}</Text>
+              </View>
+              <View style={styles.accountInfoRow}>
+                <Text style={styles.accountRowLabel}>Utilizador:</Text>
+                <Text style={styles.accountRowValue}>{username}</Text>
+              </View>
+              <View style={styles.accountInfoRow}>
+                <Text style={styles.accountRowLabel}>Chave do App:</Text>
+                <Text style={[styles.accountRowValue, { color: colors.gold, fontWeight: "900" }]}>
+                  {activationCode}
+                </Text>
+              </View>
+              <View style={styles.accountInfoRow}>
+                <Text style={styles.accountRowLabel}>Vencimento:</Text>
+                <Text style={styles.accountRowValue}>{expFormatted}</Text>
+              </View>
+              <View style={styles.accountInfoRow}>
+                <Text style={styles.accountRowLabel}>Status:</Text>
+                <Text style={{ color: statusConfig.color, fontWeight: "900", fontSize: 12 }}>
+                  {statusConfig.text}
+                </Text>
+              </View>
+              {session?.serverUrl && (
+                <View style={styles.accountInfoRow}>
+                  <Text style={styles.accountRowLabel}>Servidor:</Text>
+                  <Text style={styles.accountRowValue} numberOfLines={1}>
+                    {session.serverUrl.replace(/https?:\/\//, "")}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <Pressable onPress={() => setShowAccountModal(false)} style={styles.btnModalClose}>
+              <Text style={styles.btnModalCloseText}>FECHAR</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={async () => {
+                setShowAccountModal(false);
+                logout?.();
+                router.replace("/login");
+              }}
+              style={styles.btnModalLogout}
+            >
+              <Text style={styles.btnModalLogoutText}>Trocar de Conta / Sair</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
-// Componentes Auxiliares
 function NetflixPosterCard({
   title,
   poster,
