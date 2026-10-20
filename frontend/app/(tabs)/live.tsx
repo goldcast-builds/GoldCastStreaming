@@ -190,7 +190,6 @@ const styles = StyleSheet.create({
   posterBox: { width: "100%", height: "72%", alignItems: "center", justifyContent: "center", backgroundColor: "#101218" },
   poster: { width: "80%", height: "80%" },
   cardTitle: { color: "#D1D5DB", fontSize: 10.5, fontWeight: "700", padding: 4, textAlign: "center" },
-
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
   modalBox: { width: "100%", maxWidth: 380, backgroundColor: "#181818", borderRadius: 20, padding: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
