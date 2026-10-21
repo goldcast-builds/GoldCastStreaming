@@ -71,10 +71,8 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
-  // Navegação lateral interna da área Kids
   const [kidsTab, setKidsTab] = useState<"home" | "live" | "movies" | "series">("home");
 
-  // Perfis isolados
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
@@ -279,7 +277,6 @@ export default function HomeTab() {
     <View style={[styles.root, { backgroundColor: themeStyles.bg }]}>
       {currentProfile.type === "kids" ? (
         <View style={styles.kidsRoot}>
-          {/* MENU LATERAL ESQUERDO FIXO */}
           <View style={[styles.sidebar, { backgroundColor: themeStyles.sidebarBg }]}>
             <Pressable onPress={() => setKidsTab("home")} style={[styles.sidebarIconBtn, kidsTab === "home" && styles.sidebarTabActive]} focusable={true}>
               <Ionicons name="home" size={22} color={kidsTab === "home" ? "#38BDF8" : "#FFF"} />
@@ -310,7 +307,6 @@ export default function HomeTab() {
             </Pressable>
           </View>
 
-          {/* ÁREA PRINCIPAL DA DIREITA */}
           <View style={styles.kidsMainContent}>
             <View style={styles.kidsTopBar}>
               <View style={styles.kidsTitleBadgeWrap}>
@@ -323,10 +319,8 @@ export default function HomeTab() {
               </Pressable>
             </View>
 
-            {/* ABA HOME (INÍCIO DIVERSIFICADO E COLORIDO) */}
             {kidsTab === "home" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 18, paddingBottom: 50 }}>
-                {/* BANNER GIGANTE DE DESTAQUE COLORIDO */}
                 {kidsMoviesList.length > 0 && (
                   <Pressable
                     focusable={true}
@@ -342,7 +336,6 @@ export default function HomeTab() {
                   </Pressable>
                 )}
 
-                {/* FILMES E ANIMAÇÕES INFANTIS */}
                 <View style={{ gap: 10 }}>
                   <View style={styles.sectionTitleRow}>
                     <Ionicons name="film" size={16} color="#EC4899" />
@@ -369,7 +362,6 @@ export default function HomeTab() {
                   </ScrollView>
                 </View>
 
-                {/* SÉRIES & ANIMES INFANTIS */}
                 <View style={{ gap: 10 }}>
                   <View style={styles.sectionTitleRow}>
                     <Ionicons name="albums" size={16} color="#8B5CF6" />
@@ -396,7 +388,6 @@ export default function HomeTab() {
                   </ScrollView>
                 </View>
 
-                {/* CANAIS INFANTIS (24H FHD) */}
                 <View style={styles.kidsAgoraNaTvBox}>
                   <View style={styles.sectionTitleRow}>
                     <Ionicons name="tv" size={16} color="#38BDF8" />
@@ -423,7 +414,6 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
-            {/* ABA CANAIS AO VIVO */}
             {kidsTab === "live" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
                 <Text style={styles.kidsSectionLabel}>📺 TODOS OS CANAIS INFANTIS AO VIVO</Text>
@@ -447,7 +437,6 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
-            {/* ABA FILMES */}
             {kidsTab === "movies" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
                 <Text style={styles.kidsSectionLabel}>🎬 TODOS OS FILMES INFANTIS</Text>
@@ -469,7 +458,6 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
-            {/* ABA SÉRIES */}
             {kidsTab === "series" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
                 <Text style={styles.kidsSectionLabel}>🍿 TODAS AS SÉRIES & ANIMES</Text>
@@ -493,7 +481,6 @@ export default function HomeTab() {
           </View>
         </View>
       ) : (
-        /* LAYOUT PADRÃO PARA OUTROS PERFIS */
         <ScrollView style={styles.root} contentContainerStyle={{ paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + 120 }} showsVerticalScrollIndicator={false}>
           <View style={styles.mainContainer}>
             <View style={styles.rowBetween}>
@@ -527,7 +514,6 @@ export default function HomeTab() {
         </ScrollView>
       )}
 
-      {/* MODAL DE PERFIS */}
       <Modal visible={showProfileSheet} animationType="slide" transparent={true}>
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheetContainer, { paddingBottom: insets.bottom + 20 }]}>
@@ -627,4 +613,4 @@ const styles = StyleSheet.create({
   sheetMiniName: { color: "#E5E7EB", fontSize: 11, fontWeight: "600" },
   kidsTagBadge: { position: "absolute", bottom: 2, right: 2, backgroundColor: "#1E88E5", paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 },
   kidsTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
-}));
+});
