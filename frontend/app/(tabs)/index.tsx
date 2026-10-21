@@ -21,8 +21,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { TrendingMarquee, MarqueeItem } from "../../src/components/TrendingMarquee";
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { listLists } from "../../src/utils/api";
-import { useSession } from "../../src/store/session";
+import { PlayItem, useSession } from "../../src/store/session";
 import { xtream, LiveStream, Category } from "../../src/services/xtream";
+import { liveUrls } from "../../src/services/xtream";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -61,6 +62,8 @@ export default function HomeTab() {
   const loadVod = useSession((s) => s.loadVod);
   const loadSeries = useSession((s) => (s as any).loadSeries);
   const logout = useSession((s) => s.logout);
+  const setQueue = useSession((s) => s.setQueue);
+  const liveFormat = useSession((s) => s.prefs.liveFormat);
 
   const [hasLists, setHasLists] = useState(false);
   const [kidsChannels, setKidsChannels] = useState<LiveStream[]>([]);
@@ -68,7 +71,7 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
-  // Navegação lateral interna exclusiva da área Kids
+  // Navegação lateral interna da área Kids
   const [kidsTab, setKidsTab] = useState<"home" | "live" | "movies" | "series">("home");
 
   // Perfis isolados
@@ -195,7 +198,7 @@ export default function HomeTab() {
     return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece|descencanto|108|patrulha pata|masha|blaze|panda/i.test(text);
   };
 
-  // Carregar canais infantis FHD
+  // Carregar todos os canais infantis sem cortes
   useEffect(() => {
     if (!session) return;
     let active = true;
@@ -205,19 +208,13 @@ export default function HomeTab() {
         const catKids = categories.find((c) => /infantil|kids|desenho/i.test(c.category_name));
         if (catKids) {
           const streams: LiveStream[] = await xtream.liveStreams(session, catKids.category_id);
-          const fhdStreams = streams.filter((s) => {
-            const title = (s.name || "").toUpperCase();
-            return title.includes("FHD") || title.includes("FULL HD") || title.includes("HD");
-          });
-          if (active && fhdStreams.length > 0) setKidsChannels(fhdStreams);
-          else if (active && streams.length > 0) setKidsChannels(streams);
+          if (active && streams.length > 0) setKidsChannels(streams);
         }
       } catch {}
     })();
     return () => { active = false; };
   }, [session]);
 
-  // CATÁLOGO COMPLETO DE FILMES (SEM LIMITES DE 20 ITENS)
   const kidsMoviesList = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod.filter((v) => {
@@ -229,7 +226,6 @@ export default function HomeTab() {
     });
   }, [catalog.vod]);
 
-  // CATÁLOGO COMPLETO DE SÉRIES E ANIMES (SEM LIMITES DE 20 ITENS)
   const kidsSeriesList = useMemo(() => {
     if (!catalog.series?.length) return [];
     return catalog.series.filter((s) => {
@@ -239,6 +235,37 @@ export default function HomeTab() {
       return isKidsContent(name, cat);
     });
   }, [catalog.series]);
+
+  // Função para abrir o player de canal ao vivo diretamente
+  const handlePlayLiveChannel = (ch: LiveStream, index: number) => {
+    if (session && source?.kind !== "list") setSource({ kind: "xtream" });
+    const urls = liveUrls(session, ch.stream_id, liveFormat === "auto" ? undefined : liveFormat);
+
+    const items: PlayItem[] = kidsChannels.map((c) => ({
+      kind: "live",
+      id: String(c.stream_id),
+      title: c.name,
+      subtitle: "Infantil",
+      logo: c.stream_icon,
+      urls: liveUrls(session, c.stream_id, liveFormat === "auto" ? undefined : liveFormat),
+      streamId: c.stream_id,
+      raw: c,
+    }));
+    setQueue(items, index);
+
+    router.push({
+      pathname: "/player",
+      params: {
+        url: urls?.[0] || "",
+        streamUrl: urls?.[0] || "",
+        title: ch.name || "Canal Infantil",
+        name: ch.name || "",
+        id: String(ch.stream_id),
+        stream_id: String(ch.stream_id),
+        type: "live",
+      },
+    });
+  };
 
   const go = async (path: string) => {
     if (session && source?.kind !== "list") await setSource({ kind: "xtream" });
@@ -316,13 +343,13 @@ export default function HomeTab() {
                 </View>
 
                 <View style={styles.kidsAgoraNaTvBox}>
-                  <Text style={styles.kidsSectionLabel}>📺 CANAIS INFANTIS EM FHD (24H)</Text>
+                  <Text style={styles.kidsSectionLabel}>📺 CANAIS INFANTIS (24H)</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                    {kidsChannels.map((ch) => (
+                    {kidsChannels.map((ch, idx) => (
                       <Pressable
                         key={ch.stream_id}
                         focusable={true}
-                        onPress={() => router.push({ pathname: "/(tabs)/live", params: { channelId: String(ch.stream_id) } })}
+                        onPress={() => handlePlayLiveChannel(ch, idx)}
                         style={styles.kidsLiveThumbCard}
                       >
                         {ch.stream_icon ? (
@@ -330,7 +357,7 @@ export default function HomeTab() {
                         ) : (
                           <Ionicons name="tv" size={28} color="#FFF" />
                         )}
-                        <View style={styles.liveTagBadge}><Text style={styles.liveTagText}>FHD</Text></View>
+                        <View style={styles.liveTagBadge}><Text style={styles.liveTagText}>AO VIVO</Text></View>
                       </Pressable>
                     ))}
                   </ScrollView>
@@ -338,16 +365,16 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
-            {/* ABA CANAIS AO VIVO */}
+            {/* ABA CANAIS AO VIVO (EXIBE TODOS OS CANAIS E INICIA DIRETO AO CLICAR) */}
             {kidsTab === "live" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
-                <Text style={styles.kidsSectionLabel}>📺 TODOS OS CANAIS INFANTIS AO VIVO (FHD)</Text>
+                <Text style={styles.kidsSectionLabel}>📺 TODOS OS CANAIS INFANTIS AO VIVO</Text>
                 <View style={styles.kidsGridContainer}>
-                  {kidsChannels.map((ch) => (
+                  {kidsChannels.map((ch, idx) => (
                     <Pressable
                       key={ch.stream_id}
                       focusable={true}
-                      onPress={() => router.push({ pathname: "/(tabs)/live", params: { channelId: String(ch.stream_id) } })}
+                      onPress={() => handlePlayLiveChannel(ch, idx)}
                       style={styles.kidsGridCard}
                     >
                       {ch.stream_icon ? (
