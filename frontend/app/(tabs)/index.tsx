@@ -21,6 +21,7 @@ import { xtream, LiveStream } from "../../src/services/xtream";
 import { liveUrls } from "../../src/services/xtream";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const ITEMS_PER_PAGE = 30;
 
 interface UserProfile {
   id: string;
@@ -128,7 +129,6 @@ export default function HomeTab() {
         }
       });
 
-      // Força o carregamento imediato do catálogo VOD e Séries para popular as capas de imagem
       if (session) {
         if (loadVod) loadVod(true).catch(() => {});
         if (loadSeries) loadSeries(true).catch(() => {});
@@ -178,7 +178,7 @@ export default function HomeTab() {
       const name = v.name || "";
       const cat = v.category_name || "";
       if (currentProfile.type === "kids") return isKidsContent(name, cat);
-      if (currentProfile.type === "adult") return isAdultContent(name, cat);
+      if (currentProfile.type === "adult") return isAdultContent(name, cat); // Exibe apenas filmes XXX adultos no perfil +18[span_4](start_span)[span_4](end_span)
       if (currentProfile.type === "football") return false;
       if (adultLocked && isAdultContent(name, cat)) return false;
       return true;
@@ -186,13 +186,13 @@ export default function HomeTab() {
   }, [catalog.vod, currentProfile.type, adultLocked]);
 
   const filteredSeries = useMemo(() => {
+    if (currentProfile.type === "adult") return []; // Oculta totalmente séries no perfil +18 conforme solicitado[span_5](start_span)[span_5](end_span)
     if (!catalog.series?.length) return [];
     return catalog.series.filter((s) => {
       if (!s.cover) return false;
       const name = s.name || "";
       const cat = s.category_name || "";
       if (currentProfile.type === "kids") return isKidsContent(name, cat);
-      if (currentProfile.type === "adult") return isAdultContent(name, cat);
       if (currentProfile.type === "football") return false;
       if (adultLocked && isAdultContent(name, cat)) return false;
       return true;
@@ -267,32 +267,31 @@ export default function HomeTab() {
   return (
     <View style={[styles.root, { backgroundColor: themeStyles.bg }]}>
       <View style={styles.layoutRoot}>
-        {/* MENU LATERAL ESQUERDO LIMPO (SEM DUPLICAÇÕES) */}
+        {/* MENU LATERAL ESQUERDO FIXO */}
         <View style={[styles.sidebar, { backgroundColor: themeStyles.sidebarBg }]}>
-          {/* 1. Início / Home */}
           <Pressable onPress={() => router.push("/(tabs)")} style={[styles.sidebarIconBtn, { backgroundColor: themeStyles.accent }]} focusable={true}>
             <Ionicons name="home" size={20} color="#FFF" />
           </Pressable>
 
-          {/* 2. TV ao Vivo */}
           <Pressable onPress={() => router.push("/(tabs)/live")} style={styles.sidebarIconBtn} focusable={true}>
             <Ionicons name="tv" size={20} color="#FFF" />
           </Pressable>
 
-          {/* 3. Filmes e Séries (Ocultos no perfil de futebol) */}
           {currentProfile.type !== "football" && (
             <>
               <Pressable onPress={() => router.push("/(tabs)/movies")} style={styles.sidebarIconBtn} focusable={true}>
                 <Ionicons name="film" size={20} color="#FFF" />
               </Pressable>
 
-              <Pressable onPress={() => router.push("/(tabs)/series")} style={styles.sidebarIconBtn} focusable={true}>
-                <Ionicons name="albums" size={20} color="#FFF" />
-              </Pressable>
+              {/* Oculta o botão de séries no menu lateral se for o perfil adulto (+18) */}
+              {currentProfile.type !== "adult" && (
+                <Pressable onPress={() => router.push("/(tabs)/series")} style={styles.sidebarIconBtn} focusable={true}>
+                  <Ionicons name="albums" size={20} color="#FFF" />
+                </Pressable>
+              )}
             </>
           )}
 
-          {/* 4. Perfil Ativo */}
           <Pressable onPress={() => setShowProfileSheet(true)} style={[styles.sidebarProfileBox, { borderColor: currentProfile.color }]} focusable={true}>
             <Ionicons name={currentProfile.icon as any} size={18} color="#FFF" />
             <Text style={styles.sidebarProfileName} numberOfLines={1}>{currentProfile.name}</Text>
@@ -300,14 +299,13 @@ export default function HomeTab() {
 
           <View style={{ flex: 1 }} />
 
-          {/* 5. Sair */}
           <Pressable onPress={() => router.replace("/login")} style={styles.sidebarExitBtn} focusable={true}>
             <Ionicons name="exit-outline" size={16} color="#EF4444" />
             <Text style={styles.sidebarExitText}>SAIR</Text>
           </Pressable>
         </View>
 
-        {/* ÁREA PRINCIPAL DA DIREITA COM CARREGAMENTO OTIMIZADO DE IMAGENS */}
+        {/* ÁREA PRINCIPAL DA DIREITA */}
         <View style={styles.mainContent}>
           <View style={styles.topBar}>
             <View style={{ gap: 2 }}>
@@ -334,7 +332,7 @@ export default function HomeTab() {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 50 }}>
-            {/* Banner de Destaque */}
+            {/* Banner de Destaque com Filmes Adultos / Categoria Ativa[span_6](start_span)[span_6](end_span)[span_7](start_span)[span_7](end_span) */}
             {filteredMovies.length > 0 && currentProfile.type !== "football" && (
               <Pressable
                 focusable={true}
@@ -349,12 +347,14 @@ export default function HomeTab() {
               </Pressable>
             )}
 
-            {/* Carrossel de Filmes */}
+            {/* Filmes em Destaque */}
             {filteredMovies.length > 0 && currentProfile.type !== "football" && (
               <View style={{ gap: 8 }}>
-                <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🎬 FILMES EM DESTAQUE</Text>
+                <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>
+                  {currentProfile.type === "adult" ? "🔥 FILMES | XXX ADULTOS EM DESTAQUE" : "🎬 FILMES EM DESTAQUE"}
+                </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersRow}>
-                  {filteredMovies.slice(0, 12).map((item) => (
+                  {filteredMovies.slice(0, 15).map((item) => (
                     <Pressable
                       key={item.stream_id}
                       focusable={true}
@@ -371,8 +371,8 @@ export default function HomeTab() {
               </View>
             )}
 
-            {/* Carrossel de Séries */}
-            {filteredSeries.length > 0 && currentProfile.type !== "football" && (
+            {/* Séries (Ocultas no perfil adulto)[span_8](start_span)[span_8](end_span) */}
+            {filteredSeries.length > 0 && currentProfile.type !== "football" && currentProfile.type !== "adult" && (
               <View style={{ gap: 8 }}>
                 <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🍿 SÉRIES RECENTES</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersRow}>
@@ -393,11 +393,13 @@ export default function HomeTab() {
               </View>
             )}
 
-            {/* Carrossel de Canais */}
+            {/* Canais ao Vivo */}
             <View style={{ gap: 8 }}>
-              <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>📺 CANAIS AO VIVO EM DESTAQUE</Text>
+              <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>
+                {currentProfile.type === "adult" ? "🔞 CANAIS ADULTOS AO VIVO" : "📺 CANAIS AO VIVO EM DESTAQUE"}
+              </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                {filteredChannels.slice(0, 12).map((ch, idx) => (
+                {filteredChannels.slice(0, 15).map((ch, idx) => (
                   <Pressable
                     key={ch.stream_id}
                     focusable={true}
