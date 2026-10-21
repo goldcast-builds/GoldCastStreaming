@@ -60,16 +60,16 @@ export default function HomeTab() {
   const catalog = useSession((s) => s.catalog);
   const loadVod = useSession((s) => s.loadVod);
   const loadSeries = useSession((s) => (s as any).loadSeries);
-  const progressMap = useSession((s) => s.ud?.progress);
   const logout = useSession((s) => s.logout);
 
   const [hasLists, setHasLists] = useState(false);
-  const [jogosChannels, setJogosChannels] = useState<LiveStream[]>([]);
   const [kidsChannels, setKidsChannels] = useState<LiveStream[]>([]);
-  const [jogosCatId, setJogosCatId] = useState<string | null>(null);
   const [activationCode, setActivationCode] = useState<string>("LICENÇA ATIVA");
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
+
+  // Navegação lateral interna da área Kids ("home" | "live" | "movies" | "series")
+  const [kidsTab, setKidsTab] = useState<"home" | "live" | "movies" | "series">("home");
 
   // Perfis
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
@@ -91,8 +91,6 @@ export default function HomeTab() {
   const [showParentalModal, setShowParentalModal] = useState(false);
   const [newCustomPin, setNewCustomPin] = useState("");
   const [adultLocked, setAdultLocked] = useState(true);
-
-  const [profileProgress, setProfileProgress] = useState<Record<string, any>>({});
 
   const { username, expFormatted, daysLeft, isExpired } = useMemo(() => {
     const user = session?.userInfo?.username || session?.username || "Cliente";
@@ -126,7 +124,7 @@ export default function HomeTab() {
 
   const themeStyles = useMemo(() => {
     if (currentProfile.type === "kids") {
-      return { bg: "#101D38", accent: "#38BDF8", cardBg: "#1E293B", sidebarBg: "#0B1528", highlight: "#F59E0B" }; // Estilo UniTV Kids
+      return { bg: "#0D1B2A", accent: "#38BDF8", cardBg: "#1B2A4A", sidebarBg: "#070E17", highlight: "#F59E0B" };
     }
     if (currentProfile.type === "adult") {
       return { bg: "#140808", accent: "#EF4444", cardBg: "#1F1111", sidebarBg: "#0B0404", highlight: "#EF4444" };
@@ -186,32 +184,16 @@ export default function HomeTab() {
     await AsyncStorage.setItem("@goldcast_active_profile", JSON.stringify(p));
   };
 
-  const handleCreateProfile = async () => {
-    const clean = newProfileName.trim();
-    if (!clean) return;
-    if (profiles.length >= 5) {
-      Alert.alert("Limite atingido", "Pode criar no máximo 5 perfis por conta.");
-      return;
-    }
-    const avatar = SOPHISTICATED_AVATARS[selectedAvatarIdx] || SOPHISTICATED_AVATARS[0];
-    const created: UserProfile = { id: `p_${Date.now()}`, name: clean, color: avatar.color, icon: avatar.icon, type: newProfileType };
-    const nextList = [...profiles, created];
-    setProfiles(nextList);
-    await AsyncStorage.setItem("@goldcast_profiles", JSON.stringify(nextList));
-    setNewProfileName("");
-    setNewProfileType("normal");
-    setShowCreateModal(false);
-    await handleSelectProfile(created);
-  };
-
   const isAdultContent = (name: string, categoryName: string = "") => {
     const text = (name + " " + categoryName).toLowerCase();
-    return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates/i.test(text);
+    return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates|corra|baby/i.test(text);
   };
 
   const isKidsContent = (name: string, categoryName: string = "") => {
     const text = (name + " " + categoryName).toLowerCase();
-    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece/i.test(text);
+    // Exclui estritamente qualquer termo adulto ou suspensivo impróprio
+    if (isAdultContent(name, categoryName)) return false;
+    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece|descencanto|108|patrulha pata|masha|blaze|panda/i.test(text);
   };
 
   // Carregar canais infantis para a seção "AGORA NA TV" do layout Kids
@@ -231,21 +213,28 @@ export default function HomeTab() {
     return () => { active = false; };
   }, [session]);
 
-  const marqueeItems: MarqueeItem[] = useMemo(() => {
+  // Filtragem rigorosa para garantir que NENHUM conteúdo adulto vaze na área Kids
+  const marqueeItems = useMemo(() => {
     if (!catalog.vod?.length) return [];
-    return catalog.vod
-      .filter((v) => {
-        if (!v.stream_icon) return false;
-        const name = v.name || "";
-        const cat = v.category_name || "";
-        if (currentProfile.type === "kids") return isKidsContent(name, cat);
-        if (currentProfile.type === "adult") return isAdultContent(name, cat);
-        if (adultLocked && isAdultContent(name, cat)) return false;
-        return true;
-      })
-      .slice(0, 15)
-      .map((v) => ({ id: String(v.stream_id), name: v.name, poster: v.stream_icon, type: "movie" }));
+    return catalog.vod.filter((v) => {
+      if (!v.stream_icon) return false;
+      const name = v.name || "";
+      const cat = v.category_name || "";
+      if (currentProfile.type === "kids") return isKidsContent(name, cat);
+      if (adultLocked && isAdultContent(name, cat)) return false;
+      return true;
+    }).slice(0, 15);
   }, [catalog.vod, currentProfile.type, adultLocked]);
+
+  const seriesItems = useMemo(() => {
+    if (!catalog.series?.length) return [];
+    return catalog.series.filter((s) => {
+      const name = s.name || "";
+      const cat = s.category_name || "";
+      if (currentProfile.type === "kids") return isKidsContent(name, cat);
+      return true;
+    }).slice(0, 15);
+  }, [catalog.series, currentProfile.type]);
 
   const go = async (path: string) => {
     if (session && source?.kind !== "list") await setSource({ kind: "xtream" });
@@ -254,29 +243,41 @@ export default function HomeTab() {
 
   return (
     <View style={[styles.root, { backgroundColor: themeStyles.bg }]}>
-      {/* SE O PERFIL FOR KIDS, EXIBE O LAYOUT ESTILO UNITV/YOUCINE KIDS (MENU LATERAL + POSTERS VERTICAIS + AGORA NA TV) */}
+      {/* PERFIL KIDS COM MENU LATERAL ESQUERDO E SUBABAS DE CATEGORIA */}
       {currentProfile.type === "kids" ? (
         <View style={styles.kidsRoot}>
-          {/* MENU LATERAL ESQUERDO */}
+          {/* MENU LATERAL ESQUERDO (AZUL ESCURO) */}
           <View style={[styles.sidebar, { backgroundColor: themeStyles.sidebarBg }]}>
-            <Pressable onPress={() => go("/(tabs)/live")} style={styles.sidebarIconBtn} focusable={true}>
-              <Ionicons name="search" size={24} color="#FFF" />
+            <Pressable onPress={() => setKidsTab("home")} style={[styles.sidebarIconBtn, kidsTab === "home" && styles.sidebarTabActive]} focusable={true}>
+              <Ionicons name="home" size={22} color={kidsTab === "home" ? "#38BDF8" : "#FFF"} />
+            </Pressable>
+
+            <Pressable onPress={() => setKidsTab("live")} style={[styles.sidebarIconBtn, kidsTab === "live" && styles.sidebarTabActive]} focusable={true}>
+              <Ionicons name="tv" size={22} color={kidsTab === "live" ? "#38BDF8" : "#FFF"} />
+            </Pressable>
+
+            <Pressable onPress={() => setKidsTab("movies")} style={[styles.sidebarIconBtn, kidsTab === "movies" && styles.sidebarTabActive]} focusable={true}>
+              <Ionicons name="film" size={22} color={kidsTab === "movies" ? "#38BDF8" : "#FFF"} />
+            </Pressable>
+
+            <Pressable onPress={() => setKidsTab("series")} style={[styles.sidebarIconBtn, kidsTab === "series" && styles.sidebarTabActive]} focusable={true}>
+              <Ionicons name="albums" size={22} color={kidsTab === "series" ? "#38BDF8" : "#FFF"} />
             </Pressable>
 
             <Pressable onPress={() => setShowProfileSheet(true)} style={[styles.sidebarProfileBox, { borderColor: currentProfile.color }]} focusable={true}>
-              <Ionicons name={currentProfile.icon as any} size={22} color="#FFF" />
+              <Ionicons name={currentProfile.icon as any} size={20} color="#FFF" />
               <Text style={styles.sidebarProfileName} numberOfLines={1}>{currentProfile.name}</Text>
             </Pressable>
 
             <View style={{ flex: 1 }} />
 
             <Pressable onPress={() => router.replace("/login")} style={styles.sidebarExitBtn} focusable={true}>
-              <Ionicons name="exit-outline" size={20} color="#EF4444" />
+              <Ionicons name="exit-outline" size={18} color="#EF4444" />
               <Text style={styles.sidebarExitText}>SAIR</Text>
             </Pressable>
           </View>
 
-          {/* CONTEÚDO PRINCIPAL KIDS */}
+          {/* ÁREA PRINCIPAL (DIREITA - AZUL CLARO / FUNDO TEMÁTICO) */}
           <View style={styles.kidsMainContent}>
             <View style={styles.kidsTopBar}>
               <Text style={styles.kidsHeaderTitle}>🌟 ESPAÇO MÁGICO INFANTIL</Text>
@@ -285,55 +286,87 @@ export default function HomeTab() {
               </Pressable>
             </View>
 
-            {/* DESTAQUES VERTICAIS COLORIDOS (ESTILO PRINT) */}
-            <View style={{ gap: 10 }}>
-              <Text style={styles.kidsSectionLabel}>PERSONAGENS & DESENHOS EM DESTAQUE</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kidsPostersRow}>
-                {marqueeItems.map((item, idx) => {
-                  const cardColors = ["#3B82F6", "#EAB308", "#EC4899", "#10B981", "#8B5CF6", "#F97316"];
-                  const themeCol = cardColors[idx % cardColors.length];
-                  return (
-                    <Pressable
-                      key={item.id}
-                      focusable={true}
-                      onPress={() => router.push({ pathname: "/movie/[id]", params: { id: item.id } })}
-                      style={[styles.kidsVerticalPosterCard, { backgroundColor: themeCol }]}
-                    >
-                      <Image source={{ uri: item.poster }} style={styles.fullSize} contentFit="cover" />
-                      <View style={styles.kidsPosterGradient}>
-                        <Text style={styles.kidsPosterTitle} numberOfLines={2}>{item.name}</Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
+            {kidsTab === "home" && (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
+                <View style={{ gap: 10 }}>
+                  <Text style={styles.kidsSectionLabel}>PERSONAGENS & DESENHOS EM DESTAQUE</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kidsPostersRow}>
+                    {marqueeItems.map((item, idx) => {
+                      const cardColors = ["#3B82F6", "#EAB308", "#EC4899", "#10B981", "#8B5CF6", "#F97316"];
+                      const themeCol = cardColors[idx % cardColors.length];
+                      return (
+                        <Pressable
+                          key={item.id}
+                          focusable={true}
+                          onPress={() => router.push({ pathname: "/movie/[id]", params: { id: item.id } })}
+                          style={[styles.kidsVerticalPosterCard, { backgroundColor: themeCol }]}
+                        >
+                          <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" />
+                          <View style={styles.kidsPosterGradient}>
+                            <Text style={styles.kidsPosterTitle} numberOfLines={2}>{item.name}</Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
 
-            {/* FAIXA INFERIOR "AGORA NA TV" */}
-            <View style={styles.kidsAgoraNaTvBox}>
-              <Text style={styles.kidsSectionLabel}>📺 AGORA NA TV (CANAIS 24H)</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                {kidsChannels.slice(0, 10).map((ch) => (
-                  <Pressable
-                    key={ch.stream_id}
-                    focusable={true}
-                    onPress={() => router.push({ pathname: "/(tabs)/live", params: { channelId: String(ch.stream_id) } })}
-                    style={styles.kidsLiveThumbCard}
-                  >
-                    {ch.stream_icon ? (
-                      <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" />
-                    ) : (
-                      <Ionicons name="tv" size={28} color="#FFF" />
-                    )}
-                    <View style={styles.liveTagBadge}><Text style={styles.liveTagText}>AO VIVO</Text></View>
-                  </Pressable>
-                ))}
+                <View style={styles.kidsAgoraNaTvBox}>
+                  <Text style={styles.kidsSectionLabel}>📺 AGORA NA TV (CANAIS INFANTIS 24H)</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                    {kidsChannels.slice(0, 10).map((ch) => (
+                      <Pressable
+                        key={ch.stream_id}
+                        focusable={true}
+                        onPress={() => router.push({ pathname: "/(tabs)/live", params: { channelId: String(ch.stream_id) } })}
+                        style={styles.kidsLiveThumbCard}
+                      >
+                        {ch.stream_icon ? (
+                          <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" />
+                        ) : (
+                          <Ionicons name="tv" size={28} color="#FFF" />
+                        )}
+                        <View style={styles.liveTagBadge}><Text style={styles.liveTagText}>AO VIVO</Text></View>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
               </ScrollView>
-            </View>
+            )}
+
+            {kidsTab === "live" && (
+              <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 10 }}>
+                <Ionicons name="tv-outline" size={48} color="#38BDF8" />
+                <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>Canais Infantis ao Vivo</Text>
+                <Pressable onPress={() => router.push("/(tabs)/live")} style={styles.kidsSubTabBtn}>
+                  <Text style={{ color: "#000", fontWeight: "900" }}>ACESSAR GRADE DE CANAIS</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {kidsTab === "movies" && (
+              <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 10 }}>
+                <Ionicons name="film-outline" size={48} color="#38BDF8" />
+                <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>Filmes Infantis On-Demand</Text>
+                <Pressable onPress={() => router.push("/(tabs)/movies")} style={styles.kidsSubTabBtn}>
+                  <Text style={{ color: "#000", fontWeight: "900" }}>ACESSAR CATÁLOGO DE FILMES</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {kidsTab === "series" && (
+              <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 10 }}>
+                <Ionicons name="albums-outline" size={48} color="#38BDF8" />
+                <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>Séries & Animes Infantis</Text>
+                <Pressable onPress={() => router.push("/(tabs)/series")} style={styles.kidsSubTabBtn}>
+                  <Text style={{ color: "#000", fontWeight: "900" }}>ACESSAR SÉRIES E ANIMES</Text>
+                </Pressable>
+              </View>
+            )}
           </View>
         </View>
       ) : (
-        /* LAYOUT PADRÃO / OUTROS PERFIS */
+        /* LAYOUT PADRÃO PARA OUTROS PERFIS */
         <ScrollView style={styles.root} contentContainerStyle={{ paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + 120 }} showsVerticalScrollIndicator={false}>
           <View style={styles.mainContainer}>
             <View style={styles.rowBetween}>
@@ -345,11 +378,6 @@ export default function HomeTab() {
                     <Text style={styles.profileTopName} numberOfLines={1}>{currentProfile.name}</Text>
                     <Ionicons name="chevron-down" size={12} color={colors.textDim} />
                   </Pressable>
-
-                  <View style={styles.codePillBadge}>
-                    <Ionicons name="key" size={11} color="#000" />
-                    <Text style={styles.codePillText}>{activationCode}</Text>
-                  </View>
                 </View>
               </View>
 
@@ -367,29 +395,7 @@ export default function HomeTab() {
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
               </Pressable>
-
-              <Pressable focusable={true} onPress={() => go("/(tabs)/movies")} style={styles.navCard}>
-                <View style={styles.navCardIconBox}><Ionicons name="film" size={26} color={colors.gold} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.navCardTitle}>FILMES</Text>
-                  <Text style={styles.navCardSub}>Catálogo On-Demand</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
-              </Pressable>
-
-              <Pressable focusable={true} onPress={() => go("/(tabs)/series")} style={styles.navCard}>
-                <View style={styles.navCardIconBox}><Ionicons name="albums" size={26} color={colors.gold} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.navCardTitle}>SÉRIES</Text>
-                  <Text style={styles.navCardSub}>Temporadas completas</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
-              </Pressable>
             </View>
-
-            {marqueeItems.length > 0 && (
-              <TrendingMarquee items={marqueeItems} onPressItem={(item) => router.push({ pathname: "/movie/[id]", params: { id: item.id } })} />
-            )}
           </View>
         </ScrollView>
       )}
@@ -410,7 +416,7 @@ export default function HomeTab() {
               {profiles.map((p) => (
                 <Pressable
                   key={p.id}
-                  onPress={() => { if (editMode) handleDeleteProfile(p.id); else handleSelectProfile(p); }}
+                  onPress={() => handleSelectProfile(p)}
                   style={styles.sheetProfileMiniItem}
                 >
                   <View style={[styles.sheetMiniAvatar, { backgroundColor: p.color, borderWidth: currentProfile.id === p.id ? 3 : 0, borderColor: "#FFF" }]}>
@@ -431,12 +437,13 @@ export default function HomeTab() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   kidsRoot: { flex: 1, flexDirection: "row" },
-  sidebar: { width: 84, paddingVertical: 24, alignItems: "center", justifyContent: "flex-start", gap: 24, borderRightWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
-  sidebarIconBtn: { width: 48, height: 48, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" },
-  sidebarProfileBox: { width: 56, height: 56, borderRadius: 18, backgroundColor: "#1E293B", alignItems: "center", justifyContent: "center", borderWidth: 2, gap: 2 },
-  sidebarProfileName: { color: "#FFF", fontSize: 9, fontWeight: "700" },
-  sidebarExitBtn: { alignItems: "center", gap: 4, paddingBottom: 10 },
-  sidebarExitText: { color: "#EF4444", fontSize: 10, fontWeight: "900" },
+  sidebar: { width: 76, paddingVertical: 20, alignItems: "center", justifyContent: "flex-start", gap: 16, borderRightWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
+  sidebarIconBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+  sidebarTabActive: { backgroundColor: "#38BDF8", borderWidth: 2, borderColor: "#FFF" },
+  sidebarProfileBox: { width: 50, height: 50, borderRadius: 16, backgroundColor: "#1E293B", alignItems: "center", justifyContent: "center", borderWidth: 2, gap: 2, marginTop: 10 },
+  sidebarProfileName: { color: "#FFF", fontSize: 8, fontWeight: "700" },
+  sidebarExitBtn: { alignItems: "center", gap: 2, paddingBottom: 10 },
+  sidebarExitText: { color: "#EF4444", fontSize: 9, fontWeight: "900" },
 
   kidsMainContent: { flex: 1, paddingHorizontal: 20, paddingTop: 16, gap: 16 },
   kidsTopBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
@@ -444,21 +451,20 @@ const styles = StyleSheet.create({
   kidsSettingsBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
   kidsSectionLabel: { color: "#94A3B8", fontSize: 11, fontWeight: "800", letterSpacing: 0.8 },
   kidsPostersRow: { gap: 14, paddingVertical: 4 },
-  kidsVerticalPosterCard: { width: 140, height: 210, borderRadius: 16, overflow: "hidden", position: "relative", elevation: 6 },
-  kidsPosterGradient: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.75)", padding: 10 },
-  kidsPosterTitle: { color: "#FFF", fontSize: 12, fontWeight: "900" },
+  kidsVerticalPosterCard: { width: 130, height: 195, borderRadius: 16, overflow: "hidden", position: "relative", elevation: 6 },
+  kidsPosterGradient: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.8)", padding: 8 },
+  kidsPosterTitle: { color: "#FFF", fontSize: 11, fontWeight: "900" },
 
-  kidsAgoraNaTvBox: { gap: 10, marginTop: 4 },
-  kidsLiveThumbCard: { width: 110, height: 75, borderRadius: 12, backgroundColor: "#1E293B", overflow: "hidden", position: "relative", alignItems: "center", justifyContent: "center" },
+  kidsAgoraNaTvBox: { gap: 8, marginTop: 2 },
+  kidsLiveThumbCard: { width: 110, height: 70, borderRadius: 12, backgroundColor: "#1E293B", overflow: "hidden", position: "relative", alignItems: "center", justifyContent: "center" },
   liveTagBadge: { position: "absolute", top: 4, left: 4, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 },
   liveTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
+  kidsSubTabBtn: { backgroundColor: "#38BDF8", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginTop: 8 },
 
   mainContainer: { gap: spacing.lg, paddingHorizontal: spacing.lg },
   sectionHeader: { color: colors.textDim, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
   profileTopChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1.5 },
   profileTopName: { color: "#FFF", fontSize: 13, fontWeight: "800", maxWidth: 110 },
-  codePillBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.gold, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, marginLeft: 8 },
-  codePillText: { color: "#000", fontSize: 10.5, fontWeight: "900" },
   accountIconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   rowAlign: { flexDirection: "row", alignItems: "center" },
