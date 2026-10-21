@@ -25,7 +25,7 @@ import { xtream, LiveStream, Category } from "../../src/services/xtream";
 import { liveUrls } from "../../src/services/xtream";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const ITEMS_PER_PAGE = 36;
+const ITEMS_PER_PAGE = 30; // Lote otimizado para velocidade máxima
 
 interface UserProfile {
   id: string;
@@ -66,29 +66,19 @@ export default function HomeTab() {
   const liveFormat = useSession((s) => s.prefs.liveFormat);
 
   const [hasLists, setHasLists] = useState(false);
-  const [kidsChannels, setKidsChannels] = useState<LiveStream[]>([]);
+  const [cachedChannels, setCachedChannels] = useState<LiveStream[]>([]);
   const [activationCode, setActivationCode] = useState<string>("LICENÇA ATIVA");
-  const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
-  const [loadingGuia, setLoadingGuia] = useState(false);
-
-  const [currentTab, setCurrentTab] = useState<"home" | "live" | "movies" | "series" | "epg" | "favs">("home");
+  const [currentTab, setCurrentTab] = useState<"home" | "live" | "movies" | "series">("home");
   const [page, setPage] = useState(1);
 
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-
-  const [newProfileName, setNewProfileName] = useState("");
-  const [selectedAvatarIdx, setSelectedAvatarIdx] = useState(0);
-  const [newProfileType, setNewProfileType] = useState<"normal" | "kids" | "adult" | "football">("normal");
 
   const [adultPin, setAdultPin] = useState("0000");
   const [showPinModal, setShowPinModal] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
   const [pendingItemToOpen, setPendingItemToOpen] = useState<any>(null);
-  const [showAccountModal, setShowAccountModal] = useState(false);
   const [adultLocked, setAdultLocked] = useState(true);
 
   const { username, expFormatted, daysLeft, isExpired } = useMemo(() => {
@@ -167,7 +157,6 @@ export default function HomeTab() {
         }
       });
 
-      listLists().then((l) => { if (isMounted) setHasLists(l.length > 0); }).catch(() => {});
       if (session) {
         if (loadVod) loadVod().catch(() => {});
         if (loadSeries) loadSeries().catch(() => {});
@@ -179,7 +168,6 @@ export default function HomeTab() {
   const handleSelectProfile = async (p: UserProfile) => {
     setActiveProfile(p);
     setShowProfileSheet(false);
-    setEditMode(false);
     setPage(1);
     setCurrentTab("home");
     await AsyncStorage.setItem("@goldcast_active_profile", JSON.stringify(p));
@@ -201,35 +189,20 @@ export default function HomeTab() {
     return /futebol|brasileirão|copa|libertadores|champions|premier|esporte|sportv|premiere|espn|cazé|combate|band sports|nfl|nba|ppv|jogos/i.test(text);
   };
 
-  // Carregamento universal de canais para qualquer perfil
+  // Carregamento otimizado de canais (rápido e leve)
   useEffect(() => {
     if (!session) return;
     let active = true;
     (async () => {
       try {
-        const categories: Category[] = await xtream.liveCategories(session);
-        let targetCat = categories[0];
-
-        if (currentProfile.type === "kids") {
-          targetCat = categories.find((c) => /infantil|kids|desenho/i.test(c.category_name)) || categories[0];
-        } else if (currentProfile.type === "adult") {
-          targetCat = categories.find((c) => /adult|xxx|\+18|18\+/i.test(c.category_name)) || categories[0];
-        } else if (currentProfile.type === "football") {
-          targetCat = categories.find((c) => /esporte|futebol|premiere|sportv/i.test(c.category_name)) || categories[0];
-        }
-
-        if (targetCat) {
-          const streams: LiveStream[] = await xtream.liveStreams(session, targetCat.category_id);
-          if (active && streams.length > 0) setKidsChannels(streams);
-        } else {
-          const allStreams: LiveStream[] = await xtream.liveStreams(session);
-          if (active) setKidsChannels(allStreams);
-        }
+        const streams: LiveStream[] = await xtream.liveStreams(session);
+        if (active && streams.length > 0) setCachedChannels(streams);
       } catch {}
     })();
     return () => { active = false; };
-  }, [session, currentProfile.type]);
+  }, [session]);
 
+  // Filtros leves com limite inicial para evitar lentidão
   const filteredMovies = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod.filter((v) => {
@@ -259,7 +232,7 @@ export default function HomeTab() {
   }, [catalog.series, currentProfile.type, adultLocked]);
 
   const filteredChannels = useMemo(() => {
-    return kidsChannels.filter((ch) => {
+    return cachedChannels.filter((ch) => {
       const name = ch.name || "";
       if (currentProfile.type === "kids") return isKidsContent(name);
       if (currentProfile.type === "adult") return isAdultContent(name);
@@ -267,7 +240,7 @@ export default function HomeTab() {
       if (adultLocked && isAdultContent(name)) return false;
       return true;
     });
-  }, [kidsChannels, currentProfile.type, adultLocked]);
+  }, [cachedChannels, currentProfile.type, adultLocked]);
 
   const paginatedItems = useMemo(() => {
     let sourceList: any[] = [];
@@ -369,7 +342,7 @@ export default function HomeTab() {
             </>
           )}
 
-          <Pressable onPress={() => { setCurrentTab("home"); router.push("/(tabs)/live"); }} style={styles.sidebarIconBtn} focusable={true}>
+          <Pressable onPress={() => router.push("/(tabs)/live")} style={styles.sidebarIconBtn} focusable={true}>
             <Ionicons name="calendar" size={20} color="#FFF" />
           </Pressable>
 
@@ -412,7 +385,7 @@ export default function HomeTab() {
             </Pressable>
           </View>
 
-          {/* ABA HOME */}
+          {/* ABA HOME (LEVE E INSTANTÂNEA) */}
           {currentTab === "home" && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 50 }}>
               {filteredMovies.length > 0 && currentProfile.type !== "football" && (
@@ -433,7 +406,7 @@ export default function HomeTab() {
                 <View style={{ gap: 8 }}>
                   <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🎬 FILMES EM DESTAQUE</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersRow}>
-                    {filteredMovies.slice(0, 15).map((item) => (
+                    {filteredMovies.slice(0, 10).map((item) => (
                       <Pressable
                         key={item.stream_id}
                         focusable={true}
@@ -454,7 +427,7 @@ export default function HomeTab() {
                 <View style={{ gap: 8 }}>
                   <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🍿 SÉRIES RECENTES</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersRow}>
-                    {filteredSeries.slice(0, 15).map((s) => (
+                    {filteredSeries.slice(0, 10).map((s) => (
                       <Pressable
                         key={s.series_id}
                         focusable={true}
@@ -474,7 +447,7 @@ export default function HomeTab() {
               <View style={{ gap: 8 }}>
                 <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>📺 CANAIS AO VIVO EM DESTAQUE</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                  {filteredChannels.slice(0, 15).map((ch, idx) => (
+                  {filteredChannels.slice(0, 10).map((ch, idx) => (
                     <Pressable
                       key={ch.stream_id}
                       focusable={true}
@@ -494,7 +467,7 @@ export default function HomeTab() {
             </ScrollView>
           )}
 
-          {/* ABA LIVE / CANAIS */}
+          {/* ABA LIVE / CANAIS COM PAGINAÇÃO */}
           {currentTab === "live" && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
               <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>📺 CANAIS AO VIVO</Text>
@@ -530,7 +503,7 @@ export default function HomeTab() {
             </ScrollView>
           )}
 
-          {/* ABA FILMES */}
+          {/* ABA FILMES COM PAGINAÇÃO */}
           {currentTab === "movies" && currentProfile.type !== "football" && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
               <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🎬 CATÁLOGO DE FILMES</Text>
@@ -564,7 +537,7 @@ export default function HomeTab() {
             </ScrollView>
           )}
 
-          {/* ABA SÉRIES */}
+          {/* ABA SÉRIES COM PAGINAÇÃO */}
           {currentTab === "series" && currentProfile.type !== "football" && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
               <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🍿 CATÁLOGO DE SÉRIES</Text>
