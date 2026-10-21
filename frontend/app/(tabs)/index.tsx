@@ -25,7 +25,7 @@ import { xtream, LiveStream, Category } from "../../src/services/xtream";
 import { liveUrls } from "../../src/services/xtream";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const ITEMS_PER_PAGE = 36; // Paginação para máxima fluidez e velocidade
+const ITEMS_PER_PAGE = 36;
 
 interface UserProfile {
   id: string;
@@ -66,18 +66,14 @@ export default function HomeTab() {
   const liveFormat = useSession((s) => s.prefs.liveFormat);
 
   const [hasLists, setHasLists] = useState(false);
-  const [channelsList, setChannelsList] = useState<LiveStream[]>([]);
+  const [kidsChannels, setKidsChannels] = useState<LiveStream[]>([]);
   const [activationCode, setActivationCode] = useState<string>("LICENÇA ATIVA");
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
-  // Abas de navegação interna do menu lateral esquerdo
   const [currentTab, setCurrentTab] = useState<"home" | "live" | "movies" | "series" | "epg" | "favs">("home");
-
-  // Paginação
   const [page, setPage] = useState(1);
 
-  // Perfis
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
@@ -88,7 +84,6 @@ export default function HomeTab() {
   const [selectedAvatarIdx, setSelectedAvatarIdx] = useState(0);
   const [newProfileType, setNewProfileType] = useState<"normal" | "kids" | "adult" | "football">("normal");
 
-  // Controle Parental (+18)
   const [adultPin, setAdultPin] = useState("0000");
   const [showPinModal, setShowPinModal] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
@@ -126,7 +121,6 @@ export default function HomeTab() {
     };
   }, [activeProfile, profiles, username]);
 
-  // Temas visuais e cores padrão para cada perfil
   const themeStyles = useMemo(() => {
     if (currentProfile.type === "kids") {
       return { bg: "#0C1B2A", accent: "#38BDF8", cardBg: "#172A45", sidebarBg: "#070E17", title: "ESPAÇO MÁGICO INFANTIL" };
@@ -207,7 +201,7 @@ export default function HomeTab() {
     return /futebol|brasileirão|copa|libertadores|champions|premier|esporte|sportv|premiere|espn|cazé|combate|band sports|nfl|nba|ppv|jogos/i.test(text);
   };
 
-  // Carregamento de Canais ao Vivo de acordo com o perfil
+  // Carregamento universal de canais para qualquer perfil
   useEffect(() => {
     if (!session) return;
     let active = true;
@@ -228,7 +222,6 @@ export default function HomeTab() {
           const streams: LiveStream[] = await xtream.liveStreams(session, targetCat.category_id);
           if (active && streams.length > 0) setKidsChannels(streams);
         } else {
-          // Fallback geral
           const allStreams: LiveStream[] = await xtream.liveStreams(session);
           if (active) setKidsChannels(allStreams);
         }
@@ -237,7 +230,6 @@ export default function HomeTab() {
     return () => { active = false; };
   }, [session, currentProfile.type]);
 
-  // Listas filtradas rigorosamente por perfil
   const filteredMovies = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod.filter((v) => {
@@ -277,7 +269,6 @@ export default function HomeTab() {
     });
   }, [kidsChannels, currentProfile.type, adultLocked]);
 
-  // Paginação dos itens ativos
   const paginatedItems = useMemo(() => {
     let sourceList: any[] = [];
     if (currentTab === "live") sourceList = filteredChannels;
@@ -356,7 +347,7 @@ export default function HomeTab() {
   return (
     <View style={[styles.root, { backgroundColor: themeStyles.bg }]}>
       <View style={styles.layoutRoot}>
-        {/* MENU LATERAL ESQUERDO FIXO (PADRÃO PARA TODOS OS PERFIS) */}
+        {/* MENU LATERAL ESQUERDO FIXO */}
         <View style={[styles.sidebar, { backgroundColor: themeStyles.sidebarBg }]}>
           <Pressable onPress={() => { setCurrentTab("home"); setPage(1); }} style={[styles.sidebarIconBtn, currentTab === "home" && { backgroundColor: themeStyles.accent }]} focusable={true}>
             <Ionicons name="home" size={20} color="#FFF" />
@@ -378,12 +369,10 @@ export default function HomeTab() {
             </>
           )}
 
-          {/* GUIA DE PROGRAMAÇÃO (EPG) - SOLICITADO PARA O PERFIL NORMAL */}
           <Pressable onPress={() => { setCurrentTab("home"); router.push("/(tabs)/live"); }} style={styles.sidebarIconBtn} focusable={true}>
             <Ionicons name="calendar" size={20} color="#FFF" />
           </Pressable>
 
-          {/* PERFIL */}
           <Pressable onPress={() => setShowProfileSheet(true)} style={[styles.sidebarProfileBox, { borderColor: currentProfile.color }]} focusable={true}>
             <Ionicons name={currentProfile.icon as any} size={18} color="#FFF" />
             <Text style={styles.sidebarProfileName} numberOfLines={1}>{currentProfile.name}</Text>
@@ -391,7 +380,6 @@ export default function HomeTab() {
 
           <View style={{ flex: 1 }} />
 
-          {/* SAIR / TROCAR CONTA */}
           <Pressable onPress={() => router.replace("/login")} style={styles.sidebarExitBtn} focusable={true}>
             <Ionicons name="exit-outline" size={16} color="#EF4444" />
             <Text style={styles.sidebarExitText}>SAIR</Text>
@@ -400,7 +388,6 @@ export default function HomeTab() {
 
         {/* ÁREA PRINCIPAL DA DIREITA */}
         <View style={styles.mainContent}>
-          {/* CABEÇALHO INFORMATIVO (NOME, CÓDIGO DE ACESSO, VENCIMENTO, CONFIGURAÇÕES) */}
           <View style={styles.topBar}>
             <View style={{ gap: 2 }}>
               <Text style={[styles.headerTitle, { color: themeStyles.accent }]}>{themeStyles.title}</Text>
@@ -425,10 +412,9 @@ export default function HomeTab() {
             </Pressable>
           </View>
 
-          {/* CONTEÚDO DA ABA HOME (INÍCIO DIVERSIFICADO) */}
+          {/* ABA HOME */}
           {currentTab === "home" && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 50 }}>
-              {/* DESTAQUE PRINCIPAL */}
               {filteredMovies.length > 0 && currentProfile.type !== "football" && (
                 <Pressable
                   focusable={true}
@@ -443,7 +429,6 @@ export default function HomeTab() {
                 </Pressable>
               )}
 
-              {/* CARROSSEL DE FILMES */}
               {filteredMovies.length > 0 && currentProfile.type !== "football" && (
                 <View style={{ gap: 8 }}>
                   <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🎬 FILMES EM DESTAQUE</Text>
@@ -465,7 +450,6 @@ export default function HomeTab() {
                 </View>
               )}
 
-              {/* CARROSSEL DE SÉRIES */}
               {filteredSeries.length > 0 && currentProfile.type !== "football" && (
                 <View style={{ gap: 8 }}>
                   <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🍿 SÉRIES RECENTES</Text>
@@ -487,7 +471,6 @@ export default function HomeTab() {
                 </View>
               )}
 
-              {/* CANAIS AO VIVO */}
               <View style={{ gap: 8 }}>
                 <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>📺 CANAIS AO VIVO EM DESTAQUE</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
@@ -511,7 +494,7 @@ export default function HomeTab() {
             </ScrollView>
           )}
 
-          {/* ABA LIVE / CANAIS COM PAGINAÇÃO */}
+          {/* ABA LIVE / CANAIS */}
           {currentTab === "live" && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
               <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>📺 CANAIS AO VIVO</Text>
@@ -547,7 +530,7 @@ export default function HomeTab() {
             </ScrollView>
           )}
 
-          {/* ABA FILMES COM PAGINAÇÃO */}
+          {/* ABA FILMES */}
           {currentTab === "movies" && currentProfile.type !== "football" && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
               <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🎬 CATÁLOGO DE FILMES</Text>
@@ -581,7 +564,7 @@ export default function HomeTab() {
             </ScrollView>
           )}
 
-          {/* ABA SÉRIES COM PAGINAÇÃO */}
+          {/* ABA SÉRIES */}
           {currentTab === "series" && currentProfile.type !== "football" && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
               <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🍿 CATÁLOGO DE SÉRIES</Text>
@@ -617,7 +600,6 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* MODAL DE PIN ADULTO (+18) */}
       <Modal visible={showPinModal} animationType="fade" transparent={true}>
         <View style={styles.modalBg}>
           <View style={styles.pinCard}>
@@ -646,7 +628,6 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* MODAL DE SELEÇÃO DE PERFIS */}
       <Modal visible={showProfileSheet} animationType="slide" transparent={true}>
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheetContainer, { paddingBottom: insets.bottom + 20 }]}>
