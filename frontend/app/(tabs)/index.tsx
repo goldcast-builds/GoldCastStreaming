@@ -127,7 +127,7 @@ export default function HomeTab() {
 
   const themeStyles = useMemo(() => {
     if (currentProfile.type === "kids") {
-      return { bg: "#0D1B2A", accent: "#38BDF8", cardBg: "#1B2A4A", sidebarBg: "#070E17", highlight: "#F59E0B" };
+      return { bg: "#0C1B2A", accent: "#38BDF8", cardBg: "#172A45", sidebarBg: "#070E17", highlight: "#F59E0B" };
     }
     if (currentProfile.type === "adult") {
       return { bg: "#140808", accent: "#EF4444", cardBg: "#1F1111", sidebarBg: "#0B0404", highlight: "#EF4444" };
@@ -198,7 +198,6 @@ export default function HomeTab() {
     return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece|descencanto|108|patrulha pata|masha|blaze|panda/i.test(text);
   };
 
-  // Carregar todos os canais infantis sem cortes
   useEffect(() => {
     if (!session) return;
     let active = true;
@@ -208,7 +207,12 @@ export default function HomeTab() {
         const catKids = categories.find((c) => /infantil|kids|desenho/i.test(c.category_name));
         if (catKids) {
           const streams: LiveStream[] = await xtream.liveStreams(session, catKids.category_id);
-          if (active && streams.length > 0) setKidsChannels(streams);
+          const fhdStreams = streams.filter((s) => {
+            const title = (s.name || "").toUpperCase();
+            return title.includes("FHD") || title.includes("FULL HD") || title.includes("HD");
+          });
+          if (active && fhdStreams.length > 0) setKidsChannels(fhdStreams);
+          else if (active && streams.length > 0) setKidsChannels(streams);
         }
       } catch {}
     })();
@@ -236,7 +240,6 @@ export default function HomeTab() {
     });
   }, [catalog.series]);
 
-  // Função para abrir o player de canal ao vivo diretamente
   const handlePlayLiveChannel = (ch: LiveStream, index: number) => {
     if (session && source?.kind !== "list") setSource({ kind: "xtream" });
     const urls = liveUrls(session, ch.stream_id, liveFormat === "auto" ? undefined : liveFormat);
@@ -310,17 +313,41 @@ export default function HomeTab() {
           {/* ÁREA PRINCIPAL DA DIREITA */}
           <View style={styles.kidsMainContent}>
             <View style={styles.kidsTopBar}>
-              <Text style={styles.kidsHeaderTitle}>🌟 ESPAÇO MÁGICO INFANTIL</Text>
+              <View style={styles.kidsTitleBadgeWrap}>
+                <Ionicons name="star" size={16} color="#FBBF24" />
+                <Text style={styles.kidsHeaderTitle}>ESPAÇO MÁGICO INFANTIL</Text>
+                <Ionicons name="sparkles" size={16} color="#38BDF8" />
+              </View>
               <Pressable onPress={() => router.push("/(tabs)/settings")} style={styles.kidsSettingsBtn}>
                 <Ionicons name="settings-outline" size={20} color={themeStyles.accent} />
               </Pressable>
             </View>
 
-            {/* ABA HOME */}
+            {/* ABA HOME (INÍCIO DIVERSIFICADO E COLORIDO) */}
             {kidsTab === "home" && (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 18, paddingBottom: 50 }}>
+                {/* BANNER GIGANTE DE DESTAQUE COLORIDO */}
+                {kidsMoviesList.length > 0 && (
+                  <Pressable
+                    focusable={true}
+                    onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(kidsMoviesList[0].stream_id) } })}
+                    style={styles.kidsHeroBanner}
+                  >
+                    <Image source={{ uri: kidsMoviesList[0].stream_icon }} style={styles.fullSize} contentFit="cover" />
+                    <View style={styles.heroOverlayGradient}>
+                      <View style={styles.heroTagBadge}><Text style={styles.heroTagText}>⭐ DESTAQUE MÁGICO</Text></View>
+                      <Text style={styles.heroTitle} numberOfLines={1}>{kidsMoviesList[0].name}</Text>
+                      <Text style={styles.heroSub}>Clique para assistir à aventura completa!</Text>
+                    </View>
+                  </Pressable>
+                )}
+
+                {/* FILMES E ANIMAÇÕES INFANTIS */}
                 <View style={{ gap: 10 }}>
-                  <Text style={styles.kidsSectionLabel}>🎬 CATÁLOGO COMPLETO DE FILMES INFANTIS</Text>
+                  <View style={styles.sectionTitleRow}>
+                    <Ionicons name="film" size={16} color="#EC4899" />
+                    <Text style={styles.kidsSectionLabel}>FILMES INFANTIS & ANIMAÇÕES RECOMENDADAS</Text>
+                  </View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kidsPostersRow}>
                     {kidsMoviesList.map((item, idx) => {
                       const cardColors = ["#3B82F6", "#EAB308", "#EC4899", "#10B981", "#8B5CF6", "#F97316"];
@@ -342,8 +369,39 @@ export default function HomeTab() {
                   </ScrollView>
                 </View>
 
+                {/* SÉRIES & ANIMES INFANTIS */}
+                <View style={{ gap: 10 }}>
+                  <View style={styles.sectionTitleRow}>
+                    <Ionicons name="albums" size={16} color="#8B5CF6" />
+                    <Text style={styles.kidsSectionLabel}>🍿 SÉRIES, DESENHOS & ANIMES</Text>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kidsPostersRow}>
+                    {kidsSeriesList.map((s, idx) => {
+                      const cardColors = ["#8B5CF6", "#3B82F6", "#10B981", "#EC4899", "#F97316"];
+                      const themeCol = cardColors[idx % cardColors.length];
+                      return (
+                        <Pressable
+                          key={s.series_id}
+                          focusable={true}
+                          onPress={() => router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } })}
+                          style={[styles.kidsVerticalPosterCard, { backgroundColor: themeCol }]}
+                        >
+                          <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" />
+                          <View style={styles.kidsPosterGradient}>
+                            <Text style={styles.kidsPosterTitle} numberOfLines={2}>{s.name}</Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+
+                {/* CANAIS INFANTIS (24H FHD) */}
                 <View style={styles.kidsAgoraNaTvBox}>
-                  <Text style={styles.kidsSectionLabel}>📺 CANAIS INFANTIS (24H)</Text>
+                  <View style={styles.sectionTitleRow}>
+                    <Ionicons name="tv" size={16} color="#38BDF8" />
+                    <Text style={styles.kidsSectionLabel}>📺 CANAIS INFANTIS AO VIVO (24H FHD)</Text>
+                  </View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                     {kidsChannels.map((ch, idx) => (
                       <Pressable
@@ -357,7 +415,7 @@ export default function HomeTab() {
                         ) : (
                           <Ionicons name="tv" size={28} color="#FFF" />
                         )}
-                        <View style={styles.liveTagBadge}><Text style={styles.liveTagText}>AO VIVO</Text></View>
+                        <View style={styles.liveTagBadge}><Text style={styles.liveTagText}>FHD</Text></View>
                       </Pressable>
                     ))}
                   </ScrollView>
@@ -365,7 +423,7 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
-            {/* ABA CANAIS AO VIVO (EXIBE TODOS OS CANAIS E INICIA DIRETO AO CLICAR) */}
+            {/* ABA CANAIS AO VIVO */}
             {kidsTab === "live" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
                 <Text style={styles.kidsSectionLabel}>📺 TODOS OS CANAIS INFANTIS AO VIVO</Text>
@@ -389,7 +447,7 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
-            {/* ABA FILMES (TODOS OS FILMES) */}
+            {/* ABA FILMES */}
             {kidsTab === "movies" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
                 <Text style={styles.kidsSectionLabel}>🎬 TODOS OS FILMES INFANTIS</Text>
@@ -411,7 +469,7 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
-            {/* ABA SÉRIES (TODAS AS SÉRIES) */}
+            {/* ABA SÉRIES */}
             {kidsTab === "series" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
                 <Text style={styles.kidsSectionLabel}>🍿 TODAS AS SÉRIES & ANIMES</Text>
@@ -516,9 +574,19 @@ const styles = StyleSheet.create({
 
   kidsMainContent: { flex: 1, paddingHorizontal: 20, paddingTop: 16, gap: 16 },
   kidsTopBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  kidsHeaderTitle: { color: "#38BDF8", fontSize: 16, fontWeight: "900", letterSpacing: 0.5 },
+  kidsTitleBadgeWrap: { flexDirection: "row", alignItems: "center", gap: 6 },
+  kidsHeaderTitle: { color: "#38BDF8", fontSize: 16, fontWeight: "900", letterSpacing: 0.8 },
   kidsSettingsBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
-  kidsSectionLabel: { color: "#94A3B8", fontSize: 11, fontWeight: "800", letterSpacing: 0.8 },
+  
+  kidsHeroBanner: { width: "100%", height: 160, borderRadius: 18, overflow: "hidden", position: "relative" },
+  heroOverlayGradient: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(12,27,42,0.88)", padding: 14, gap: 4 },
+  heroTagBadge: { backgroundColor: "#F59E0B", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: "flex-start" },
+  heroTagText: { color: "#000", fontSize: 9, fontWeight: "900" },
+  heroTitle: { color: "#FFF", fontSize: 16, fontWeight: "900" },
+  heroSub: { color: "#94A3B8", fontSize: 11, fontWeight: "600" },
+
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  kidsSectionLabel: { color: "#38BDF8", fontSize: 11, fontWeight: "800", letterSpacing: 0.8 },
   kidsPostersRow: { gap: 14, paddingVertical: 4 },
   kidsVerticalPosterCard: { width: 130, height: 195, borderRadius: 16, overflow: "hidden", position: "relative", elevation: 6 },
   kidsPosterGradient: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.8)", padding: 8 },
@@ -559,4 +627,4 @@ const styles = StyleSheet.create({
   sheetMiniName: { color: "#E5E7EB", fontSize: 11, fontWeight: "600" },
   kidsTagBadge: { position: "absolute", bottom: 2, right: 2, backgroundColor: "#1E88E5", paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 },
   kidsTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
-});
+}));
