@@ -7,13 +7,13 @@ import {
   ScrollView,
   Animated,
   Easing,
-  Image,
   ActivityIndicator,
   Modal,
   TextInput,
   Dimensions,
   Alert,
 } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
@@ -25,7 +25,7 @@ import { xtream, LiveStream, Category } from "../../src/services/xtream";
 import { liveUrls } from "../../src/services/xtream";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const ITEMS_PER_PAGE = 30; // Lote otimizado para velocidade máxima
+const ITEMS_PER_PAGE = 30;
 
 interface UserProfile {
   id: string;
@@ -33,14 +33,6 @@ interface UserProfile {
   color: string;
   icon: string;
   type: "normal" | "kids" | "adult" | "football";
-}
-
-interface GuiaMatch {
-  id: string;
-  time: string;
-  league: string;
-  match: string;
-  channels: string;
 }
 
 const SOPHISTICATED_AVATARS = [
@@ -65,7 +57,6 @@ export default function HomeTab() {
   const setQueue = useSession((s) => s.setQueue);
   const liveFormat = useSession((s) => s.prefs.liveFormat);
 
-  const [hasLists, setHasLists] = useState(false);
   const [cachedChannels, setCachedChannels] = useState<LiveStream[]>([]);
   const [activationCode, setActivationCode] = useState<string>("LICENÇA ATIVA");
   const [currentTab, setCurrentTab] = useState<"home" | "live" | "movies" | "series">("home");
@@ -81,12 +72,12 @@ export default function HomeTab() {
   const [pendingItemToOpen, setPendingItemToOpen] = useState<any>(null);
   const [adultLocked, setAdultLocked] = useState(true);
 
-  const { username, expFormatted, daysLeft, isExpired } = useMemo(() => {
+  const { username, expFormatted } = useMemo(() => {
     const user = session?.userInfo?.username || session?.username || "Cliente";
     const exp = session?.userInfo?.exp_date;
-    if (!exp) return { username: user, expFormatted: "Ilimitado", daysLeft: 999, isExpired: false };
+    if (!exp) return { username: user, expFormatted: "Ilimitado" };
     const ts = Number(exp);
-    if (!ts || isNaN(ts)) return { username: user, expFormatted: "Indisponível", daysLeft: 0, isExpired: false };
+    if (!ts || isNaN(ts)) return { username: user, expFormatted: "Indisponível" };
     const expDate = new Date(ts * 1000);
     const expFormatted = expDate.toLocaleDateString("pt-BR", {
       day: "2-digit",
@@ -94,9 +85,7 @@ export default function HomeTab() {
       year: "numeric",
       timeZone: "America/Sao_Paulo",
     });
-    const diffMs = expDate.getTime() - Date.now();
-    const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    return { username: user, expFormatted, daysLeft, isExpired: daysLeft <= 0 };
+    return { username: user, expFormatted };
   }, [session]);
 
   const currentProfile: UserProfile = useMemo(() => {
@@ -189,7 +178,6 @@ export default function HomeTab() {
     return /futebol|brasileirão|copa|libertadores|champions|premier|esporte|sportv|premiere|espn|cazé|combate|band sports|nfl|nba|ppv|jogos/i.test(text);
   };
 
-  // Carregamento otimizado de canais (rápido e leve)
   useEffect(() => {
     if (!session) return;
     let active = true;
@@ -202,7 +190,6 @@ export default function HomeTab() {
     return () => { active = false; };
   }, [session]);
 
-  // Filtros leves com limite inicial para evitar lentidão
   const filteredMovies = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod.filter((v) => {
@@ -385,7 +372,7 @@ export default function HomeTab() {
             </Pressable>
           </View>
 
-          {/* ABA HOME (LEVE E INSTANTÂNEA) */}
+          {/* ABA HOME */}
           {currentTab === "home" && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 50 }}>
               {filteredMovies.length > 0 && currentProfile.type !== "football" && (
@@ -394,7 +381,7 @@ export default function HomeTab() {
                   onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/movie/[id]", params: { id: String(filteredMovies[0].stream_id) } }), isAdultContent(filteredMovies[0].name))}
                   style={styles.heroBanner}
                 >
-                  <Image source={{ uri: filteredMovies[0].stream_icon }} style={styles.fullSize} contentFit="cover" />
+                  <Image source={{ uri: filteredMovies[0].stream_icon }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" />
                   <View style={styles.heroOverlay}>
                     <View style={[styles.heroBadge, { backgroundColor: themeStyles.accent }]}><Text style={styles.heroBadgeText}>⭐ DESTAQUE</Text></View>
                     <Text style={styles.heroTitle} numberOfLines={1}>{filteredMovies[0].name}</Text>
@@ -413,7 +400,7 @@ export default function HomeTab() {
                         onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } }), isAdultContent(item.name))}
                         style={styles.posterCard}
                       >
-                        <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" />
+                        <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" />
                         <View style={styles.posterGradient}>
                           <Text style={styles.posterTitle} numberOfLines={2}>{item.name}</Text>
                         </View>
@@ -434,7 +421,7 @@ export default function HomeTab() {
                         onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } }), isAdultContent(s.name))}
                         style={styles.posterCard}
                       >
-                        <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" />
+                        <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" />
                         <View style={styles.posterGradient}>
                           <Text style={styles.posterTitle} numberOfLines={2}>{s.name}</Text>
                         </View>
@@ -455,7 +442,7 @@ export default function HomeTab() {
                       style={styles.liveThumbCard}
                     >
                       {ch.stream_icon ? (
-                        <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" />
+                        <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" cachePolicy="memory-disk" />
                       ) : (
                         <Ionicons name="tv" size={28} color="#FFF" />
                       )}
@@ -480,7 +467,7 @@ export default function HomeTab() {
                     style={styles.gridCard}
                   >
                     {ch.stream_icon ? (
-                      <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" />
+                      <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" cachePolicy="memory-disk" />
                     ) : (
                       <Ionicons name="tv" size={32} color={themeStyles.accent} />
                     )}
@@ -515,7 +502,7 @@ export default function HomeTab() {
                     onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } }), isAdultContent(item.name))}
                     style={styles.gridMovieCard}
                   >
-                    <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" />
+                    <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" />
                     <View style={styles.posterGradient}>
                       <Text style={styles.posterTitle} numberOfLines={1}>{item.name}</Text>
                     </View>
@@ -549,7 +536,7 @@ export default function HomeTab() {
                     onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } }), isAdultContent(s.name))}
                     style={styles.gridMovieCard}
                   >
-                    <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" />
+                    <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" />
                     <View style={styles.posterGradient}>
                       <Text style={styles.posterTitle} numberOfLines={1}>{s.name}</Text>
                     </View>
@@ -653,7 +640,7 @@ const styles = StyleSheet.create({
   userInfoText: { color: "#FFF", fontSize: 9.5, fontWeight: "700" },
   settingsBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
 
-  heroBanner: { width: "100%", height: 150, borderRadius: 16, overflow: "hidden", position: "relative" },
+  heroBanner: { width: "100%", height: 150, borderRadius: 16, overflow: "hidden", position: "relative", backgroundColor: "#1A1D29" },
   heroOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.82)", padding: 12, gap: 4 },
   heroBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: "flex-start" },
   heroBadgeText: { color: "#000", fontSize: 8.5, fontWeight: "900" },
@@ -672,7 +659,7 @@ const styles = StyleSheet.create({
   gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   gridCard: { width: 105, height: 80, borderRadius: 10, backgroundColor: "#1E293B", alignItems: "center", justifyContent: "center", padding: 6, gap: 4 },
   gridCardTitle: { color: "#FFF", fontSize: 9.5, fontWeight: "700", textAlign: "center" },
-  gridMovieCard: { width: 105, height: 150, borderRadius: 10, overflow: "hidden", position: "relative" },
+  gridMovieCard: { width: 105, height: 150, borderRadius: 10, overflow: "hidden", position: "relative", backgroundColor: "#1A1D29" },
 
   paginationRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 14, marginTop: 16, paddingBottom: 10 },
   pageBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
