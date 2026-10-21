@@ -6,13 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  FlatList,
   Dimensions,
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
-// Exemplo de dados de jogos organizados por data e competição
 const DIAS_SEMANA = [
   { id: '1', dia: 'QUA', data: '21/10', ativo: true },
   { id: '2', dia: 'QUI', data: '22/10', ativo: false },
@@ -54,7 +52,7 @@ const JOGOS_POR_DATA = {
         {
           id: '3',
           horario: '19:00',
-          status: 'ENCerrado',
+          status: 'ENC',
           timeCasa: { nome: 'São Paulo', escudo: 'https://upload.wikimedia.org/wikipedia/commons/6/6f/Sao_Paulo_FC_%282020%29.svg' },
           placar: '1 x 3',
           timeVisitante: { nome: 'Corinthians', escudo: 'https://upload.wikimedia.org/wikipedia/commons/5/5e/Corinthians_simbolo.svg' },
@@ -75,7 +73,7 @@ const JOGOS_POR_DATA = {
           timeCasa: { nome: 'Real Madrid', escudo: 'https://upload.wikimedia.org/wikipedia/commons/5/56/Real_Madrid_CF.svg' },
           placar: 'VS',
           timeVisitante: { nome: 'Manchester City', escudo: 'https://upload.wikimedia.org/wikipedia/commons/e/eb/Manchester_City_FC_badge.svg' },
-          canal: { nome: 'TNT / Max', icone: 'https://upload.wikimedia.org/wikipedia/commons/c/ce/TNT_logo_2016.svg' },
+          canal: { nome: 'TNT', icone: 'https://upload.wikimedia.org/wikipedia/commons/c/ce/TNT_logo_2016.svg' },
         }
       ]
     }
@@ -97,7 +95,7 @@ export default function IndexScreen({ navigation }) {
     <View style={styles.container}>
       {/* HEADER SUPERIOR PREMIUM */}
       <View style={styles.header}>
-        <View style={styles.userInfo}>
+        <View>
           <Text style={styles.welcomeText}>Bem-vindo,</Text>
           <Text style={styles.userName}>GoldCast VIP</Text>
         </View>
@@ -106,13 +104,13 @@ export default function IndexScreen({ navigation }) {
         </View>
       </View>
 
-      {/* BARRA DE NAVEGAÇÃO ENTRE AS TELAS (Dando a ilusão de estar tudo junto) */}
+      {/* BARRA DE NAVEGAÇÃO ENTRE AS TELAS */}
       <View style={styles.navBar}>
         <TouchableOpacity style={[styles.navItem, styles.navItemActive]}>
           <Text style={[styles.navText, styles.navTextActive]}>Início & Futebol</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Live')}>
-          <Text style={styles.navText}>Canais (Live)</Text>
+          <Text style={styles.navText}>Canais</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Movies')}>
           <Text style={styles.navText}>Filmes</Text>
@@ -124,10 +122,8 @@ export default function IndexScreen({ navigation }) {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        {/* DESTAQUE DO TOPO (Banner ou Canais Ao Vivo Rápidos) */}
-        <View style={styles.sectionHeaderContainer}>
-          <Text style={styles.sectionTitle}>Canais em Destaque</Text>
-        </View>
+        {/* CANAIS EM DESTAQUE */}
+        <Text style={styles.sectionTitle}>Canais em Destaque</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.destaquesScroll}>
           {['Premiere 1', 'ESPN Brasil', 'SporTV', 'TNT Sports'].map((canal, index) => (
             <TouchableOpacity key={index} style={styles.destaqueCard}>
@@ -137,8 +133,8 @@ export default function IndexScreen({ navigation }) {
           ))}
         </ScrollView>
 
-        {/* ÁREA DE FUTEBOL: CARROSSEL DE DATAS */}
-        <View style={[styles.sectionHeaderContainer, { marginTop: 20 }]}>
+        {/* CENTRAL DE JOGOS: DATAS */}
+        <View style={styles.sectionHeaderContainer}>
           <Text style={styles.sectionTitle}>⚽ Central de Jogos</Text>
           <Text style={styles.sectionSub}>Partidas do dia e da semana</Text>
         </View>
@@ -156,7 +152,7 @@ export default function IndexScreen({ navigation }) {
           ))}
         </ScrollView>
 
-        {/* LISTA DE JOGOS ORGANIZADOS POR CAMPEONATO */}
+        {/* LISTA DE JOGOS */}
         {jogosAtuais.length > 0 ? (
           jogosAtuais.map((liga, index) => (
             <View key={index} style={styles.leagueContainer}>
@@ -175,10 +171,10 @@ export default function IndexScreen({ navigation }) {
                     </Text>
                   </View>
 
-                  {/* Time Casa */}
-                  <View style={styles.teamContainerRight}>
-                    <Text style={styles.teamName} numberOfLines={1}>{jogo.timeCasa.nome}</Text>
+                  {/* Time Casa (Escudo Maior) */}
+                  <View style={styles.teamHome}>
                     <Image source={{ uri: jogo.timeCasa.escudo }} style={styles.teamShield} />
+                    <Text style={styles.teamName} numberOfLines={1}>{jogo.timeCasa.nome}</Text>
                   </View>
 
                   {/* Placar / VS */}
@@ -186,15 +182,15 @@ export default function IndexScreen({ navigation }) {
                     <Text style={styles.scoreText}>{jogo.placar}</Text>
                   </View>
 
-                  {/* Time Visitante */}
-                  <View style={styles.teamContainerLeft}>
+                  {/* Time Visitante (Escudo Maior) */}
+                  <View style={styles.teamAway}>
                     <Image source={{ uri: jogo.timeVisitante.escudo }} style={styles.teamShield} />
                     <Text style={styles.teamName} numberOfLines={1}>{jogo.timeVisitante.nome}</Text>
                   </View>
 
                   {/* Canal de Transmissão */}
                   <View style={styles.channelCol}>
-                    <Image source={{ uri: jogo.canal.icone }} style={styles.channelIcon} resizeMode="contain" />
+                    <Text style={styles.channelText} numberOfLines={1}>{jogo.canal.nome}</Text>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -214,51 +210,51 @@ export default function IndexScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#09090b', // Preto Grafite Profundo
+    backgroundColor: '#09090b',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 40,
+    paddingTop: 45,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#1f1f23',
   },
   welcomeText: {
     color: '#a1a1aa',
-    fontSize: 12,
+    fontSize: 11,
   },
   userName: {
-    color: '#d4af37', // Dourado Luxo
-    fontSize: 16,
+    color: '#d4af37',
+    fontSize: 15,
     fontWeight: 'bold',
   },
   badgeContainer: {
-    backgroundColor: '#1f1f23',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    backgroundColor: '#121215',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#3f3f46',
+    borderColor: '#27272a',
   },
   badgeText: {
     color: '#fbbf24',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   navBar: {
     flexDirection: 'row',
     backgroundColor: '#121215',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#1f1f23',
   },
   navItem: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 6,
     alignItems: 'center',
     borderRadius: 6,
   },
@@ -269,7 +265,7 @@ const styles = StyleSheet.create({
   },
   navText: {
     color: '#a1a1aa',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
   },
   navTextActive: {
@@ -277,30 +273,32 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   scrollContent: {
-    padding: 16,
+    padding: 12,
     paddingBottom: 40,
-  },
-  sectionHeaderContainer: {
-    marginBottom: 10,
   },
   sectionTitle: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  sectionHeaderContainer: {
+    marginTop: 14,
+    marginBottom: 8,
   },
   sectionSub: {
     color: '#71717a',
-    fontSize: 12,
+    fontSize: 11,
   },
   destaquesScroll: {
-    marginBottom: 15,
+    marginBottom: 10,
   },
   destaqueCard: {
-    width: 120,
-    height: 75,
-    backgroundColor: '#18181b',
+    width: 110,
+    height: 65,
+    backgroundColor: '#121215',
     borderRadius: 8,
-    marginRight: 10,
+    marginRight: 8,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -309,35 +307,35 @@ const styles = StyleSheet.create({
   },
   liveTag: {
     position: 'absolute',
-    top: 6,
-    left: 6,
+    top: 4,
+    left: 4,
     backgroundColor: '#ef4444',
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
     paddingVertical: 1,
-    borderRadius: 3,
+    borderRadius: 2,
   },
   liveTagText: {
     color: '#fff',
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: 'bold',
   },
   destaqueText: {
     color: '#f4f4f5',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    marginTop: 10,
+    marginTop: 8,
   },
   datesScroll: {
-    marginBottom: 15,
+    marginBottom: 12,
   },
   dateCard: {
-    width: 60,
-    height: 60,
-    backgroundColor: '#18181b',
-    borderRadius: 10,
+    width: 55,
+    height: 55,
+    backgroundColor: '#121215',
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: 6,
     borderWidth: 1,
     borderColor: '#27272a',
   },
@@ -347,42 +345,42 @@ const styles = StyleSheet.create({
   },
   dateDay: {
     color: '#a1a1aa',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
   },
   dateNumber: {
     color: '#ffffff',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   dateTextActive: {
     color: '#000000',
   },
   leagueContainer: {
-    marginBottom: 20,
+    marginBottom: 14,
     backgroundColor: '#121215',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 10,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#1f1f23',
   },
   leagueHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 8,
+    marginBottom: 10,
+    paddingBottom: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#1f1f23',
   },
   leagueLogo: {
-    width: 20,
-    height: 20,
-    marginRight: 8,
+    width: 18,
+    height: 18,
+    marginRight: 6,
     resizeMode: 'contain',
   },
   leagueTitle: {
     color: '#d4af37',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   matchCard: {
@@ -390,78 +388,79 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#18181b',
     borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    marginBottom: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    marginBottom: 6,
     borderWidth: 1,
     borderColor: '#27272a',
   },
   matchTimeCol: {
-    width: 50,
+    width: 42,
     alignItems: 'center',
   },
   matchTime: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
   },
   matchStatus: {
     color: '#71717a',
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '600',
   },
-  teamContainerRight: {
+  teamHome: {
     flex: 1,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingRight: 6,
+    paddingRight: 4,
   },
-  teamContainerLeft: {
+  teamAway: {
     flex: 1,
     flexDirection: 'row',
-    justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingLeft: 6,
+    justifyContent: 'flex-start',
+    paddingLeft: 4,
+  },
+  teamShield: {
+    width: 24,
+    height: 24,
+    marginHorizontal: 4,
+    resizeMode: 'contain',
   },
   teamName: {
     color: '#e4e4e7',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
-    maxWidth: 75,
-  },
-  teamShield: {
-    width: 22,
-    height: 22,
-    marginHorizontal: 6,
-    resizeMode: 'contain',
+    maxWidth: 60,
   },
   scoreContainer: {
-    width: 45,
+    width: 38,
     alignItems: 'center',
   },
   scoreText: {
     color: '#d4af37',
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: 'bold',
   },
   channelCol: {
-    width: 45,
+    width: 48,
     alignItems: 'center',
     borderLeftWidth: 1,
     borderLeftColor: '#27272a',
-    paddingLeft: 6,
+    paddingLeft: 4,
   },
-  channelIcon: {
-    width: 32,
-    height: 18,
+  channelText: {
+    color: '#94a3b8',
+    fontSize: 9,
+    fontWeight: 'bold',
   },
   noGamesContainer: {
-    padding: 30,
+    padding: 20,
     alignItems: 'center',
   },
   noGamesText: {
     color: '#71717a',
-    fontSize: 13,
+    fontSize: 12,
   },
 });
