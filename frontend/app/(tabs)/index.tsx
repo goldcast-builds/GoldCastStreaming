@@ -18,7 +18,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { TrendingMarquee, MarqueeItem } from "../../src/components/TrendingMarquee";
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { listLists } from "../../src/utils/api";
 import { PlayItem, useSession } from "../../src/store/session";
@@ -26,7 +25,7 @@ import { xtream, LiveStream, Category } from "../../src/services/xtream";
 import { liveUrls } from "../../src/services/xtream";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const ITEMS_PER_PAGE = 36; // Paginação otimizada para máxima fluidez e velocidade de renderização
+const ITEMS_PER_PAGE = 36; // Paginação para máxima fluidez e velocidade
 
 interface UserProfile {
   id: string;
@@ -67,20 +66,18 @@ export default function HomeTab() {
   const liveFormat = useSession((s) => s.prefs.liveFormat);
 
   const [hasLists, setHasLists] = useState(false);
-  const [kidsChannels, setKidsChannels] = useState<LiveStream[]>([]);
+  const [channelsList, setChannelsList] = useState<LiveStream[]>([]);
   const [activationCode, setActivationCode] = useState<string>("LICENÇA ATIVA");
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
-  // Navegação lateral interna da área Kids
-  const [kidsTab, setKidsTab] = useState<"home" | "live" | "movies" | "series">("home");
+  // Abas de navegação interna do menu lateral esquerdo
+  const [currentTab, setCurrentTab] = useState<"home" | "live" | "movies" | "series" | "epg" | "favs">("home");
 
-  // Estados de Paginação para cada aba (fluidez total)
-  const [livePage, setLivePage] = useState(1);
-  const [moviesPage, setMoviesPage] = useState(1);
-  const [seriesPage, setSeriesPage] = useState(1);
+  // Paginação
+  const [page, setPage] = useState(1);
 
-  // Perfis isolados
+  // Perfis
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
@@ -91,14 +88,12 @@ export default function HomeTab() {
   const [selectedAvatarIdx, setSelectedAvatarIdx] = useState(0);
   const [newProfileType, setNewProfileType] = useState<"normal" | "kids" | "adult" | "football">("normal");
 
+  // Controle Parental (+18)
   const [adultPin, setAdultPin] = useState("0000");
   const [showPinModal, setShowPinModal] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
   const [pendingItemToOpen, setPendingItemToOpen] = useState<any>(null);
-
   const [showAccountModal, setShowAccountModal] = useState(false);
-  const [showParentalModal, setShowParentalModal] = useState(false);
-  const [newCustomPin, setNewCustomPin] = useState("");
   const [adultLocked, setAdultLocked] = useState(true);
 
   const { username, expFormatted, daysLeft, isExpired } = useMemo(() => {
@@ -131,17 +126,18 @@ export default function HomeTab() {
     };
   }, [activeProfile, profiles, username]);
 
+  // Temas visuais e cores padrão para cada perfil
   const themeStyles = useMemo(() => {
     if (currentProfile.type === "kids") {
-      return { bg: "#0C1B2A", accent: "#38BDF8", cardBg: "#172A45", sidebarBg: "#070E17", highlight: "#F59E0B" };
+      return { bg: "#0C1B2A", accent: "#38BDF8", cardBg: "#172A45", sidebarBg: "#070E17", title: "ESPAÇO MÁGICO INFANTIL" };
     }
     if (currentProfile.type === "adult") {
-      return { bg: "#140808", accent: "#EF4444", cardBg: "#1F1111", sidebarBg: "#0B0404", highlight: "#EF4444" };
+      return { bg: "#140808", accent: "#EF4444", cardBg: "#1F1111", sidebarBg: "#0B0404", title: "ÁREA ADULTA EXCLUSIVA (+18)" };
     }
     if (currentProfile.type === "football") {
-      return { bg: "#041C0F", accent: "#10B981", cardBg: "#0D2E1A", sidebarBg: "#02120A", highlight: "#10B981" };
+      return { bg: "#041C0F", accent: "#10B981", cardBg: "#0D2E1A", sidebarBg: "#02120A", title: "CENTRAL DE FUTEBOL & ESPORTES" };
     }
-    return { bg: colors.bg, accent: colors.gold, cardBg: colors.surface, sidebarBg: "#12141C", highlight: colors.gold };
+    return { bg: colors.bg, accent: colors.gold, cardBg: colors.surface, sidebarBg: "#12141C", title: "GOLDCAST STREAMING" };
   }, [currentProfile.type]);
 
   useFocusEffect(
@@ -190,102 +186,141 @@ export default function HomeTab() {
     setActiveProfile(p);
     setShowProfileSheet(false);
     setEditMode(false);
+    setPage(1);
+    setCurrentTab("home");
     await AsyncStorage.setItem("@goldcast_active_profile", JSON.stringify(p));
   };
 
   const isAdultContent = (name: string, categoryName: string = "") => {
     const text = (name + " " + categoryName).toLowerCase();
-    return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates|corra|baby/i.test(text);
+    return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates/i.test(text);
   };
 
   const isKidsContent = (name: string, categoryName: string = "") => {
     const text = (name + " " + categoryName).toLowerCase();
     if (isAdultContent(name, categoryName)) return false;
-    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece|descencanto|108|patrulha pata|masha|blaze|panda/i.test(text);
+    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece/i.test(text);
   };
 
-  // Carregar TODOS os canais infantis sem exceção e sem filtros restritivos de resolução
+  const isFootballContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    return /futebol|brasileirão|copa|libertadores|champions|premier|esporte|sportv|premiere|espn|cazé|combate|band sports|nfl|nba|ppv|jogos/i.test(text);
+  };
+
+  // Carregamento de Canais ao Vivo de acordo com o perfil
   useEffect(() => {
     if (!session) return;
     let active = true;
     (async () => {
       try {
         const categories: Category[] = await xtream.liveCategories(session);
-        const catKids = categories.find((c) => /infantil|kids|desenho/i.test(c.category_name));
-        if (catKids) {
-          const streams: LiveStream[] = await xtream.liveStreams(session, catKids.category_id);
+        let targetCat = categories[0];
+
+        if (currentProfile.type === "kids") {
+          targetCat = categories.find((c) => /infantil|kids|desenho/i.test(c.category_name)) || categories[0];
+        } else if (currentProfile.type === "adult") {
+          targetCat = categories.find((c) => /adult|xxx|\+18|18\+/i.test(c.category_name)) || categories[0];
+        } else if (currentProfile.type === "football") {
+          targetCat = categories.find((c) => /esporte|futebol|premiere|sportv/i.test(c.category_name)) || categories[0];
+        }
+
+        if (targetCat) {
+          const streams: LiveStream[] = await xtream.liveStreams(session, targetCat.category_id);
           if (active && streams.length > 0) setKidsChannels(streams);
+        } else {
+          // Fallback geral
+          const allStreams: LiveStream[] = await xtream.liveStreams(session);
+          if (active) setKidsChannels(allStreams);
         }
       } catch {}
     })();
     return () => { active = false; };
-  }, [session]);
+  }, [session, currentProfile.type]);
 
-  const kidsMoviesList = useMemo(() => {
+  // Listas filtradas rigorosamente por perfil
+  const filteredMovies = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod.filter((v) => {
       if (!v.stream_icon) return false;
       const name = v.name || "";
       const cat = v.category_name || "";
-      if (isAdultContent(name, cat)) return false;
-      return isKidsContent(name, cat);
+      if (currentProfile.type === "kids") return isKidsContent(name, cat);
+      if (currentProfile.type === "adult") return isAdultContent(name, cat);
+      if (currentProfile.type === "football") return false;
+      if (adultLocked && isAdultContent(name, cat)) return false;
+      return true;
     });
-  }, [catalog.vod]);
+  }, [catalog.vod, currentProfile.type, adultLocked]);
 
-  const kidsSeriesList = useMemo(() => {
+  const filteredSeries = useMemo(() => {
     if (!catalog.series?.length) return [];
     return catalog.series.filter((s) => {
+      if (!s.cover) return false;
       const name = s.name || "";
       const cat = s.category_name || "";
-      if (isAdultContent(name, cat)) return false;
-      return isKidsContent(name, cat);
+      if (currentProfile.type === "kids") return isKidsContent(name, cat);
+      if (currentProfile.type === "adult") return isAdultContent(name, cat);
+      if (currentProfile.type === "football") return false;
+      if (adultLocked && isAdultContent(name, cat)) return false;
+      return true;
     });
-  }, [catalog.series]);
+  }, [catalog.series, currentProfile.type, adultLocked]);
 
-  // Itens paginados para garantir fluidez total e carregamento rápido
-  const paginatedLiveChannels = useMemo(() => {
-    const start = (livePage - 1) * ITEMS_PER_PAGE;
-    return kidsChannels.slice(start, start + ITEMS_PER_PAGE);
-  }, [kidsChannels, livePage]);
+  const filteredChannels = useMemo(() => {
+    return kidsChannels.filter((ch) => {
+      const name = ch.name || "";
+      if (currentProfile.type === "kids") return isKidsContent(name);
+      if (currentProfile.type === "adult") return isAdultContent(name);
+      if (currentProfile.type === "football") return isFootballContent(name);
+      if (adultLocked && isAdultContent(name)) return false;
+      return true;
+    });
+  }, [kidsChannels, currentProfile.type, adultLocked]);
 
-  const totalLivePages = Math.ceil(kidsChannels.length / ITEMS_PER_PAGE);
+  // Paginação dos itens ativos
+  const paginatedItems = useMemo(() => {
+    let sourceList: any[] = [];
+    if (currentTab === "live") sourceList = filteredChannels;
+    else if (currentTab === "movies") sourceList = filteredMovies;
+    else if (currentTab === "series") sourceList = filteredSeries;
+    else sourceList = filteredChannels;
 
-  const paginatedMovies = useMemo(() => {
-    const start = (moviesPage - 1) * ITEMS_PER_PAGE;
-    return kidsMoviesList.slice(start, start + ITEMS_PER_PAGE);
-  }, [kidsMoviesList, moviesPage]);
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    return sourceList.slice(start, start + ITEMS_PER_PAGE);
+  }, [currentTab, filteredChannels, filteredMovies, filteredSeries, page]);
 
-  const totalMoviePages = Math.ceil(kidsMoviesList.length / ITEMS_PER_PAGE);
-
-  const paginatedSeries = useMemo(() => {
-    const start = (seriesPage - 1) * ITEMS_PER_PAGE;
-    return kidsSeriesList.slice(start, start + ITEMS_PER_PAGE);
-  }, [kidsSeriesList, seriesPage]);
-
-  const totalSeriesPages = Math.ceil(kidsSeriesList.length / ITEMS_PER_PAGE);
+  const totalPages = useMemo(() => {
+    let len = 0;
+    if (currentTab === "live") len = filteredChannels.length;
+    else if (currentTab === "movies") len = filteredMovies.length;
+    else if (currentTab === "series") len = filteredSeries.length;
+    else len = filteredChannels.length;
+    return Math.ceil(len / ITEMS_PER_PAGE);
+  }, [currentTab, filteredChannels.length, filteredMovies.length, filteredSeries.length]);
 
   const handlePlayLiveChannel = (ch: LiveStream, index: number) => {
     if (session && source?.kind !== "list") setSource({ kind: "xtream" });
+    const globalIdx = (page - 1) * ITEMS_PER_PAGE + index;
     const urls = liveUrls(session, ch.stream_id, liveFormat === "auto" ? undefined : liveFormat);
 
-    const items: PlayItem[] = kidsChannels.map((c) => ({
+    const items: PlayItem[] = filteredChannels.map((c) => ({
       kind: "live",
       id: String(c.stream_id),
       title: c.name,
-      subtitle: "Infantil",
+      subtitle: currentProfile.type,
       logo: c.stream_icon,
       urls: liveUrls(session, c.stream_id, liveFormat === "auto" ? undefined : liveFormat),
       streamId: c.stream_id,
       raw: c,
     }));
-    setQueue(items, index);
+    setQueue(items, globalIdx);
 
     router.push({
       pathname: "/player",
       params: {
         url: urls?.[0] || "",
         streamUrl: urls?.[0] || "",
-        title: ch.name || "Canal Infantil",
+        title: ch.name || "Canal",
         name: ch.name || "",
         id: String(ch.stream_id),
         stream_id: String(ch.stream_id),
@@ -294,292 +329,324 @@ export default function HomeTab() {
     });
   };
 
-  const go = async (path: string) => {
-    if (session && source?.kind !== "list") await setSource({ kind: "xtream" });
-    router.push(path as any);
+  const handleOpenItemWithCheck = (action: () => void, isAdult: boolean) => {
+    if (adultLocked && currentProfile.type !== "adult" && isAdult) {
+      setPendingItemToOpen(() => action);
+      setEnteredPin("");
+      setShowPinModal(true);
+    } else {
+      action();
+    }
+  };
+
+  const verifyPinAndOpen = () => {
+    if (enteredPin === adultPin) {
+      setShowPinModal(false);
+      setEnteredPin("");
+      if (pendingItemToOpen) {
+        pendingItemToOpen();
+        setPendingItemToOpen(null);
+      }
+    } else {
+      Alert.alert("Senha incorreta", "A senha padrão é 0000.");
+      setEnteredPin("");
+    }
   };
 
   return (
     <View style={[styles.root, { backgroundColor: themeStyles.bg }]}>
-      {currentProfile.type === "kids" ? (
-        <View style={styles.kidsRoot}>
-          {/* MENU LATERAL ESQUERDO FIXO */}
-          <View style={[styles.sidebar, { backgroundColor: themeStyles.sidebarBg }]}>
-            <Pressable onPress={() => setKidsTab("home")} style={[styles.sidebarIconBtn, kidsTab === "home" && styles.sidebarTabActive]} focusable={true}>
-              <Ionicons name="home" size={22} color={kidsTab === "home" ? "#38BDF8" : "#FFF"} />
-            </Pressable>
+      <View style={styles.layoutRoot}>
+        {/* MENU LATERAL ESQUERDO FIXO (PADRÃO PARA TODOS OS PERFIS) */}
+        <View style={[styles.sidebar, { backgroundColor: themeStyles.sidebarBg }]}>
+          <Pressable onPress={() => { setCurrentTab("home"); setPage(1); }} style={[styles.sidebarIconBtn, currentTab === "home" && { backgroundColor: themeStyles.accent }]} focusable={true}>
+            <Ionicons name="home" size={20} color="#FFF" />
+          </Pressable>
 
-            <Pressable onPress={() => setKidsTab("live")} style={[styles.sidebarIconBtn, kidsTab === "live" && styles.sidebarTabActive]} focusable={true}>
-              <Ionicons name="tv" size={22} color={kidsTab === "live" ? "#38BDF8" : "#FFF"} />
-            </Pressable>
+          <Pressable onPress={() => { setCurrentTab("live"); setPage(1); }} style={[styles.sidebarIconBtn, currentTab === "live" && { backgroundColor: themeStyles.accent }]} focusable={true}>
+            <Ionicons name="tv" size={20} color="#FFF" />
+          </Pressable>
 
-            <Pressable onPress={() => setKidsTab("movies")} style={[styles.sidebarIconBtn, kidsTab === "movies" && styles.sidebarTabActive]} focusable={true}>
-              <Ionicons name="film" size={22} color={kidsTab === "movies" ? "#38BDF8" : "#FFF"} />
-            </Pressable>
+          {currentProfile.type !== "football" && (
+            <>
+              <Pressable onPress={() => { setCurrentTab("movies"); setPage(1); }} style={[styles.sidebarIconBtn, currentTab === "movies" && { backgroundColor: themeStyles.accent }]} focusable={true}>
+                <Ionicons name="film" size={20} color="#FFF" />
+              </Pressable>
 
-            <Pressable onPress={() => setKidsTab("series")} style={[styles.sidebarIconBtn, kidsTab === "series" && styles.sidebarTabActive]} focusable={true}>
-              <Ionicons name="albums" size={22} color={kidsTab === "series" ? "#38BDF8" : "#FFF"} />
-            </Pressable>
+              <Pressable onPress={() => { setCurrentTab("series"); setPage(1); }} style={[styles.sidebarIconBtn, currentTab === "series" && { backgroundColor: themeStyles.accent }]} focusable={true}>
+                <Ionicons name="albums" size={20} color="#FFF" />
+              </Pressable>
+            </>
+          )}
 
-            <Pressable onPress={() => setShowProfileSheet(true)} style={[styles.sidebarProfileBox, { borderColor: currentProfile.color }]} focusable={true}>
-              <Ionicons name={currentProfile.icon as any} size={20} color="#FFF" />
-              <Text style={styles.sidebarProfileName} numberOfLines={1}>{currentProfile.name}</Text>
-            </Pressable>
+          {/* GUIA DE PROGRAMAÇÃO (EPG) - SOLICITADO PARA O PERFIL NORMAL */}
+          <Pressable onPress={() => { setCurrentTab("home"); router.push("/(tabs)/live"); }} style={styles.sidebarIconBtn} focusable={true}>
+            <Ionicons name="calendar" size={20} color="#FFF" />
+          </Pressable>
 
-            <View style={{ flex: 1 }} />
+          {/* PERFIL */}
+          <Pressable onPress={() => setShowProfileSheet(true)} style={[styles.sidebarProfileBox, { borderColor: currentProfile.color }]} focusable={true}>
+            <Ionicons name={currentProfile.icon as any} size={18} color="#FFF" />
+            <Text style={styles.sidebarProfileName} numberOfLines={1}>{currentProfile.name}</Text>
+          </Pressable>
 
-            <Pressable onPress={() => router.replace("/login")} style={styles.sidebarExitBtn} focusable={true}>
-              <Ionicons name="exit-outline" size={18} color="#EF4444" />
-              <Text style={styles.sidebarExitText}>SAIR</Text>
+          <View style={{ flex: 1 }} />
+
+          {/* SAIR / TROCAR CONTA */}
+          <Pressable onPress={() => router.replace("/login")} style={styles.sidebarExitBtn} focusable={true}>
+            <Ionicons name="exit-outline" size={16} color="#EF4444" />
+            <Text style={styles.sidebarExitText}>SAIR</Text>
+          </Pressable>
+        </View>
+
+        {/* ÁREA PRINCIPAL DA DIREITA */}
+        <View style={styles.mainContent}>
+          {/* CABEÇALHO INFORMATIVO (NOME, CÓDIGO DE ACESSO, VENCIMENTO, CONFIGURAÇÕES) */}
+          <View style={styles.topBar}>
+            <View style={{ gap: 2 }}>
+              <Text style={[styles.headerTitle, { color: themeStyles.accent }]}>{themeStyles.title}</Text>
+              <View style={styles.rowAlign}>
+                <View style={styles.userInfoBadge}>
+                  <Ionicons name="person-circle" size={13} color={themeStyles.accent} />
+                  <Text style={styles.userInfoText}>{username}</Text>
+                </View>
+                <View style={styles.userInfoBadge}>
+                  <Ionicons name="key" size={12} color="#000" />
+                  <Text style={[styles.userInfoText, { color: "#000", fontWeight: "900" }]}>{activationCode}</Text>
+                </View>
+                <View style={styles.userInfoBadge}>
+                  <Ionicons name="time" size={12} color={colors.textDim} />
+                  <Text style={styles.userInfoText}>Exp: {expFormatted}</Text>
+                </View>
+              </View>
+            </View>
+
+            <Pressable onPress={() => router.push("/(tabs)/settings")} style={styles.settingsBtn} focusable={true}>
+              <Ionicons name="settings-outline" size={20} color={themeStyles.accent} />
             </Pressable>
           </View>
 
-          {/* ÁREA PRINCIPAL DA DIREITA */}
-          <View style={styles.kidsMainContent}>
-            <View style={styles.kidsTopBar}>
-              <View style={styles.kidsTitleBadgeWrap}>
-                <Ionicons name="star" size={16} color="#FBBF24" />
-                <Text style={styles.kidsHeaderTitle}>ESPAÇO MÁGICO INFANTIL</Text>
-                <Ionicons name="sparkles" size={16} color="#38BDF8" />
-              </View>
-              <Pressable onPress={() => router.push("/(tabs)/settings")} style={styles.kidsSettingsBtn}>
-                <Ionicons name="settings-outline" size={20} color={themeStyles.accent} />
-              </Pressable>
-            </View>
-
-            {/* ABA HOME */}
-            {kidsTab === "home" && (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 18, paddingBottom: 50 }}>
-                {kidsMoviesList.length > 0 && (
-                  <Pressable
-                    focusable={true}
-                    onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(kidsMoviesList[0].stream_id) } })}
-                    style={styles.kidsHeroBanner}
-                  >
-                    <Image source={{ uri: kidsMoviesList[0].stream_icon }} style={styles.fullSize} contentFit="cover" />
-                    <View style={styles.heroOverlayGradient}>
-                      <View style={styles.heroTagBadge}><Text style={styles.heroTagText}>⭐ DESTAQUE MÁGICO</Text></View>
-                      <Text style={styles.heroTitle} numberOfLines={1}>{kidsMoviesList[0].name}</Text>
-                      <Text style={styles.heroSub}>Clique para assistir à aventura completa!</Text>
-                    </View>
-                  </Pressable>
-                )}
-
-                <View style={{ gap: 10 }}>
-                  <View style={styles.sectionTitleRow}>
-                    <Ionicons name="film" size={16} color="#EC4899" />
-                    <Text style={styles.kidsSectionLabel}>FILMES INFANTIS & ANIMAÇÕES RECOMENDADAS</Text>
+          {/* CONTEÚDO DA ABA HOME (INÍCIO DIVERSIFICADO) */}
+          {currentTab === "home" && (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 50 }}>
+              {/* DESTAQUE PRINCIPAL */}
+              {filteredMovies.length > 0 && currentProfile.type !== "football" && (
+                <Pressable
+                  focusable={true}
+                  onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/movie/[id]", params: { id: String(filteredMovies[0].stream_id) } }), isAdultContent(filteredMovies[0].name))}
+                  style={styles.heroBanner}
+                >
+                  <Image source={{ uri: filteredMovies[0].stream_icon }} style={styles.fullSize} contentFit="cover" />
+                  <View style={styles.heroOverlay}>
+                    <View style={[styles.heroBadge, { backgroundColor: themeStyles.accent }]}><Text style={styles.heroBadgeText}>⭐ DESTAQUE</Text></View>
+                    <Text style={styles.heroTitle} numberOfLines={1}>{filteredMovies[0].name}</Text>
                   </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kidsPostersRow}>
-                    {kidsMoviesList.slice(0, 15).map((item, idx) => {
-                      const cardColors = ["#3B82F6", "#EAB308", "#EC4899", "#10B981", "#8B5CF6", "#F97316"];
-                      const themeCol = cardColors[idx % cardColors.length];
-                      return (
-                        <Pressable
-                          key={item.stream_id}
-                          focusable={true}
-                          onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
-                          style={[styles.kidsVerticalPosterCard, { backgroundColor: themeCol }]}
-                        >
-                          <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" />
-                          <View style={styles.kidsPosterGradient}>
-                            <Text style={styles.kidsPosterTitle} numberOfLines={2}>{item.name}</Text>
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
+                </Pressable>
+              )}
 
-                <View style={styles.kidsAgoraNaTvBox}>
-                  <View style={styles.sectionTitleRow}>
-                    <Ionicons name="tv" size={16} color="#38BDF8" />
-                    <Text style={styles.kidsSectionLabel}>📺 CANAIS INFANTIS AO VIVO (24H)</Text>
-                  </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                    {kidsChannels.map((ch, idx) => (
+              {/* CARROSSEL DE FILMES */}
+              {filteredMovies.length > 0 && currentProfile.type !== "football" && (
+                <View style={{ gap: 8 }}>
+                  <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🎬 FILMES EM DESTAQUE</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersRow}>
+                    {filteredMovies.slice(0, 15).map((item) => (
                       <Pressable
-                        key={ch.stream_id}
+                        key={item.stream_id}
                         focusable={true}
-                        onPress={() => handlePlayLiveChannel(ch, idx)}
-                        style={styles.kidsLiveThumbCard}
+                        onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } }), isAdultContent(item.name))}
+                        style={styles.posterCard}
                       >
-                        {ch.stream_icon ? (
-                          <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" />
-                        ) : (
-                          <Ionicons name="tv" size={28} color="#FFF" />
-                        )}
-                        <View style={styles.liveTagBadge}><Text style={styles.liveTagText}>AO VIVO</Text></View>
+                        <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" />
+                        <View style={styles.posterGradient}>
+                          <Text style={styles.posterTitle} numberOfLines={2}>{item.name}</Text>
+                        </View>
                       </Pressable>
                     ))}
                   </ScrollView>
                 </View>
-              </ScrollView>
-            )}
+              )}
 
-            {/* ABA CANAIS AO VIVO COM PAGINAÇÃO */}
-            {kidsTab === "live" && (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
-                <Text style={styles.kidsSectionLabel}>📺 TODOS OS CANAIS INFANTIS AO VIVO</Text>
-                <View style={styles.kidsGridContainer}>
-                  {paginatedLiveChannels.map((ch, idx) => (
+              {/* CARROSSEL DE SÉRIES */}
+              {filteredSeries.length > 0 && currentProfile.type !== "football" && (
+                <View style={{ gap: 8 }}>
+                  <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🍿 SÉRIES RECENTES</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersRow}>
+                    {filteredSeries.slice(0, 15).map((s) => (
+                      <Pressable
+                        key={s.series_id}
+                        focusable={true}
+                        onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } }), isAdultContent(s.name))}
+                        style={styles.posterCard}
+                      >
+                        <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" />
+                        <View style={styles.posterGradient}>
+                          <Text style={styles.posterTitle} numberOfLines={2}>{s.name}</Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* CANAIS AO VIVO */}
+              <View style={{ gap: 8 }}>
+                <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>📺 CANAIS AO VIVO EM DESTAQUE</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                  {filteredChannels.slice(0, 15).map((ch, idx) => (
                     <Pressable
                       key={ch.stream_id}
                       focusable={true}
-                      onPress={() => handlePlayLiveChannel(ch, (livePage - 1) * ITEMS_PER_PAGE + idx)}
-                      style={styles.kidsGridCard}
+                      onPress={() => handleOpenItemWithCheck(() => handlePlayLiveChannel(ch, idx), isAdultContent(ch.name))}
+                      style={styles.liveThumbCard}
                     >
                       {ch.stream_icon ? (
                         <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" />
                       ) : (
-                        <Ionicons name="tv" size={32} color="#38BDF8" />
+                        <Ionicons name="tv" size={28} color="#FFF" />
                       )}
-                      <Text style={styles.gridCardTitle} numberOfLines={1}>{ch.name}</Text>
+                      <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>AO VIVO</Text></View>
                     </Pressable>
                   ))}
-                </View>
+                </ScrollView>
+              </View>
+            </ScrollView>
+          )}
 
-                {totalLivePages > 1 && (
-                  <View style={styles.paginationRow}>
-                    <Pressable
-                      disabled={livePage === 1}
-                      onPress={() => setLivePage(p => Math.max(1, p - 1))}
-                      style={[styles.pageBtn, livePage === 1 && { opacity: 0.4 }]}
-                    >
-                      <Text style={styles.pageBtnText}>◀ Anterior</Text>
-                    </Pressable>
-                    <Text style={styles.pageIndicator}>Página {livePage} de {totalLivePages}</Text>
-                    <Pressable
-                      disabled={livePage === totalLivePages}
-                      onPress={() => setLivePage(p => Math.min(totalLivePages, p + 1))}
-                      style={[styles.pageBtn, livePage === totalLivePages && { opacity: 0.4 }]}
-                    >
-                      <Text style={styles.pageBtnText}>Seguinte ▶</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </ScrollView>
-            )}
-
-            {/* ABA FILMES COM PAGINAÇÃO */}
-            {kidsTab === "movies" && (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
-                <Text style={styles.kidsSectionLabel}>🎬 TODOS OS FILMES INFANTIS</Text>
-                <View style={styles.kidsGridContainer}>
-                  {paginatedMovies.map((item) => (
-                    <Pressable
-                      key={item.stream_id}
-                      focusable={true}
-                      onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
-                      style={styles.kidsGridMovieCard}
-                    >
-                      <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" />
-                      <View style={styles.kidsPosterGradient}>
-                        <Text style={styles.kidsPosterTitle} numberOfLines={1}>{item.name}</Text>
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-
-                {totalMoviePages > 1 && (
-                  <View style={styles.paginationRow}>
-                    <Pressable
-                      disabled={moviesPage === 1}
-                      onPress={() => setMoviesPage(p => Math.max(1, p - 1))}
-                      style={[styles.pageBtn, moviesPage === 1 && { opacity: 0.4 }]}
-                    >
-                      <Text style={styles.pageBtnText}>◀ Anterior</Text>
-                    </Pressable>
-                    <Text style={styles.pageIndicator}>Página {moviesPage} de {totalMoviePages}</Text>
-                    <Pressable
-                      disabled={moviesPage === totalMoviePages}
-                      onPress={() => setMoviesPage(p => Math.min(totalMoviePages, p + 1))}
-                      style={[styles.pageBtn, moviesPage === totalMoviePages && { opacity: 0.4 }]}
-                    >
-                      <Text style={styles.pageBtnText}>Seguinte ▶</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </ScrollView>
-            )}
-
-            {/* ABA SÉRIES COM PAGINAÇÃO */}
-            {kidsTab === "series" && (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
-                <Text style={styles.kidsSectionLabel}>🍿 TODAS AS SÉRIES & ANIMES</Text>
-                <View style={styles.kidsGridContainer}>
-                  {paginatedSeries.map((s) => (
-                    <Pressable
-                      key={s.series_id}
-                      focusable={true}
-                      onPress={() => router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } })}
-                      style={styles.kidsGridMovieCard}
-                    >
-                      <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" />
-                      <View style={styles.kidsPosterGradient}>
-                        <Text style={styles.kidsPosterTitle} numberOfLines={1}>{s.name}</Text>
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-
-                {totalSeriesPages > 1 && (
-                  <View style={styles.paginationRow}>
-                    <Pressable
-                      disabled={seriesPage === 1}
-                      onPress={() => setSeriesPage(p => Math.max(1, p - 1))}
-                      style={[styles.pageBtn, seriesPage === 1 && { opacity: 0.4 }]}
-                    >
-                      <Text style={styles.pageBtnText}>◀ Anterior</Text>
-                    </Pressable>
-                    <Text style={styles.pageIndicator}>Página {seriesPage} de {totalSeriesPages}</Text>
-                    <Pressable
-                      disabled={seriesPage === totalSeriesPages}
-                      onPress={() => setSeriesPage(p => Math.min(totalSeriesPages, p + 1))}
-                      style={[styles.pageBtn, seriesPage === totalSeriesPages && { opacity: 0.4 }]}
-                    >
-                      <Text style={styles.pageBtnText}>Seguinte ▶</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      ) : (
-        <ScrollView style={styles.root} contentContainerStyle={{ paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + 120 }} showsVerticalScrollIndicator={false}>
-          <View style={styles.mainContainer}>
-            <View style={styles.rowBetween}>
-              <View style={{ gap: 2 }}>
-                <Text style={styles.sectionHeader}>GOLDCAST STREAMING</Text>
-                <View style={styles.rowAlign}>
-                  <Pressable onPress={() => setShowProfileSheet(true)} style={[styles.profileTopChip, { borderColor: currentProfile.color }]}>
-                    <Ionicons name={currentProfile.icon as any} size={16} color={currentProfile.color} />
-                    <Text style={styles.profileTopName} numberOfLines={1}>{currentProfile.name}</Text>
-                    <Ionicons name="chevron-down" size={12} color={colors.textDim} />
+          {/* ABA LIVE / CANAIS COM PAGINAÇÃO */}
+          {currentTab === "live" && (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
+              <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>📺 CANAIS AO VIVO</Text>
+              <View style={styles.gridContainer}>
+                {paginatedItems.map((ch: any, idx: number) => (
+                  <Pressable
+                    key={ch.stream_id}
+                    focusable={true}
+                    onPress={() => handleOpenItemWithCheck(() => handlePlayLiveChannel(ch, idx), isAdultContent(ch.name))}
+                    style={styles.gridCard}
+                  >
+                    {ch.stream_icon ? (
+                      <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" />
+                    ) : (
+                      <Ionicons name="tv" size={32} color={themeStyles.accent} />
+                    )}
+                    <Text style={styles.gridCardTitle} numberOfLines={1}>{ch.name}</Text>
                   </Pressable>
-                </View>
+                ))}
               </View>
 
-              <Pressable focusable={true} onPress={() => router.push("/(tabs)/settings")} style={styles.accountIconBtn}>
-                <Ionicons name="settings-outline" size={22} color={colors.gold} />
-              </Pressable>
-            </View>
-
-            <View style={styles.gridNav}>
-              <Pressable focusable={true} onPress={() => go("/(tabs)/live")} style={styles.navCard}>
-                <View style={styles.navCardIconBox}><Ionicons name="tv" size={26} color={colors.gold} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.navCardTitle}>TV AO VIVO</Text>
-                  <Text style={styles.navCardSub}>Canais em tempo real</Text>
+              {totalPages > 1 && (
+                <View style={styles.paginationRow}>
+                  <Pressable disabled={page === 1} onPress={() => setPage(p => Math.max(1, p - 1))} style={[styles.pageBtn, { backgroundColor: themeStyles.accent }, page === 1 && { opacity: 0.4 }]}>
+                    <Text style={styles.pageBtnText}>◀ Anterior</Text>
+                  </Pressable>
+                  <Text style={styles.pageIndicator}>Página {page} de {totalPages}</Text>
+                  <Pressable disabled={page === totalPages} onPress={() => setPage(p => Math.min(totalPages, p + 1))} style={[styles.pageBtn, { backgroundColor: themeStyles.accent }, page === totalPages && { opacity: 0.4 }]}>
+                    <Text style={styles.pageBtnText}>Seguinte ▶</Text>
+                  </Pressable>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
+              )}
+            </ScrollView>
+          )}
+
+          {/* ABA FILMES COM PAGINAÇÃO */}
+          {currentTab === "movies" && currentProfile.type !== "football" && (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
+              <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🎬 CATÁLOGO DE FILMES</Text>
+              <View style={styles.gridContainer}>
+                {paginatedItems.map((item: any) => (
+                  <Pressable
+                    key={item.stream_id}
+                    focusable={true}
+                    onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } }), isAdultContent(item.name))}
+                    style={styles.gridMovieCard}
+                  >
+                    <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" />
+                    <View style={styles.posterGradient}>
+                      <Text style={styles.posterTitle} numberOfLines={1}>{item.name}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+
+              {totalPages > 1 && (
+                <View style={styles.paginationRow}>
+                  <Pressable disabled={page === 1} onPress={() => setPage(p => Math.max(1, p - 1))} style={[styles.pageBtn, { backgroundColor: themeStyles.accent }, page === 1 && { opacity: 0.4 }]}>
+                    <Text style={styles.pageBtnText}>◀ Anterior</Text>
+                  </Pressable>
+                  <Text style={styles.pageIndicator}>Página {page} de {totalPages}</Text>
+                  <Pressable disabled={page === totalPages} onPress={() => setPage(p => Math.min(totalPages, p + 1))} style={[styles.pageBtn, { backgroundColor: themeStyles.accent }, page === totalPages && { opacity: 0.4 }]}>
+                    <Text style={styles.pageBtnText}>Seguinte ▶</Text>
+                  </Pressable>
+                </View>
+              )}
+            </ScrollView>
+          )}
+
+          {/* ABA SÉRIES COM PAGINAÇÃO */}
+          {currentTab === "series" && currentProfile.type !== "football" && (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
+              <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🍿 CATÁLOGO DE SÉRIES</Text>
+              <View style={styles.gridContainer}>
+                {paginatedItems.map((s: any) => (
+                  <Pressable
+                    key={s.series_id}
+                    focusable={true}
+                    onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } }), isAdultContent(s.name))}
+                    style={styles.gridMovieCard}
+                  >
+                    <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" />
+                    <View style={styles.posterGradient}>
+                      <Text style={styles.posterTitle} numberOfLines={1}>{s.name}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+
+              {totalPages > 1 && (
+                <View style={styles.paginationRow}>
+                  <Pressable disabled={page === 1} onPress={() => setPage(p => Math.max(1, p - 1))} style={[styles.pageBtn, { backgroundColor: themeStyles.accent }, page === 1 && { opacity: 0.4 }]}>
+                    <Text style={styles.pageBtnText}>◀ Anterior</Text>
+                  </Pressable>
+                  <Text style={styles.pageIndicator}>Página {page} de {totalPages}</Text>
+                  <Pressable disabled={page === totalPages} onPress={() => setPage(p => Math.min(totalPages, p + 1))} style={[styles.pageBtn, { backgroundColor: themeStyles.accent }, page === totalPages && { opacity: 0.4 }]}>
+                    <Text style={styles.pageBtnText}>Seguinte ▶</Text>
+                  </Pressable>
+                </View>
+              )}
+            </ScrollView>
+          )}
+        </View>
+      </View>
+
+      {/* MODAL DE PIN ADULTO (+18) */}
+      <Modal visible={showPinModal} animationType="fade" transparent={true}>
+        <View style={styles.modalBg}>
+          <View style={styles.pinCard}>
+            <Ionicons name="lock-closed" size={36} color="#EF4444" />
+            <Text style={styles.pinTitle}>Conteúdo Protegido (+18)</Text>
+            <Text style={styles.pinSub}>Digite a senha PIN (padrão: 0000)</Text>
+            <TextInput
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={4}
+              placeholder="••••"
+              placeholderTextColor="#777"
+              value={enteredPin}
+              onChangeText={setEnteredPin}
+              style={styles.pinInput}
+            />
+            <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 10 }}>
+              <Pressable onPress={() => { setShowPinModal(false); setEnteredPin(""); }} style={[styles.pinBtn, { backgroundColor: "#262936" }]}>
+                <Text style={{ color: "#FFF", fontWeight: "800" }}>CANCELAR</Text>
+              </Pressable>
+              <Pressable onPress={verifyPinAndOpen} style={[styles.pinBtn, { backgroundColor: "#EF4444" }]}>
+                <Text style={{ color: "#FFF", fontWeight: "900" }}>LIBERAR</Text>
               </Pressable>
             </View>
           </View>
-        </ScrollView>
-      )}
+        </View>
+      </Modal>
 
+      {/* MODAL DE SELEÇÃO DE PERFIS */}
       <Modal visible={showProfileSheet} animationType="slide" transparent={true}>
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheetContainer, { paddingBottom: insets.bottom + 20 }]}>
@@ -601,6 +668,7 @@ export default function HomeTab() {
                   <View style={[styles.sheetMiniAvatar, { backgroundColor: p.color, borderWidth: currentProfile.id === p.id ? 3 : 0, borderColor: "#FFF" }]}>
                     <Ionicons name={p.icon as any} size={28} color="#FFF" />
                     {p.type === "kids" && <View style={styles.kidsTagBadge}><Text style={styles.kidsTagText}>KIDS</Text></View>}
+                    {p.type === "adult" && <View style={styles.adultTagBadge}><Text style={styles.adultTagText}>+18</Text></View>}
                   </View>
                   <Text style={styles.sheetMiniName} numberOfLines={1}>{p.name}</Text>
                 </Pressable>
@@ -615,63 +683,55 @@ export default function HomeTab() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  kidsRoot: { flex: 1, flexDirection: "row" },
-  sidebar: { width: 76, paddingVertical: 20, alignItems: "center", justifyContent: "flex-start", gap: 16, borderRightWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
-  sidebarIconBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
-  sidebarTabActive: { backgroundColor: "#38BDF8", borderWidth: 2, borderColor: "#FFF" },
-  sidebarProfileBox: { width: 50, height: 50, borderRadius: 16, backgroundColor: "#1E293B", alignItems: "center", justifyContent: "center", borderWidth: 2, gap: 2, marginTop: 10 },
+  layoutRoot: { flex: 1, flexDirection: "row" },
+  sidebar: { width: 72, paddingVertical: 18, alignItems: "center", justifyContent: "flex-start", gap: 14, borderRightWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
+  sidebarIconBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+  sidebarProfileBox: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#1E293B", alignItems: "center", justifyContent: "center", borderWidth: 2, gap: 2, marginTop: 8 },
   sidebarProfileName: { color: "#FFF", fontSize: 8, fontWeight: "700" },
   sidebarExitBtn: { alignItems: "center", gap: 2, paddingBottom: 10 },
-  sidebarExitText: { color: "#EF4444", fontSize: 9, fontWeight: "900" },
+  sidebarExitText: { color: "#EF4444", fontSize: 8, fontWeight: "900" },
 
-  kidsMainContent: { flex: 1, paddingHorizontal: 20, paddingTop: 16, gap: 16 },
-  kidsTopBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  kidsTitleBadgeWrap: { flexDirection: "row", alignItems: "center", gap: 6 },
-  kidsHeaderTitle: { color: "#38BDF8", fontSize: 16, fontWeight: "900", letterSpacing: 0.8 },
-  kidsSettingsBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
-  
-  kidsHeroBanner: { width: "100%", height: 160, borderRadius: 18, overflow: "hidden", position: "relative" },
-  heroOverlayGradient: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(12,27,42,0.88)", padding: 14, gap: 4 },
-  heroTagBadge: { backgroundColor: "#F59E0B", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: "flex-start" },
-  heroTagText: { color: "#000", fontSize: 9, fontWeight: "900" },
-  heroTitle: { color: "#FFF", fontSize: 16, fontWeight: "900" },
-  heroSub: { color: "#94A3B8", fontSize: 11, fontWeight: "600" },
+  mainContent: { flex: 1, paddingHorizontal: 16, paddingTop: 14, gap: 14 },
+  topBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  headerTitle: { fontSize: 15, fontWeight: "900", letterSpacing: 0.6 },
+  rowAlign: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  userInfoBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.08)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  userInfoText: { color: "#FFF", fontSize: 9.5, fontWeight: "700" },
+  settingsBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
 
-  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  kidsSectionLabel: { color: "#38BDF8", fontSize: 11, fontWeight: "800", letterSpacing: 0.8 },
-  kidsPostersRow: { gap: 14, paddingVertical: 4 },
-  kidsVerticalPosterCard: { width: 130, height: 195, borderRadius: 16, overflow: "hidden", position: "relative", elevation: 6 },
-  kidsPosterGradient: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.8)", padding: 8 },
-  kidsPosterTitle: { color: "#FFF", fontSize: 11, fontWeight: "900" },
+  heroBanner: { width: "100%", height: 150, borderRadius: 16, overflow: "hidden", position: "relative" },
+  heroOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.82)", padding: 12, gap: 4 },
+  heroBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: "flex-start" },
+  heroBadgeText: { color: "#000", fontSize: 8.5, fontWeight: "900" },
+  heroTitle: { color: "#FFF", fontSize: 15, fontWeight: "900" },
 
-  kidsAgoraNaTvBox: { gap: 8, marginTop: 2 },
-  kidsLiveThumbCard: { width: 110, height: 70, borderRadius: 12, backgroundColor: "#1E293B", overflow: "hidden", position: "relative", alignItems: "center", justifyContent: "center" },
-  liveTagBadge: { position: "absolute", top: 4, left: 4, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 },
-  liveTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
+  sectionLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.8 },
+  postersRow: { gap: 12, paddingVertical: 2 },
+  posterCard: { width: 120, height: 180, borderRadius: 14, overflow: "hidden", position: "relative", backgroundColor: "#1A1D29" },
+  posterGradient: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.8)", padding: 6 },
+  posterTitle: { color: "#FFF", fontSize: 10.5, fontWeight: "900" },
 
-  kidsGridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  kidsGridCard: { width: 110, height: 85, borderRadius: 12, backgroundColor: "#1E293B", alignItems: "center", justifyContent: "center", padding: 6, gap: 4 },
-  gridCardTitle: { color: "#FFF", fontSize: 10, fontWeight: "700", textAlign: "center" },
-  kidsGridMovieCard: { width: 110, height: 160, borderRadius: 12, overflow: "hidden", position: "relative" },
+  liveThumbCard: { width: 105, height: 68, borderRadius: 10, backgroundColor: "#1E293B", overflow: "hidden", position: "relative", alignItems: "center", justifyContent: "center" },
+  liveBadge: { position: "absolute", top: 3, left: 3, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 },
+  liveBadgeText: { color: "#FFF", fontSize: 6.5, fontWeight: "900" },
 
-  paginationRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 16, marginTop: 20, paddingBottom: 10 },
-  pageBtn: { backgroundColor: "#38BDF8", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  pageBtnText: { color: "#000", fontWeight: "900", fontSize: 12 },
-  pageIndicator: { color: "#FFF", fontSize: 13, fontWeight: "700" },
+  gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  gridCard: { width: 105, height: 80, borderRadius: 10, backgroundColor: "#1E293B", alignItems: "center", justifyContent: "center", padding: 6, gap: 4 },
+  gridCardTitle: { color: "#FFF", fontSize: 9.5, fontWeight: "700", textAlign: "center" },
+  gridMovieCard: { width: 105, height: 150, borderRadius: 10, overflow: "hidden", position: "relative" },
 
-  mainContainer: { gap: spacing.lg, paddingHorizontal: spacing.lg },
-  sectionHeader: { color: colors.textDim, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
-  profileTopChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1.5 },
-  profileTopName: { color: "#FFF", fontSize: 13, fontWeight: "800", maxWidth: 110 },
-  accountIconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  rowAlign: { flexDirection: "row", alignItems: "center" },
-  gridNav: { gap: 12 },
-  navCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 2, borderColor: colors.border, gap: 14 },
-  navCardIconBox: { width: 48, height: 48, borderRadius: 10, backgroundColor: "rgba(229, 169, 59, 0.12)", alignItems: "center", justifyContent: "center" },
-  navCardTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
-  navCardSub: { color: colors.textMuted, fontSize: 11.5, marginTop: 2 },
-  fullSize: { width: "100%", height: "100%" },
+  paginationRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 14, marginTop: 16, paddingBottom: 10 },
+  pageBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  pageBtnText: { color: "#000", fontWeight: "900", fontSize: 11 },
+  pageIndicator: { color: "#FFF", fontSize: 12, fontWeight: "700" },
+
+  modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", padding: 20 },
+  pinCard: { width: "100%", maxWidth: 360, backgroundColor: "#181818", borderRadius: 20, padding: 22, alignItems: "center", gap: 12, borderWidth: 1.5, borderColor: "#EF4444" },
+  pinTitle: { color: "#FFF", fontSize: 18, fontWeight: "800" },
+  pinSub: { color: "#9CA3AF", fontSize: 12, textAlign: "center" },
+  pinInput: { width: "100%", height: 48, backgroundColor: "#262626", borderRadius: 10, paddingHorizontal: 14, color: "#FFF", fontSize: 22, textAlign: "center", letterSpacing: 8 },
+  pinBtn: { flex: 1, height: 40, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+
   sheetOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "flex-end" },
   sheetContainer: { backgroundColor: "#181818", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 18, paddingTop: 10, gap: 14 },
   sheetHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: "#4B5563", alignSelf: "center" },
@@ -684,4 +744,6 @@ const styles = StyleSheet.create({
   sheetMiniName: { color: "#E5E7EB", fontSize: 11, fontWeight: "600" },
   kidsTagBadge: { position: "absolute", bottom: 2, right: 2, backgroundColor: "#1E88E5", paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 },
   kidsTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
+  adultTagBadge: { position: "absolute", bottom: 2, right: 2, backgroundColor: "#EF4444", paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 },
+  adultTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
 });
