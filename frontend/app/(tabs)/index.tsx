@@ -26,6 +26,7 @@ import { xtream, LiveStream, Category } from "../../src/services/xtream";
 import { liveUrls } from "../../src/services/xtream";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const ITEMS_PER_PAGE = 36; // Paginação otimizada para máxima fluidez e velocidade de renderização
 
 interface UserProfile {
   id: string;
@@ -71,8 +72,15 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
+  // Navegação lateral interna da área Kids
   const [kidsTab, setKidsTab] = useState<"home" | "live" | "movies" | "series">("home");
 
+  // Estados de Paginação para cada aba (fluidez total)
+  const [livePage, setLivePage] = useState(1);
+  const [moviesPage, setMoviesPage] = useState(1);
+  const [seriesPage, setSeriesPage] = useState(1);
+
+  // Perfis isolados
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
@@ -196,6 +204,7 @@ export default function HomeTab() {
     return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece|descencanto|108|patrulha pata|masha|blaze|panda/i.test(text);
   };
 
+  // Carregar TODOS os canais infantis sem exceção e sem filtros restritivos de resolução
   useEffect(() => {
     if (!session) return;
     let active = true;
@@ -205,12 +214,7 @@ export default function HomeTab() {
         const catKids = categories.find((c) => /infantil|kids|desenho/i.test(c.category_name));
         if (catKids) {
           const streams: LiveStream[] = await xtream.liveStreams(session, catKids.category_id);
-          const fhdStreams = streams.filter((s) => {
-            const title = (s.name || "").toUpperCase();
-            return title.includes("FHD") || title.includes("FULL HD") || title.includes("HD");
-          });
-          if (active && fhdStreams.length > 0) setKidsChannels(fhdStreams);
-          else if (active && streams.length > 0) setKidsChannels(streams);
+          if (active && streams.length > 0) setKidsChannels(streams);
         }
       } catch {}
     })();
@@ -237,6 +241,28 @@ export default function HomeTab() {
       return isKidsContent(name, cat);
     });
   }, [catalog.series]);
+
+  // Itens paginados para garantir fluidez total e carregamento rápido
+  const paginatedLiveChannels = useMemo(() => {
+    const start = (livePage - 1) * ITEMS_PER_PAGE;
+    return kidsChannels.slice(start, start + ITEMS_PER_PAGE);
+  }, [kidsChannels, livePage]);
+
+  const totalLivePages = Math.ceil(kidsChannels.length / ITEMS_PER_PAGE);
+
+  const paginatedMovies = useMemo(() => {
+    const start = (moviesPage - 1) * ITEMS_PER_PAGE;
+    return kidsMoviesList.slice(start, start + ITEMS_PER_PAGE);
+  }, [kidsMoviesList, moviesPage]);
+
+  const totalMoviePages = Math.ceil(kidsMoviesList.length / ITEMS_PER_PAGE);
+
+  const paginatedSeries = useMemo(() => {
+    const start = (seriesPage - 1) * ITEMS_PER_PAGE;
+    return kidsSeriesList.slice(start, start + ITEMS_PER_PAGE);
+  }, [kidsSeriesList, seriesPage]);
+
+  const totalSeriesPages = Math.ceil(kidsSeriesList.length / ITEMS_PER_PAGE);
 
   const handlePlayLiveChannel = (ch: LiveStream, index: number) => {
     if (session && source?.kind !== "list") setSource({ kind: "xtream" });
@@ -277,6 +303,7 @@ export default function HomeTab() {
     <View style={[styles.root, { backgroundColor: themeStyles.bg }]}>
       {currentProfile.type === "kids" ? (
         <View style={styles.kidsRoot}>
+          {/* MENU LATERAL ESQUERDO FIXO */}
           <View style={[styles.sidebar, { backgroundColor: themeStyles.sidebarBg }]}>
             <Pressable onPress={() => setKidsTab("home")} style={[styles.sidebarIconBtn, kidsTab === "home" && styles.sidebarTabActive]} focusable={true}>
               <Ionicons name="home" size={22} color={kidsTab === "home" ? "#38BDF8" : "#FFF"} />
@@ -307,6 +334,7 @@ export default function HomeTab() {
             </Pressable>
           </View>
 
+          {/* ÁREA PRINCIPAL DA DIREITA */}
           <View style={styles.kidsMainContent}>
             <View style={styles.kidsTopBar}>
               <View style={styles.kidsTitleBadgeWrap}>
@@ -319,6 +347,7 @@ export default function HomeTab() {
               </Pressable>
             </View>
 
+            {/* ABA HOME */}
             {kidsTab === "home" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 18, paddingBottom: 50 }}>
                 {kidsMoviesList.length > 0 && (
@@ -342,7 +371,7 @@ export default function HomeTab() {
                     <Text style={styles.kidsSectionLabel}>FILMES INFANTIS & ANIMAÇÕES RECOMENDADAS</Text>
                   </View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kidsPostersRow}>
-                    {kidsMoviesList.map((item, idx) => {
+                    {kidsMoviesList.slice(0, 15).map((item, idx) => {
                       const cardColors = ["#3B82F6", "#EAB308", "#EC4899", "#10B981", "#8B5CF6", "#F97316"];
                       const themeCol = cardColors[idx % cardColors.length];
                       return (
@@ -362,36 +391,10 @@ export default function HomeTab() {
                   </ScrollView>
                 </View>
 
-                <View style={{ gap: 10 }}>
-                  <View style={styles.sectionTitleRow}>
-                    <Ionicons name="albums" size={16} color="#8B5CF6" />
-                    <Text style={styles.kidsSectionLabel}>🍿 SÉRIES, DESENHOS & ANIMES</Text>
-                  </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kidsPostersRow}>
-                    {kidsSeriesList.map((s, idx) => {
-                      const cardColors = ["#8B5CF6", "#3B82F6", "#10B981", "#EC4899", "#F97316"];
-                      const themeCol = cardColors[idx % cardColors.length];
-                      return (
-                        <Pressable
-                          key={s.series_id}
-                          focusable={true}
-                          onPress={() => router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } })}
-                          style={[styles.kidsVerticalPosterCard, { backgroundColor: themeCol }]}
-                        >
-                          <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" />
-                          <View style={styles.kidsPosterGradient}>
-                            <Text style={styles.kidsPosterTitle} numberOfLines={2}>{s.name}</Text>
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-
                 <View style={styles.kidsAgoraNaTvBox}>
                   <View style={styles.sectionTitleRow}>
                     <Ionicons name="tv" size={16} color="#38BDF8" />
-                    <Text style={styles.kidsSectionLabel}>📺 CANAIS INFANTIS AO VIVO (24H FHD)</Text>
+                    <Text style={styles.kidsSectionLabel}>📺 CANAIS INFANTIS AO VIVO (24H)</Text>
                   </View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                     {kidsChannels.map((ch, idx) => (
@@ -406,7 +409,7 @@ export default function HomeTab() {
                         ) : (
                           <Ionicons name="tv" size={28} color="#FFF" />
                         )}
-                        <View style={styles.liveTagBadge}><Text style={styles.liveTagText}>FHD</Text></View>
+                        <View style={styles.liveTagBadge}><Text style={styles.liveTagText}>AO VIVO</Text></View>
                       </Pressable>
                     ))}
                   </ScrollView>
@@ -414,15 +417,16 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
+            {/* ABA CANAIS AO VIVO COM PAGINAÇÃO */}
             {kidsTab === "live" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
                 <Text style={styles.kidsSectionLabel}>📺 TODOS OS CANAIS INFANTIS AO VIVO</Text>
                 <View style={styles.kidsGridContainer}>
-                  {kidsChannels.map((ch, idx) => (
+                  {paginatedLiveChannels.map((ch, idx) => (
                     <Pressable
                       key={ch.stream_id}
                       focusable={true}
-                      onPress={() => handlePlayLiveChannel(ch, idx)}
+                      onPress={() => handlePlayLiveChannel(ch, (livePage - 1) * ITEMS_PER_PAGE + idx)}
                       style={styles.kidsGridCard}
                     >
                       {ch.stream_icon ? (
@@ -434,14 +438,35 @@ export default function HomeTab() {
                     </Pressable>
                   ))}
                 </View>
+
+                {totalLivePages > 1 && (
+                  <View style={styles.paginationRow}>
+                    <Pressable
+                      disabled={livePage === 1}
+                      onPress={() => setLivePage(p => Math.max(1, p - 1))}
+                      style={[styles.pageBtn, livePage === 1 && { opacity: 0.4 }]}
+                    >
+                      <Text style={styles.pageBtnText}>◀ Anterior</Text>
+                    </Pressable>
+                    <Text style={styles.pageIndicator}>Página {livePage} de {totalLivePages}</Text>
+                    <Pressable
+                      disabled={livePage === totalLivePages}
+                      onPress={() => setLivePage(p => Math.min(totalLivePages, p + 1))}
+                      style={[styles.pageBtn, livePage === totalLivePages && { opacity: 0.4 }]}
+                    >
+                      <Text style={styles.pageBtnText}>Seguinte ▶</Text>
+                    </Pressable>
+                  </View>
+                )}
               </ScrollView>
             )}
 
+            {/* ABA FILMES COM PAGINAÇÃO */}
             {kidsTab === "movies" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
                 <Text style={styles.kidsSectionLabel}>🎬 TODOS OS FILMES INFANTIS</Text>
                 <View style={styles.kidsGridContainer}>
-                  {kidsMoviesList.map((item) => (
+                  {paginatedMovies.map((item) => (
                     <Pressable
                       key={item.stream_id}
                       focusable={true}
@@ -455,14 +480,35 @@ export default function HomeTab() {
                     </Pressable>
                   ))}
                 </View>
+
+                {totalMoviePages > 1 && (
+                  <View style={styles.paginationRow}>
+                    <Pressable
+                      disabled={moviesPage === 1}
+                      onPress={() => setMoviesPage(p => Math.max(1, p - 1))}
+                      style={[styles.pageBtn, moviesPage === 1 && { opacity: 0.4 }]}
+                    >
+                      <Text style={styles.pageBtnText}>◀ Anterior</Text>
+                    </Pressable>
+                    <Text style={styles.pageIndicator}>Página {moviesPage} de {totalMoviePages}</Text>
+                    <Pressable
+                      disabled={moviesPage === totalMoviePages}
+                      onPress={() => setMoviesPage(p => Math.min(totalMoviePages, p + 1))}
+                      style={[styles.pageBtn, moviesPage === totalMoviePages && { opacity: 0.4 }]}
+                    >
+                      <Text style={styles.pageBtnText}>Seguinte ▶</Text>
+                    </Pressable>
+                  </View>
+                )}
               </ScrollView>
             )}
 
+            {/* ABA SÉRIES COM PAGINAÇÃO */}
             {kidsTab === "series" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
                 <Text style={styles.kidsSectionLabel}>🍿 TODAS AS SÉRIES & ANIMES</Text>
                 <View style={styles.kidsGridContainer}>
-                  {kidsSeriesList.map((s) => (
+                  {paginatedSeries.map((s) => (
                     <Pressable
                       key={s.series_id}
                       focusable={true}
@@ -476,6 +522,26 @@ export default function HomeTab() {
                     </Pressable>
                   ))}
                 </View>
+
+                {totalSeriesPages > 1 && (
+                  <View style={styles.paginationRow}>
+                    <Pressable
+                      disabled={seriesPage === 1}
+                      onPress={() => setSeriesPage(p => Math.max(1, p - 1))}
+                      style={[styles.pageBtn, seriesPage === 1 && { opacity: 0.4 }]}
+                    >
+                      <Text style={styles.pageBtnText}>◀ Anterior</Text>
+                    </Pressable>
+                    <Text style={styles.pageIndicator}>Página {seriesPage} de {totalSeriesPages}</Text>
+                    <Pressable
+                      disabled={seriesPage === totalSeriesPages}
+                      onPress={() => setSeriesPage(p => Math.min(totalSeriesPages, p + 1))}
+                      style={[styles.pageBtn, seriesPage === totalSeriesPages && { opacity: 0.4 }]}
+                    >
+                      <Text style={styles.pageBtnText}>Seguinte ▶</Text>
+                    </Pressable>
+                  </View>
+                )}
               </ScrollView>
             )}
           </View>
@@ -587,6 +653,11 @@ const styles = StyleSheet.create({
   kidsGridCard: { width: 110, height: 85, borderRadius: 12, backgroundColor: "#1E293B", alignItems: "center", justifyContent: "center", padding: 6, gap: 4 },
   gridCardTitle: { color: "#FFF", fontSize: 10, fontWeight: "700", textAlign: "center" },
   kidsGridMovieCard: { width: 110, height: 160, borderRadius: 12, overflow: "hidden", position: "relative" },
+
+  paginationRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 16, marginTop: 20, paddingBottom: 10 },
+  pageBtn: { backgroundColor: "#38BDF8", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  pageBtnText: { color: "#000", fontWeight: "900", fontSize: 12 },
+  pageIndicator: { color: "#FFF", fontSize: 13, fontWeight: "700" },
 
   mainContainer: { gap: spacing.lg, paddingHorizontal: spacing.lg },
   sectionHeader: { color: colors.textDim, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
