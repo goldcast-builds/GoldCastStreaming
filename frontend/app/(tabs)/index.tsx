@@ -68,10 +68,10 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingGuia, setLoadingGuia] = useState(false);
 
-  // Navegação lateral interna da área Kids ("home" | "live" | "movies" | "series")
+  // Navegação lateral interna exclusiva da área Kids
   const [kidsTab, setKidsTab] = useState<"home" | "live" | "movies" | "series">("home");
 
-  // Perfis
+  // Perfis isolados
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
@@ -195,7 +195,7 @@ export default function HomeTab() {
     return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece|descencanto|108|patrulha pata|masha|blaze|panda/i.test(text);
   };
 
-  // Carregar canais infantis apenas em alta definição (FHD) para a seção "Agora na TV"
+  // Carregar canais infantis FHD
   useEffect(() => {
     if (!session) return;
     let active = true;
@@ -205,7 +205,6 @@ export default function HomeTab() {
         const catKids = categories.find((c) => /infantil|kids|desenho/i.test(c.category_name));
         if (catKids) {
           const streams: LiveStream[] = await xtream.liveStreams(session, catKids.category_id);
-          // Filtragem rigorosa para manter apenas canais em FHD
           const fhdStreams = streams.filter((s) => {
             const title = (s.name || "").toUpperCase();
             return title.includes("FHD") || title.includes("FULL HD") || title.includes("HD");
@@ -218,7 +217,7 @@ export default function HomeTab() {
     return () => { active = false; };
   }, [session]);
 
-  // Filtragem rigorosa de Filmes/Animações para a aba Kids
+  // CATÁLOGO COMPLETO DE FILMES (SEM LIMITES DE 20 ITENS)
   const kidsMoviesList = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod.filter((v) => {
@@ -227,10 +226,10 @@ export default function HomeTab() {
       const cat = v.category_name || "";
       if (isAdultContent(name, cat)) return false;
       return isKidsContent(name, cat);
-    }).slice(0, 20);
+    });
   }, [catalog.vod]);
 
-  // Filtragem de Séries/Animes para a aba Kids
+  // CATÁLOGO COMPLETO DE SÉRIES E ANIMES (SEM LIMITES DE 20 ITENS)
   const kidsSeriesList = useMemo(() => {
     if (!catalog.series?.length) return [];
     return catalog.series.filter((s) => {
@@ -238,7 +237,7 @@ export default function HomeTab() {
       const cat = s.category_name || "";
       if (isAdultContent(name, cat)) return false;
       return isKidsContent(name, cat);
-    }).slice(0, 20);
+    });
   }, [catalog.series]);
 
   const go = async (path: string) => {
@@ -248,10 +247,9 @@ export default function HomeTab() {
 
   return (
     <View style={[styles.root, { backgroundColor: themeStyles.bg }]}>
-      {/* PERFIL KIDS COM MENU LATERAL ESQUERDO FIXO E ABAS INTERNAS */}
       {currentProfile.type === "kids" ? (
         <View style={styles.kidsRoot}>
-          {/* MENU LATERAL ESQUERDO (FIXO, NÃO SAI AO CLICAR) */}
+          {/* MENU LATERAL ESQUERDO FIXO */}
           <View style={[styles.sidebar, { backgroundColor: themeStyles.sidebarBg }]}>
             <Pressable onPress={() => setKidsTab("home")} style={[styles.sidebarIconBtn, kidsTab === "home" && styles.sidebarTabActive]} focusable={true}>
               <Ionicons name="home" size={22} color={kidsTab === "home" ? "#38BDF8" : "#FFF"} />
@@ -282,7 +280,7 @@ export default function HomeTab() {
             </Pressable>
           </View>
 
-          {/* ÁREA PRINCIPAL (DIREITA - EXIBE O CONTEÚDO DA CATEGORIA SELECIONADA DIRETAMENTE NA TELA) */}
+          {/* ÁREA PRINCIPAL DA DIREITA */}
           <View style={styles.kidsMainContent}>
             <View style={styles.kidsTopBar}>
               <Text style={styles.kidsHeaderTitle}>🌟 ESPAÇO MÁGICO INFANTIL</Text>
@@ -291,12 +289,11 @@ export default function HomeTab() {
               </Pressable>
             </View>
 
-            {/* ABA HOME (INÍCIO): EXIBE FILMES/ANIMAÇÕES ACIMA E CANAIS FHD ABAIXO */}
+            {/* ABA HOME */}
             {kidsTab === "home" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
-                {/* FILMES E ANIMAÇÕES INFANTIS (CÍRCULO VERMELHO DO PRINT) */}
                 <View style={{ gap: 10 }}>
-                  <Text style={styles.kidsSectionLabel}>🎬 FILMES INFANTIS & ANIMAÇÕES</Text>
+                  <Text style={styles.kidsSectionLabel}>🎬 CATÁLOGO COMPLETO DE FILMES INFANTIS</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kidsPostersRow}>
                     {kidsMoviesList.map((item, idx) => {
                       const cardColors = ["#3B82F6", "#EAB308", "#EC4899", "#10B981", "#8B5CF6", "#F97316"];
@@ -318,7 +315,6 @@ export default function HomeTab() {
                   </ScrollView>
                 </View>
 
-                {/* CANAIS INFANTIS 24H EM FHD (CÍRCULO VERDE DO PRINT) */}
                 <View style={styles.kidsAgoraNaTvBox}>
                   <Text style={styles.kidsSectionLabel}>📺 CANAIS INFANTIS EM FHD (24H)</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
@@ -342,10 +338,10 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
-            {/* ABA CANAIS AO VIVO (LIVE) */}
+            {/* ABA CANAIS AO VIVO */}
             {kidsTab === "live" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
-                <Text style={styles.kidsSectionLabel}>📺 TODOS OS CANAIS INFANTIS AO VIVO</Text>
+                <Text style={styles.kidsSectionLabel}>📺 TODOS OS CANAIS INFANTIS AO VIVO (FHD)</Text>
                 <View style={styles.kidsGridContainer}>
                   {kidsChannels.map((ch) => (
                     <Pressable
@@ -366,10 +362,10 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
-            {/* ABA FILMES (MOVIES) */}
+            {/* ABA FILMES (TODOS OS FILMES) */}
             {kidsTab === "movies" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
-                <Text style={styles.kidsSectionLabel}>🎬 CATÁLOGO COMPLETO DE FILMES INFANTIS</Text>
+                <Text style={styles.kidsSectionLabel}>🎬 TODOS OS FILMES INFANTIS</Text>
                 <View style={styles.kidsGridContainer}>
                   {kidsMoviesList.map((item) => (
                     <Pressable
@@ -388,10 +384,10 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
-            {/* ABA SÉRIES (SERIES) */}
+            {/* ABA SÉRIES (TODAS AS SÉRIES) */}
             {kidsTab === "series" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
-                <Text style={styles.kidsSectionLabel}>🍿 SÉRIES & ANIMES INFANTIS</Text>
+                <Text style={styles.kidsSectionLabel}>🍿 TODAS AS SÉRIES & ANIMES</Text>
                 <View style={styles.kidsGridContainer}>
                   {kidsSeriesList.map((s) => (
                     <Pressable
