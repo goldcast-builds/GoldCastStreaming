@@ -128,9 +128,10 @@ export default function HomeTab() {
         }
       });
 
+      // Força o carregamento imediato do catálogo VOD e Séries para popular as capas de imagem
       if (session) {
-        if (loadVod) loadVod().catch(() => {});
-        if (loadSeries) loadSeries().catch(() => {});
+        if (loadVod) loadVod(true).catch(() => {});
+        if (loadSeries) loadSeries(true).catch(() => {});
       }
       return () => { isMounted = false; };
     }, [session, loadVod, loadSeries, username])
@@ -266,16 +267,19 @@ export default function HomeTab() {
   return (
     <View style={[styles.root, { backgroundColor: themeStyles.bg }]}>
       <View style={styles.layoutRoot}>
-        {/* MENU LATERAL ESQUERDO FIXO (REDIRECIONAMENTO EFICIENTE PARA AS ABAS NATIVAS) */}
+        {/* MENU LATERAL ESQUERDO LIMPO (SEM DUPLICAÇÕES) */}
         <View style={[styles.sidebar, { backgroundColor: themeStyles.sidebarBg }]}>
+          {/* 1. Início / Home */}
           <Pressable onPress={() => router.push("/(tabs)")} style={[styles.sidebarIconBtn, { backgroundColor: themeStyles.accent }]} focusable={true}>
             <Ionicons name="home" size={20} color="#FFF" />
           </Pressable>
 
+          {/* 2. TV ao Vivo */}
           <Pressable onPress={() => router.push("/(tabs)/live")} style={styles.sidebarIconBtn} focusable={true}>
             <Ionicons name="tv" size={20} color="#FFF" />
           </Pressable>
 
+          {/* 3. Filmes e Séries (Ocultos no perfil de futebol) */}
           {currentProfile.type !== "football" && (
             <>
               <Pressable onPress={() => router.push("/(tabs)/movies")} style={styles.sidebarIconBtn} focusable={true}>
@@ -288,10 +292,7 @@ export default function HomeTab() {
             </>
           )}
 
-          <Pressable onPress={() => router.push("/(tabs)/live")} style={styles.sidebarIconBtn} focusable={true}>
-            <Ionicons name="calendar" size={20} color="#FFF" />
-          </Pressable>
-
+          {/* 4. Perfil Ativo */}
           <Pressable onPress={() => setShowProfileSheet(true)} style={[styles.sidebarProfileBox, { borderColor: currentProfile.color }]} focusable={true}>
             <Ionicons name={currentProfile.icon as any} size={18} color="#FFF" />
             <Text style={styles.sidebarProfileName} numberOfLines={1}>{currentProfile.name}</Text>
@@ -299,13 +300,14 @@ export default function HomeTab() {
 
           <View style={{ flex: 1 }} />
 
+          {/* 5. Sair */}
           <Pressable onPress={() => router.replace("/login")} style={styles.sidebarExitBtn} focusable={true}>
             <Ionicons name="exit-outline" size={16} color="#EF4444" />
             <Text style={styles.sidebarExitText}>SAIR</Text>
           </Pressable>
         </View>
 
-        {/* ÁREA PRINCIPAL DA DIREITA (HOME DASHBOARD LEVE) */}
+        {/* ÁREA PRINCIPAL DA DIREITA COM CARREGAMENTO OTIMIZADO DE IMAGENS */}
         <View style={styles.mainContent}>
           <View style={styles.topBar}>
             <View style={{ gap: 2 }}>
@@ -332,13 +334,14 @@ export default function HomeTab() {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 50 }}>
+            {/* Banner de Destaque */}
             {filteredMovies.length > 0 && currentProfile.type !== "football" && (
               <Pressable
                 focusable={true}
                 onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/movie/[id]", params: { id: String(filteredMovies[0].stream_id) } }), isAdultContent(filteredMovies[0].name))}
                 style={styles.heroBanner}
               >
-                <Image source={{ uri: filteredMovies[0].stream_icon }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" />
+                <Image source={{ uri: filteredMovies[0].stream_icon }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                 <View style={styles.heroOverlay}>
                   <View style={[styles.heroBadge, { backgroundColor: themeStyles.accent }]}><Text style={styles.heroBadgeText}>⭐ DESTAQUE</Text></View>
                   <Text style={styles.heroTitle} numberOfLines={1}>{filteredMovies[0].name}</Text>
@@ -346,18 +349,19 @@ export default function HomeTab() {
               </Pressable>
             )}
 
+            {/* Carrossel de Filmes */}
             {filteredMovies.length > 0 && currentProfile.type !== "football" && (
               <View style={{ gap: 8 }}>
-                <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🎬 FILMES EM DESTAQUE (CLIQUE PARA VER TODOS NA ABA FILMES)</Text>
+                <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🎬 FILMES EM DESTAQUE</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersRow}>
-                  {filteredMovies.slice(0, 10).map((item) => (
+                  {filteredMovies.slice(0, 12).map((item) => (
                     <Pressable
                       key={item.stream_id}
                       focusable={true}
                       onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } }), isAdultContent(item.name))}
                       style={styles.posterCard}
                     >
-                      <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" />
+                      <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                       <View style={styles.posterGradient}>
                         <Text style={styles.posterTitle} numberOfLines={2}>{item.name}</Text>
                       </View>
@@ -367,18 +371,19 @@ export default function HomeTab() {
               </View>
             )}
 
+            {/* Carrossel de Séries */}
             {filteredSeries.length > 0 && currentProfile.type !== "football" && (
               <View style={{ gap: 8 }}>
                 <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🍿 SÉRIES RECENTES</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersRow}>
-                  {filteredSeries.slice(0, 10).map((s) => (
+                  {filteredSeries.slice(0, 12).map((s) => (
                     <Pressable
                       key={s.series_id}
                       focusable={true}
                       onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } }), isAdultContent(s.name))}
                       style={styles.posterCard}
                     >
-                      <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" />
+                      <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                       <View style={styles.posterGradient}>
                         <Text style={styles.posterTitle} numberOfLines={2}>{s.name}</Text>
                       </View>
@@ -388,10 +393,11 @@ export default function HomeTab() {
               </View>
             )}
 
+            {/* Carrossel de Canais */}
             <View style={{ gap: 8 }}>
               <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>📺 CANAIS AO VIVO EM DESTAQUE</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                {filteredChannels.slice(0, 10).map((ch, idx) => (
+                {filteredChannels.slice(0, 12).map((ch, idx) => (
                   <Pressable
                     key={ch.stream_id}
                     focusable={true}
@@ -399,7 +405,7 @@ export default function HomeTab() {
                     style={styles.liveThumbCard}
                   >
                     {ch.stream_icon ? (
-                      <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" cachePolicy="memory-disk" />
+                      <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" cachePolicy="memory-disk" transition={200} />
                     ) : (
                       <Ionicons name="tv" size={28} color="#FFF" />
                     )}
@@ -507,6 +513,8 @@ const styles = StyleSheet.create({
   liveThumbCard: { width: 105, height: 68, borderRadius: 10, backgroundColor: "#1E293B", overflow: "hidden", position: "relative", alignItems: "center", justifyContent: "center" },
   liveBadge: { position: "absolute", top: 3, left: 3, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 },
   liveBadgeText: { color: "#FFF", fontSize: 6.5, fontWeight: "900" },
+
+  fullSize: { width: "100%", height: "100%" },
 
   modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", padding: 20 },
   pinCard: { width: "100%", maxWidth: 360, backgroundColor: "#181818", borderRadius: 20, padding: 22, alignItems: "center", gap: 12, borderWidth: 1.5, borderColor: "#EF4444" },
