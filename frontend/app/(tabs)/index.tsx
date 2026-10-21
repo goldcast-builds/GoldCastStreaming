@@ -191,12 +191,11 @@ export default function HomeTab() {
 
   const isKidsContent = (name: string, categoryName: string = "") => {
     const text = (name + " " + categoryName).toLowerCase();
-    // Exclui estritamente qualquer termo adulto ou suspensivo impróprio
     if (isAdultContent(name, categoryName)) return false;
     return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece|descencanto|108|patrulha pata|masha|blaze|panda/i.test(text);
   };
 
-  // Carregar canais infantis para a seção "AGORA NA TV" do layout Kids
+  // Carregar canais infantis apenas em alta definição (FHD) para a seção "Agora na TV"
   useEffect(() => {
     if (!session) return;
     let active = true;
@@ -206,35 +205,41 @@ export default function HomeTab() {
         const catKids = categories.find((c) => /infantil|kids|desenho/i.test(c.category_name));
         if (catKids) {
           const streams: LiveStream[] = await xtream.liveStreams(session, catKids.category_id);
-          if (active && streams.length > 0) setKidsChannels(streams);
+          // Filtragem rigorosa para manter apenas canais em FHD
+          const fhdStreams = streams.filter((s) => {
+            const title = (s.name || "").toUpperCase();
+            return title.includes("FHD") || title.includes("FULL HD") || title.includes("HD");
+          });
+          if (active && fhdStreams.length > 0) setKidsChannels(fhdStreams);
+          else if (active && streams.length > 0) setKidsChannels(streams);
         }
       } catch {}
     })();
     return () => { active = false; };
   }, [session]);
 
-  // Filtragem rigorosa para garantir que NENHUM conteúdo adulto vaze na área Kids
-  const marqueeItems = useMemo(() => {
+  // Filtragem rigorosa de Filmes/Animações para a aba Kids
+  const kidsMoviesList = useMemo(() => {
     if (!catalog.vod?.length) return [];
     return catalog.vod.filter((v) => {
       if (!v.stream_icon) return false;
       const name = v.name || "";
       const cat = v.category_name || "";
-      if (currentProfile.type === "kids") return isKidsContent(name, cat);
-      if (adultLocked && isAdultContent(name, cat)) return false;
-      return true;
-    }).slice(0, 15);
-  }, [catalog.vod, currentProfile.type, adultLocked]);
+      if (isAdultContent(name, cat)) return false;
+      return isKidsContent(name, cat);
+    }).slice(0, 20);
+  }, [catalog.vod]);
 
-  const seriesItems = useMemo(() => {
+  // Filtragem de Séries/Animes para a aba Kids
+  const kidsSeriesList = useMemo(() => {
     if (!catalog.series?.length) return [];
     return catalog.series.filter((s) => {
       const name = s.name || "";
       const cat = s.category_name || "";
-      if (currentProfile.type === "kids") return isKidsContent(name, cat);
-      return true;
-    }).slice(0, 15);
-  }, [catalog.series, currentProfile.type]);
+      if (isAdultContent(name, cat)) return false;
+      return isKidsContent(name, cat);
+    }).slice(0, 20);
+  }, [catalog.series]);
 
   const go = async (path: string) => {
     if (session && source?.kind !== "list") await setSource({ kind: "xtream" });
@@ -243,10 +248,10 @@ export default function HomeTab() {
 
   return (
     <View style={[styles.root, { backgroundColor: themeStyles.bg }]}>
-      {/* PERFIL KIDS COM MENU LATERAL ESQUERDO E SUBABAS DE CATEGORIA */}
+      {/* PERFIL KIDS COM MENU LATERAL ESQUERDO FIXO E ABAS INTERNAS */}
       {currentProfile.type === "kids" ? (
         <View style={styles.kidsRoot}>
-          {/* MENU LATERAL ESQUERDO (AZUL ESCURO) */}
+          {/* MENU LATERAL ESQUERDO (FIXO, NÃO SAI AO CLICAR) */}
           <View style={[styles.sidebar, { backgroundColor: themeStyles.sidebarBg }]}>
             <Pressable onPress={() => setKidsTab("home")} style={[styles.sidebarIconBtn, kidsTab === "home" && styles.sidebarTabActive]} focusable={true}>
               <Ionicons name="home" size={22} color={kidsTab === "home" ? "#38BDF8" : "#FFF"} />
@@ -277,7 +282,7 @@ export default function HomeTab() {
             </Pressable>
           </View>
 
-          {/* ÁREA PRINCIPAL (DIREITA - AZUL CLARO / FUNDO TEMÁTICO) */}
+          {/* ÁREA PRINCIPAL (DIREITA - EXIBE O CONTEÚDO DA CATEGORIA SELECIONADA DIRETAMENTE NA TELA) */}
           <View style={styles.kidsMainContent}>
             <View style={styles.kidsTopBar}>
               <Text style={styles.kidsHeaderTitle}>🌟 ESPAÇO MÁGICO INFANTIL</Text>
@@ -286,19 +291,21 @@ export default function HomeTab() {
               </Pressable>
             </View>
 
+            {/* ABA HOME (INÍCIO): EXIBE FILMES/ANIMAÇÕES ACIMA E CANAIS FHD ABAIXO */}
             {kidsTab === "home" && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
+                {/* FILMES E ANIMAÇÕES INFANTIS (CÍRCULO VERMELHO DO PRINT) */}
                 <View style={{ gap: 10 }}>
-                  <Text style={styles.kidsSectionLabel}>PERSONAGENS & DESENHOS EM DESTAQUE</Text>
+                  <Text style={styles.kidsSectionLabel}>🎬 FILMES INFANTIS & ANIMAÇÕES</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kidsPostersRow}>
-                    {marqueeItems.map((item, idx) => {
+                    {kidsMoviesList.map((item, idx) => {
                       const cardColors = ["#3B82F6", "#EAB308", "#EC4899", "#10B981", "#8B5CF6", "#F97316"];
                       const themeCol = cardColors[idx % cardColors.length];
                       return (
                         <Pressable
-                          key={item.id}
+                          key={item.stream_id}
                           focusable={true}
-                          onPress={() => router.push({ pathname: "/movie/[id]", params: { id: item.id } })}
+                          onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
                           style={[styles.kidsVerticalPosterCard, { backgroundColor: themeCol }]}
                         >
                           <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" />
@@ -311,10 +318,11 @@ export default function HomeTab() {
                   </ScrollView>
                 </View>
 
+                {/* CANAIS INFANTIS 24H EM FHD (CÍRCULO VERDE DO PRINT) */}
                 <View style={styles.kidsAgoraNaTvBox}>
-                  <Text style={styles.kidsSectionLabel}>📺 AGORA NA TV (CANAIS INFANTIS 24H)</Text>
+                  <Text style={styles.kidsSectionLabel}>📺 CANAIS INFANTIS EM FHD (24H)</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                    {kidsChannels.slice(0, 10).map((ch) => (
+                    {kidsChannels.map((ch) => (
                       <Pressable
                         key={ch.stream_id}
                         focusable={true}
@@ -326,7 +334,7 @@ export default function HomeTab() {
                         ) : (
                           <Ionicons name="tv" size={28} color="#FFF" />
                         )}
-                        <View style={styles.liveTagBadge}><Text style={styles.liveTagText}>AO VIVO</Text></View>
+                        <View style={styles.liveTagBadge}><Text style={styles.liveTagText}>FHD</Text></View>
                       </Pressable>
                     ))}
                   </ScrollView>
@@ -334,34 +342,72 @@ export default function HomeTab() {
               </ScrollView>
             )}
 
+            {/* ABA CANAIS AO VIVO (LIVE) */}
             {kidsTab === "live" && (
-              <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 10 }}>
-                <Ionicons name="tv-outline" size={48} color="#38BDF8" />
-                <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>Canais Infantis ao Vivo</Text>
-                <Pressable onPress={() => router.push("/(tabs)/live")} style={styles.kidsSubTabBtn}>
-                  <Text style={{ color: "#000", fontWeight: "900" }}>ACESSAR GRADE DE CANAIS</Text>
-                </Pressable>
-              </View>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
+                <Text style={styles.kidsSectionLabel}>📺 TODOS OS CANAIS INFANTIS AO VIVO</Text>
+                <View style={styles.kidsGridContainer}>
+                  {kidsChannels.map((ch) => (
+                    <Pressable
+                      key={ch.stream_id}
+                      focusable={true}
+                      onPress={() => router.push({ pathname: "/(tabs)/live", params: { channelId: String(ch.stream_id) } })}
+                      style={styles.kidsGridCard}
+                    >
+                      {ch.stream_icon ? (
+                        <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" />
+                      ) : (
+                        <Ionicons name="tv" size={32} color="#38BDF8" />
+                      )}
+                      <Text style={styles.gridCardTitle} numberOfLines={1}>{ch.name}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
             )}
 
+            {/* ABA FILMES (MOVIES) */}
             {kidsTab === "movies" && (
-              <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 10 }}>
-                <Ionicons name="film-outline" size={48} color="#38BDF8" />
-                <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>Filmes Infantis On-Demand</Text>
-                <Pressable onPress={() => router.push("/(tabs)/movies")} style={styles.kidsSubTabBtn}>
-                  <Text style={{ color: "#000", fontWeight: "900" }}>ACESSAR CATÁLOGO DE FILMES</Text>
-                </Pressable>
-              </View>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
+                <Text style={styles.kidsSectionLabel}>🎬 CATÁLOGO COMPLETO DE FILMES INFANTIS</Text>
+                <View style={styles.kidsGridContainer}>
+                  {kidsMoviesList.map((item) => (
+                    <Pressable
+                      key={item.stream_id}
+                      focusable={true}
+                      onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
+                      style={styles.kidsGridMovieCard}
+                    >
+                      <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" />
+                      <View style={styles.kidsPosterGradient}>
+                        <Text style={styles.kidsPosterTitle} numberOfLines={1}>{item.name}</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
             )}
 
+            {/* ABA SÉRIES (SERIES) */}
             {kidsTab === "series" && (
-              <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 10 }}>
-                <Ionicons name="albums-outline" size={48} color="#38BDF8" />
-                <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>Séries & Animes Infantis</Text>
-                <Pressable onPress={() => router.push("/(tabs)/series")} style={styles.kidsSubTabBtn}>
-                  <Text style={{ color: "#000", fontWeight: "900" }}>ACESSAR SÉRIES E ANIMES</Text>
-                </Pressable>
-              </View>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
+                <Text style={styles.kidsSectionLabel}>🍿 SÉRIES & ANIMES INFANTIS</Text>
+                <View style={styles.kidsGridContainer}>
+                  {kidsSeriesList.map((s) => (
+                    <Pressable
+                      key={s.series_id}
+                      focusable={true}
+                      onPress={() => router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } })}
+                      style={styles.kidsGridMovieCard}
+                    >
+                      <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" />
+                      <View style={styles.kidsPosterGradient}>
+                        <Text style={styles.kidsPosterTitle} numberOfLines={1}>{s.name}</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
             )}
           </View>
         </View>
@@ -459,7 +505,11 @@ const styles = StyleSheet.create({
   kidsLiveThumbCard: { width: 110, height: 70, borderRadius: 12, backgroundColor: "#1E293B", overflow: "hidden", position: "relative", alignItems: "center", justifyContent: "center" },
   liveTagBadge: { position: "absolute", top: 4, left: 4, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 },
   liveTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
-  kidsSubTabBtn: { backgroundColor: "#38BDF8", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginTop: 8 },
+
+  kidsGridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  kidsGridCard: { width: 110, height: 85, borderRadius: 12, backgroundColor: "#1E293B", alignItems: "center", justifyContent: "center", padding: 6, gap: 4 },
+  gridCardTitle: { color: "#FFF", fontSize: 10, fontWeight: "700", textAlign: "center" },
+  kidsGridMovieCard: { width: 110, height: 160, borderRadius: 12, overflow: "hidden", position: "relative" },
 
   mainContainer: { gap: spacing.lg, paddingHorizontal: spacing.lg },
   sectionHeader: { color: colors.textDim, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
