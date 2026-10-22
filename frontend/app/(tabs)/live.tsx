@@ -49,7 +49,6 @@ export default function LiveTab() {
   const [searchFocused, setSearchFocused] = useState(false);
   const q = useDebounce(search.trim().toLowerCase(), 300);
 
-  // Perfil Ativo para Filtragem e Layout Estilo UniTV/YouCine Kids
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
   const [adultPin, setAdultPin] = useState("0000");
   const [adultLocked, setAdultLocked] = useState(true);
@@ -103,7 +102,6 @@ export default function LiveTab() {
     return () => { cancelled = true; };
   }, [listMode, selectedCat, q]);
 
-  // Funções de verificação de conteúdo por perfil
   const isAdultContent = (name: string, categoryName: string = "") => {
     const text = (name + " " + categoryName).toLowerCase();
     return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates|canal adulto|filmes xxx/i.test(text);
@@ -114,12 +112,6 @@ export default function LiveTab() {
     return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|akame|dragon ball|naruto|one piece|sword art/i.test(text);
   };
 
-  const isFootballContent = (name: string, categoryName: string = "") => {
-    const text = (name + " " + categoryName).toLowerCase();
-    return /futebol|brasileirão|copa|libertadores|champions|premier|esporte|sportv|premiere|espn|cazé|combate|band sports|nfl|nba|futebol na tv|jogos|ppv/i.test(text);
-  };
-
-  // Temas visuais dinâmicos (Espelho YouCine/UniTV Kids)
   const themeStyles = useMemo(() => {
     const type = currentProfile?.type;
     if (type === "kids") {
@@ -134,28 +126,24 @@ export default function LiveTab() {
     return { bg: colors.bg, accent: colors.gold, cardBg: colors.surface2, headerBg: colors.surface };
   }, [currentProfile?.type]);
 
+  // Exibe todas as categorias da API do IPTV sem bloqueios severos no perfil normal
   const cats: Category[] = useMemo(() => {
     const base = listMode ? listCats : catalog.liveCats;
     let filtered = base;
 
-    // Filtragem estrita de categorias conforme o perfil ativo
     if (currentProfile?.type === "kids") {
       filtered = base.filter((c) => isKidsContent("", c.category_name));
     } else if (currentProfile?.type === "adult") {
       filtered = base.filter((c) => isAdultContent("", c.category_name));
-    } else if (currentProfile?.type === "football") {
-      filtered = base.filter((c) => isFootballContent("", c.category_name));
-    } else if (adultLocked) {
-      filtered = base.filter((c) => !isAdultContent("", c.category_name));
     }
 
     return [
-      { category_id: CAT_ALL, category_name: currentProfile?.type === "kids" ? "🌟 Todos Kids" : currentProfile?.type === "football" ? "⚽ Todos Esportes" : "Todos" },
+      { category_id: CAT_ALL, category_name: "Todos" },
       { category_id: CAT_FAV, category_name: "Favoritos" },
       { category_id: CAT_RECENT, category_name: "Recentes" },
       ...filtered,
     ];
-  }, [listMode, listCats, catalog.liveCats, currentProfile?.type, adultLocked]);
+  }, [listMode, listCats, catalog.liveCats, currentProfile?.type]);
 
   const catName = useMemo(() => Object.fromEntries(cats.map((c) => [String(c.category_id), c.category_name])), [cats]);
 
@@ -163,7 +151,6 @@ export default function LiveTab() {
     let src: any[] = listMode ? listItems : catalog.live;
 
     if (!listMode && session) {
-      // Filtragem por canal
       src = src.filter((c) => {
         const name = c.name || "";
         const cat = catName[String(c.category_id)] || "";
@@ -174,13 +161,7 @@ export default function LiveTab() {
         if (currentProfile?.type === "adult") {
           return isAdultContent(name, cat);
         }
-        if (currentProfile?.type === "football") {
-          return isFootballContent(name, cat);
-        }
-        if (adultLocked && isAdultContent(name, cat)) {
-          return false;
-        }
-        return true;
+        return true; // Permite todos os canais para perfis normais e de futebol
       });
     }
 
@@ -203,7 +184,7 @@ export default function LiveTab() {
       id: String(c.stream_id), name: c.name, logo: c.stream_icon, category: catName[String(c.category_id)] || "",
       urls: liveUrls(session, c.stream_id, liveFormat === "auto" ? undefined : liveFormat), streamId: c.stream_id, epgId: c.epg_channel_id, raw: c,
     }));
-  }, [listMode, listItems, session, catalog.live, selectedCat, q, favs, recents, catName, liveFormat, currentProfile?.type, adultLocked]);
+  }, [listMode, listItems, session, catalog.live, selectedCat, q, favs, recents, catName, liveFormat, currentProfile?.type]);
 
   const visibleRows = useMemo(() => {
     if (!listMode) return rows;
@@ -233,6 +214,7 @@ export default function LiveTab() {
       });
     };
 
+    // Solicita o PIN apenas se for canal adulto e o bloqueio estiver ativo num perfil não adulto
     if (adultLocked && currentProfile?.type !== "adult" && isAdultContent(item.name, item.category)) {
       setPendingAction(() => openAction);
       setEnteredPin("");
@@ -261,15 +243,10 @@ export default function LiveTab() {
 
   return (
     <View style={[styles.root, { backgroundColor: themeStyles.bg, paddingTop: insets.top + spacing.sm }]} testID="live-screen">
-      {/* CABEÇALHO COM TEMA DINÂMICO */}
       <View style={styles.headerRow}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          {currentProfile?.type === "kids" && <Ionicons name="sparkles" size={22} color={themeStyles.accent} />}
-          {currentProfile?.type === "football" && <Ionicons name="football" size={22} color={themeStyles.accent} />}
-          {currentProfile?.type === "adult" && <Ionicons name="lock-closed" size={22} color={themeStyles.accent} />}
-          <Text style={[styles.h1, { color: currentProfile?.type === "kids" || currentProfile?.type === "football" ? themeStyles.accent : colors.text }]}>
-            {currentProfile?.type === "kids" ? "Área Kids & Desenhos" : currentProfile?.type === "football" ? "Canais de Futebol & Esportes" : currentProfile?.type === "adult" ? "Canais Adultos (+18)" : "TV ao vivo"}
-          </Text>
+          <Ionicons name="tv" size={22} color={themeStyles.accent} />
+          <Text style={[styles.h1, { color: colors.text }]}>TV ao vivo & Canais</Text>
         </View>
 
         {(lists.length > 0 || session) && (
@@ -280,13 +257,12 @@ export default function LiveTab() {
         )}
       </View>
 
-      {/* BARRA DE PESQUISA */}
       <View style={[styles.searchWrap, { backgroundColor: themeStyles.headerBg }, searchFocused && styles.searchWrapFocused]}>
         <Ionicons name="search" size={16} color={searchFocused ? "#000000" : colors.textDim} />
         <TextInput 
           ref={searchRef} 
           testID="live-search" 
-          placeholder={currentProfile?.type === "kids" ? "Buscar desenhos, animes..." : "Buscar canais..."} 
+          placeholder="Buscar canais..." 
           placeholderTextColor={searchFocused ? "#333333" : colors.textDim} 
           value={search} 
           onChangeText={setSearch} 
@@ -303,7 +279,6 @@ export default function LiveTab() {
         )}
       </View>
 
-      {/* CHIPS DE CATEGORIAS */}
       <View style={styles.chipsWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.md }}>
           {cats.map((c) => (
@@ -318,7 +293,6 @@ export default function LiveTab() {
         </ScrollView>
       </View>
 
-      {/* CONTEÚDO / GRADE DE CANAIS */}
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={themeStyles.accent} /><Text style={styles.emptyText}>Carregando canais...</Text></View>
       ) : errLive && !listMode && !catalog.liveLoaded ? (
@@ -330,7 +304,7 @@ export default function LiveTab() {
       ) : visibleRows.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name={selectedCat === CAT_FAV ? "star-outline" : "tv-outline"} size={40} color={colors.textDim} />
-          <Text style={styles.emptyText}>{selectedCat === CAT_FAV ? "Nenhum canal favorito ainda." : "Nenhum canal encontrado para este perfil."}</Text>
+          <Text style={styles.emptyText}>{selectedCat === CAT_FAV ? "Nenhum canal favorito ainda." : "Nenhum canal encontrado."}</Text>
         </View>
       ) : (
         <FlatList
@@ -359,7 +333,6 @@ export default function LiveTab() {
         />
       )}
 
-      {/* MODAL DE PIN ADULTO */}
       <Modal visible={showPinModal} transparent animationType="fade" onRequestClose={() => setShowPinModal(false)}>
         <View style={styles.modalBg}>
           <View style={styles.pinCard}>
@@ -388,7 +361,6 @@ export default function LiveTab() {
         </View>
       </Modal>
 
-      {/* MODAL DE TROCA DE FONTE */}
       <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
         <Pressable style={styles.modalBg} onPress={() => setPickerOpen(false)}>
           <View style={styles.modalCard} testID="source-picker">
