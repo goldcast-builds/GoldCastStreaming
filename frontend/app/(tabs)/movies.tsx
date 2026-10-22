@@ -66,9 +66,10 @@ export default function MoviesTab() {
 
       if (profileType === "kids") return isKidsContent(name, cat);
       if (profileType === "adult") return isAdultContent(name, cat);
-      if (profileType === "football") return false; // Perfil de futebol não foca em filmes
+      if (profileType === "football") return false; 
 
-      if (adultLocked && isAdultContent(name, cat)) return false;
+      // Se o bloqueio adulto estiver ativo num perfil normal, oculta da listagem inicial
+      if (adultLocked && currentProfile?.type !== "adult" && isAdultContent(name, cat)) return false;
       return true;
     });
   }, [catalog.vod, currentProfile?.type, adultLocked]);
@@ -96,6 +97,7 @@ export default function MoviesTab() {
       return;
     }
 
+    // Solicita o PIN de segurança se for conteúdo adulto e o bloqueio estiver ativo
     if (adultLocked && currentProfile?.type !== "adult" && isAdultContent(item.name)) {
       setPendingItemToOpen(() => openAction);
       setEnteredPin("");
