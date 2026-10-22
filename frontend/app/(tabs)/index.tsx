@@ -43,7 +43,7 @@ export default function HomeTab() {
   const [mediaType, setMediaType] = useState<"movies" | "series">("movies");
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Estados do Modal de Jogos de Hoje integrado
+  // Estados do Modal de Jogos de Hoje Modernizado
   const [showJogosModal, setShowJogosModal] = useState(false);
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingJogos, setLoadingJogos] = useState(false);
@@ -74,7 +74,7 @@ export default function HomeTab() {
     }, [session, loadVod, loadSeries])
   );
 
-  // Busca do Guia de Jogos em tempo real para o Modal integrado
+  // Busca do Guia de Jogos em tempo real
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
@@ -134,7 +134,9 @@ export default function HomeTab() {
     };
 
     fetchGuia();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [showJogosModal]);
 
   const isTestAccount = useMemo(() => {
@@ -188,61 +190,86 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* PAINEL DE BLOCOS PRINCIPAIS */}
-      <View style={styles.dashboardGrid}>
-        {/* Retângulo Esquerdo: Carrossel Dinâmico de Filmes e Séries Recém-Adicionados */}
-        <Pressable
-          focusable={true}
-          onPress={() => {
-            if (activeCarouselItem) {
-              if (mediaType === "movies") {
-                router.push({ pathname: "/movie/[id]", params: { id: String(activeCarouselItem.stream_id) } });
-              } else {
-                router.push({ pathname: "/series/[id]", params: { id: String(activeCarouselItem.series_id) } });
+      {/* PAINEL DE CONTEÚDO PRINCIPAL (LAYOUT REAJUSTADO) */}
+      <View style={styles.mainLayoutContainer}>
+        {/* Lado Esquerdo: Bloco Principal de Destaque Ajustado (Proporção Completa das Capas) */}
+        <View style={styles.leftContainer}>
+          <Pressable
+            focusable={true}
+            onPress={() => {
+              if (activeCarouselItem) {
+                if (mediaType === "movies") {
+                  router.push({ pathname: "/movie/[id]", params: { id: String(activeCarouselItem.stream_id) } });
+                } else {
+                  router.push({ pathname: "/series/[id]", params: { id: String(activeCarouselItem.series_id) } });
+                }
               }
-            }
-          }}
-          style={({ focused }) => [styles.cardLarge, focused && styles.cardFocused]}
-        >
-          {activeCarouselItem ? (
-            <View style={styles.fullSizeContainer}>
-              <Image
-                source={{ uri: mediaType === "movies" ? activeCarouselItem.stream_icon : activeCarouselItem.cover }}
-                style={styles.fullSize}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-              />
-              <View style={styles.carouselOverlay}>
-                <View style={styles.carouselBadge}>
-                  <Text style={styles.carouselBadgeText}>{mediaType === "movies" ? "⭐ FILMES RECENTES" : "🍿 SÉRIES RECENTES"}</Text>
-                </View>
-                <Text style={styles.carouselTitle} numberOfLines={1}>
-                  {mediaType === "movies" ? activeCarouselItem.name : activeCarouselItem.name}
-                </Text>
-                <View style={styles.carouselControlsRow}>
-                  <Pressable onPress={(e) => { e.stopPropagation(); handlePrevCarousel(); }} style={styles.carouselNavBtn} focusable={true}>
-                    <Ionicons name="chevron-back" size={18} color="#FFF" />
-                  </Pressable>
-                  <Pressable onPress={(e) => { e.stopPropagation(); setMediaType(mediaType === "movies" ? "series" : "movies"); setCurrentIndex(0); }} style={styles.carouselSwitchBtn} focusable={true}>
-                    <Text style={styles.carouselSwitchText}>Alternar Filmes / Séries</Text>
-                  </Pressable>
-                  <Pressable onPress={(e) => { e.stopPropagation(); handleNextCarousel(); }} style={styles.carouselNavBtn} focusable={true}>
-                    <Ionicons name="chevron-forward" size={18} color="#FFF" />
-                  </Pressable>
+            }}
+            style={({ focused }) => [styles.cardLarge, focused && styles.cardFocused]}
+          >
+            {activeCarouselItem ? (
+              <View style={styles.fullSizeContainer}>
+                <Image
+                  source={{ uri: mediaType === "movies" ? activeCarouselItem.stream_icon : activeCarouselItem.cover }}
+                  style={styles.fullSize}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                />
+                <View style={styles.carouselOverlay}>
+                  <View style={styles.carouselBadge}>
+                    <Text style={styles.carouselBadgeText}>{mediaType === "movies" ? "⭐ FILMES RECENTES" : "🍿 SÉRIES RECENTES"}</Text>
+                  </View>
+                  <Text style={styles.carouselTitle} numberOfLines={1}>
+                    {mediaType === "movies" ? activeCarouselItem.name : activeCarouselItem.name}
+                  </Text>
+                  <View style={styles.carouselControlsRow}>
+                    <Pressable onPress={(e) => { e.stopPropagation(); handlePrevCarousel(); }} style={styles.carouselNavBtn} focusable={true}>
+                      <Ionicons name="chevron-back" size={18} color="#FFF" />
+                    </Pressable>
+                    <Pressable onPress={(e) => { e.stopPropagation(); setMediaType(mediaType === "movies" ? "series" : "movies"); setCurrentIndex(0); }} style={styles.carouselSwitchBtn} focusable={true}>
+                      <Text style={styles.carouselSwitchText}>Alternar Filmes / Séries</Text>
+                    </Pressable>
+                    <Pressable onPress={(e) => { e.stopPropagation(); handleNextCarousel(); }} style={styles.carouselNavBtn} focusable={true}>
+                      <Ionicons name="chevron-forward" size={18} color="#FFF" />
+                    </Pressable>
+                  </View>
                 </View>
               </View>
-            </View>
-          ) : (
-            <View style={styles.cardLargeInner}>
-              <Ionicons name="film-outline" size={64} color="#FFF" />
-              <Text style={styles.cardTitle}>MOVIES & SÉRIES</Text>
-            </View>
-          )}
-        </Pressable>
+            ) : (
+              <View style={styles.cardLargeInner}>
+                <Ionicons name="film-outline" size={64} color="#FFF" />
+                <Text style={styles.cardTitle}>MOVIES & SÉRIES</Text>
+              </View>
+            )}
+          </Pressable>
 
-        {/* Coluna Direita Redimensionada com 3 Blocos Proporcionados (Filmes, Séries e Canais) */}
+          {/* BARRA INFERIOR REDIMENSIONADA LOGO ABAIXO DO DESTAQUE (MARCAÇÃO VERMELHA) */}
+          <View style={styles.bottomBarBelow}>
+            <Pressable focusable={true} onPress={() => setShowJogosModal(true)} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
+              <Ionicons name="football-outline" size={20} color="#FFF" />
+              <Text style={styles.bottomCardText}>JOGOS DE HOJE</Text>
+            </Pressable>
+
+            <Pressable focusable={true} onPress={() => Alert.alert("Atualizações", "O aplicativo está na versão mais recente.")} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
+              <Ionicons name="newspaper-outline" size={20} color="#FFF" />
+              <Text style={styles.bottomCardText}>ATUALIZAÇÕES</Text>
+            </Pressable>
+
+            <Pressable focusable={true} onPress={handleScreenRecord} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
+              <Ionicons name="videocam-outline" size={20} color="#FFF" />
+              <Text style={styles.bottomCardText}>RECORDINGS</Text>
+            </Pressable>
+
+            <View style={styles.statusBadgeWrap}>
+              <Text style={[styles.premiumLabel, isTestAccount && { color: "#FBBF24" }]}>
+                {isTestAccount ? "Teste" : "Premium"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Lado Direito: Os 3 Blocos Proporcionados (Filmes, Séries e Canais) */}
         <View style={styles.rightColumn}>
-          {/* Bloco Filmes */}
           <Pressable
             focusable={true}
             onPress={() => router.push("/(tabs)/movies")}
@@ -254,7 +281,6 @@ export default function HomeTab() {
             </View>
           </Pressable>
 
-          {/* Bloco Séries */}
           <Pressable
             focusable={true}
             onPress={() => router.push("/(tabs)/series")}
@@ -266,7 +292,6 @@ export default function HomeTab() {
             </View>
           </Pressable>
 
-          {/* Bloco Canais */}
           <Pressable
             focusable={true}
             onPress={() => router.push("/(tabs)/live")}
@@ -280,48 +305,26 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* BARRA INFERIOR DE ATALHOS */}
-      <View style={styles.bottomBar}>
-        <Pressable focusable={true} onPress={() => setShowJogosModal(true)} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
-          <Ionicons name="football-outline" size={24} color="#FFF" />
-          <Text style={styles.bottomCardText}>JOGOS DE HOJE</Text>
-        </Pressable>
-
-        <Pressable focusable={true} onPress={() => Alert.alert("Atualizações", "O aplicativo está na versão mais recente.")} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
-          <Ionicons name="newspaper-outline" size={24} color="#FFF" />
-          <Text style={styles.bottomCardText}>ATUALIZAÇÕES</Text>
-        </Pressable>
-
-        <Pressable focusable={true} onPress={handleScreenRecord} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
-          <Ionicons name="videocam-outline" size={24} color="#FFF" />
-          <Text style={styles.bottomCardText}>RECORDINGS</Text>
-        </Pressable>
-
-        <View style={{ flex: 1, alignItems: "flex-end", justifyContent: "center", paddingRight: 10 }}>
-          <Text style={[styles.premiumLabel, isTestAccount && { color: "#FBBF24" }]}>
-            {isTestAccount ? "Teste" : "Premium"}
-          </Text>
-        </View>
-      </View>
-
-      {/* Modal Integrado de Jogos de Hoje */}
+      {/* Modal Modernizado de Jogos de Hoje */}
       <Modal visible={showJogosModal} animationType="slide" transparent={true} onRequestClose={() => setShowJogosModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Ionicons name="football" size={22} color={colors.gold} />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={styles.modalIconBox}>
+                  <Ionicons name="football" size={18} color={colors.gold} />
+                </View>
                 <Text style={styles.modalTitle}>JOGOS DE HOJE — GUIA NA TV</Text>
               </View>
               <Pressable onPress={() => setShowJogosModal(false)} style={styles.closeBtn} focusable={true}>
-                <Ionicons name="close" size={20} color="#FFF" />
+                <Ionicons name="close" size={18} color="#FFF" />
               </Pressable>
             </View>
 
             {loadingJogos ? (
               <View style={styles.centerBox}>
                 <ActivityIndicator size="large" color={colors.gold} />
-                <Text style={styles.loadingText}>Buscando programação dos jogos...</Text>
+                <Text style={styles.loadingText}>Buscando programação dos jogos em tempo real...</Text>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
@@ -329,14 +332,14 @@ export default function HomeTab() {
                   <View key={g.id} style={styles.guiaCard}>
                     <View style={styles.guiaHeaderRow}>
                       <View style={styles.guiaTimeBadge}>
-                        <Ionicons name="time" size={10} color="#000" />
+                        <Ionicons name="time-outline" size={11} color="#000" />
                         <Text style={styles.guiaTimeText}>{g.time}</Text>
                       </View>
                       <Text style={styles.guiaLeagueText} numberOfLines={1}>{g.league}</Text>
                     </View>
                     <Text style={styles.guiaMatchTitle} numberOfLines={2}>{g.match}</Text>
                     <View style={styles.guiaChannelsRow}>
-                      <Ionicons name="tv-outline" size={12} color={colors.gold} />
+                      <Ionicons name="tv-outline" size={13} color={colors.gold} />
                       <Text style={styles.guiaChannelsText} numberOfLines={1}>{g.channels}</Text>
                     </View>
                   </View>
@@ -351,86 +354,96 @@ export default function HomeTab() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, paddingHorizontal: 40, paddingVertical: 24, justifyContent: "space-between" },
+  root: { flex: 1, paddingHorizontal: 36, paddingVertical: 20, justifyContent: "space-between" },
   
   tvHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 14 },
-  tvBrand: { color: "#FFF", fontSize: 20, fontWeight: "900", letterSpacing: 1.2 },
+  tvBrand: { color: "#FFF", fontSize: 18, fontWeight: "900", letterSpacing: 1.2 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 18 },
   headerIconBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerDate: { color: "#9CA3AF", fontSize: 15, fontWeight: "700" },
-  headerTime: { color: "#FFF", fontSize: 20, fontWeight: "900" },
+  headerDate: { color: "#9CA3AF", fontSize: 14, fontWeight: "700" },
+  headerTime: { color: "#FFF", fontSize: 18, fontWeight: "900" },
 
-  dashboardGrid: { flexDirection: "row", gap: 20, height: "58%" },
+  // Layout Principal Reposicionado
+  mainLayoutContainer: { flexDirection: "row", gap: 20, height: "76%" },
+  leftContainer: { flex: 1.4, justifyContent: "space-between" },
+  rightColumn: { flex: 1, justifyContent: "space-between" },
   
+  // Bloco Principal de Destaque Ajustado (Proporção Completa das Capas)
   cardLarge: {
-    flex: 1.3,
+    flex: 1,
     borderRadius: 16,
     backgroundColor: "#C2185B",
     overflow: "hidden",
     borderWidth: 2,
     borderColor: "transparent",
+    maxHeight: "78%",
   },
   cardLargeInner: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, backgroundColor: "rgba(100, 20, 80, 0.4)" },
-  cardTitle: { color: "#FFF", fontSize: 26, fontWeight: "900", letterSpacing: 2 },
+  cardTitle: { color: "#FFF", fontSize: 24, fontWeight: "900", letterSpacing: 2 },
 
   fullSizeContainer: { width: "100%", height: "100%", position: "relative" },
   fullSize: { width: "100%", height: "100%" },
-  carouselOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.8)", padding: 12, gap: 6 },
+  carouselOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.85)", padding: 12, gap: 6 },
   carouselBadge: { backgroundColor: "#F59E0B", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: "flex-start" },
   carouselBadgeText: { color: "#000", fontSize: 9, fontWeight: "900" },
-  carouselTitle: { color: "#FFF", fontSize: 16, fontWeight: "900" },
-  carouselControlsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
-  carouselNavBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
+  carouselTitle: { color: "#FFF", fontSize: 15, fontWeight: "900" },
+  carouselControlsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 },
+  carouselNavBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
   carouselSwitchBtn: { backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   carouselSwitchText: { color: "#FFF", fontSize: 10, fontWeight: "700" },
 
-  rightColumn: { flex: 1, gap: 12 },
-  
+  // 3 Blocos Proporcionados da Direita
   cardTriple: {
     flex: 1,
     borderRadius: 14,
     overflow: "hidden",
     borderWidth: 2,
     borderColor: "transparent",
+    maxHeight: "30%",
   },
   cardTripleInner: { flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: 24, gap: 16 },
   cardTitleTriple: { color: "#FFF", fontSize: 18, fontWeight: "900", letterSpacing: 1.5 },
 
-  bottomBar: { flexDirection: "row", gap: 16, height: "18%" },
+  // Barra Inferior Reposicionada Abaixo do Destaque
+  bottomBarBelow: { flexDirection: "row", gap: 12, height: "18%" },
   bottomCard: {
     flex: 1,
     borderRadius: 12,
     backgroundColor: "rgba(255, 255, 255, 0.08)",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     borderWidth: 2,
     borderColor: "transparent",
   },
-  bottomCardText: { color: "#FFF", fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
-  premiumLabel: { color: "#10B981", fontSize: 16, fontWeight: "900", letterSpacing: 0.5, marginRight: 10 },
+  bottomCardText: { color: "#FFF", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  statusBadgeWrap: { flex: 0.8, alignItems: "flex-end", justifyContent: "center", paddingRight: 4 },
+  premiumLabel: { color: "#10B981", fontSize: 14, fontWeight: "900", letterSpacing: 0.5 },
 
   cardFocused: {
     borderColor: "#FBBF24",
     borderWidth: 4,
-    transform: [{ scale: 1.03 }],
+    transform: [{ scale: 1.02 }],
   },
 
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "center", alignItems: "center", padding: 20 },
-  modalCard: { width: "100%", maxWidth: 650, height: "80%", backgroundColor: "#141722", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.3)", padding: 20, gap: 14 },
-  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)", paddingBottom: 10 },
-  modalTitle: { color: colors.gold, fontSize: 16, fontWeight: "900", letterSpacing: 0.8 },
-  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#222634", alignItems: "center", justifyContent: "center" },
+  // Modal Modernizado de Jogos de Hoje
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", padding: 20 },
+  modalCard: { width: "100%", maxWidth: 680, height: "82%", backgroundColor: "#131622", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.25)", padding: 22, gap: 16 },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)", paddingBottom: 12 },
+  modalIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(212,175,55,0.15)", alignItems: "center", justifyContent: "center" },
+  modalTitle: { color: colors.gold, fontSize: 15, fontWeight: "900", letterSpacing: 0.8 },
+  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#1E2230", alignItems: "center", justifyContent: "center" },
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  loadingText: { color: colors.textMuted, fontSize: 13 },
+  loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
   listContainer: { gap: 10, paddingVertical: 4 },
-  guiaCard: { backgroundColor: "#1A1E2D", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)", gap: 6 },
+  
+  guiaCard: { backgroundColor: "#191D2E", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)", gap: 6 },
   guiaHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  guiaTimeBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.gold, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  guiaTimeText: { color: "#000", fontSize: 9.5, fontWeight: "900" },
-  guiaLeagueText: { color: colors.textDim, fontSize: 10.5, fontWeight: "700", flex: 1 },
-  guiaMatchTitle: { color: "#FFF", fontSize: 13, fontWeight: "800" },
+  guiaTimeBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.gold, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  guiaTimeText: { color: "#000", fontSize: 10, fontWeight: "900" },
+  guiaLeagueText: { color: colors.textDim, fontSize: 11, fontWeight: "700", flex: 1 },
+  guiaMatchTitle: { color: "#FFF", fontSize: 14, fontWeight: "900", letterSpacing: 0.2 },
   guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
-  guiaChannelsText: { color: colors.gold, fontSize: 11, fontWeight: "700" },
+  guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "800" },
 });
