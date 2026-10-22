@@ -9,6 +9,7 @@ import {
   NativeModules,
   StatusBar,
   DeviceEventEmitter,
+  AppState,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -70,7 +71,6 @@ export default function PlayerScreen() {
     );
   }, [rawParams, activePlayItem]);
 
-  // Define a chave única para o histórico de progresso
   const progressKey = useMemo(() => {
     if (activePlayItem?.progressKey) return activePlayItem.progressKey;
     if (streamId) {
@@ -79,25 +79,20 @@ export default function PlayerScreen() {
     return "";
   }, [activePlayItem, streamId, streamType]);
 
-  // Recupera o progresso salvo na sessão
   const savedProgress = useMemo(() => {
     if (!progressKey || streamType === "live") return null;
     const allProgress = ud?.progress || {};
     return allProgress[progressKey] || (streamId ? allProgress[String(streamId)] : null) || null;
   }, [progressKey, streamId, streamType, ud]);
 
-  // Calcula a posição inicial em milissegundos
   const startPositionMs = useMemo(() => {
     if (!savedProgress) return 0;
     const pos = Number(savedProgress.position) || 0;
     const dur = Number(savedProgress.duration) || 0;
 
-    // Se já assistiu a mais de 95%, reinicia do início
     if (dur > 0 && pos / dur >= 0.95) return 0;
-    // Ignora se assistiu a menos de 10 segundos
     if (pos < 10) return 0;
 
-    // Converte segundos para milissegundos se necessário
     return pos > 100000 ? pos : Math.round(pos * 1000);
   }, [savedProgress]);
 
@@ -149,7 +144,6 @@ export default function PlayerScreen() {
 
     if (!rawUrl) return "";
 
-    // Força HTTP para evitar erros de certificados SSL em painéis IPTV
     if (rawUrl.toLowerCase().startsWith("https://")) {
       rawUrl = "http://" + rawUrl.substring(8);
     }
@@ -157,7 +151,22 @@ export default function PlayerScreen() {
     return rawUrl;
   }, [rawParams, activePlayItem, session, streamId, streamType]);
 
-  // Escuta os eventos de progresso emitidos pelo player nativo
+  // Listener para retornar ao catálogo automaticamente quando o usuário fecha o player externo e volta ao app
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        // Se o usuário voltou para o app vindo do player externo, volta para a tela anterior
+        if (router.canGoBack()) {
+          router.back();
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [router]);
+
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener(
       "onPlayerProgress",
@@ -222,7 +231,6 @@ export default function PlayerScreen() {
         NativeModules.JustPlayer &&
         typeof NativeModules.JustPlayer.play === "function"
       ) {
-        // Registra nos recentes
         if (activePlayItem || streamId) {
           addRecent((streamType as any) || "live", activePlayItem || { id: streamId, title, urls: [streamUrl] });
         }
@@ -257,6 +265,11 @@ export default function PlayerScreen() {
       return () => clearTimeout(timer);
     }
   }, [streamUrl, abrirNoJustPlayer]);
+
+  // Reseta o gatilho de auto-launch se o índice da fila mudar (permite avançar/voltar episódios)
+  useEffect(() => {
+    hasAutoLaunched.current = false;
+  }, [queueIndex]);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
