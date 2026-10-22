@@ -43,12 +43,10 @@ export default function HomeTab() {
   const [mediaType, setMediaType] = useState<"movies" | "series">("movies");
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Estados do Modal de Jogos de Hoje Modernizado
   const [showJogosModal, setShowJogosModal] = useState(false);
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingJogos, setLoadingJogos] = useState(false);
 
-  // Relógio e Data em tempo real estilo TV
   useEffect(() => {
     const updateDateTime = () => {
       const now = new Date();
@@ -74,7 +72,6 @@ export default function HomeTab() {
     }, [session, loadVod, loadSeries])
   );
 
-  // Busca do Guia de Jogos em tempo real
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
@@ -190,9 +187,9 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* PAINEL DE CONTEÚDO PRINCIPAL (LAYOUT REAJUSTADO) */}
+      {/* PAINEL DE CONTEÚDO PRINCIPAL */}
       <View style={styles.mainLayoutContainer}>
-        {/* Lado Esquerdo: Bloco Principal de Destaque Ajustado (Proporção Completa das Capas) */}
+        {/* Lado Esquerdo: Destaque com visual corrigido (contentFit="contain" com fundo elegante) */}
         <View style={styles.leftContainer}>
           <Pressable
             focusable={true}
@@ -209,12 +206,24 @@ export default function HomeTab() {
           >
             {activeCarouselItem ? (
               <View style={styles.fullSizeContainer}>
+                {/* Fundo desfocado/estendido para preencher o espaço lateral sem cortar o pôster */}
+                <Image
+                  source={{ uri: mediaType === "movies" ? activeCarouselItem.stream_icon : activeCarouselItem.cover }}
+                  style={[styles.fullSize, StyleSheet.absoluteFillObject]}
+                  contentFit="cover"
+                  blurRadius={20}
+                  cachePolicy="memory-disk"
+                />
+                <View style={[styles.fullSize, { backgroundColor: "rgba(0,0,0,0.4)" }, StyleSheet.absoluteFillObject]} />
+
+                {/* Imagem principal por completo (contentFit="contain") */}
                 <Image
                   source={{ uri: mediaType === "movies" ? activeCarouselItem.stream_icon : activeCarouselItem.cover }}
                   style={styles.fullSize}
-                  contentFit="cover"
+                  contentFit="contain"
                   cachePolicy="memory-disk"
                 />
+
                 <View style={styles.carouselOverlay}>
                   <View style={styles.carouselBadge}>
                     <Text style={styles.carouselBadgeText}>{mediaType === "movies" ? "⭐ FILMES RECENTES" : "🍿 SÉRIES RECENTES"}</Text>
@@ -243,7 +252,7 @@ export default function HomeTab() {
             )}
           </Pressable>
 
-          {/* BARRA INFERIOR REDIMENSIONADA LOGO ABAIXO DO DESTAQUE (MARCAÇÃO VERMELHA) */}
+          {/* BARRA INFERIOR DE ATALHOS */}
           <View style={styles.bottomBarBelow}>
             <Pressable focusable={true} onPress={() => setShowJogosModal(true)} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
               <Ionicons name="football-outline" size={20} color="#FFF" />
@@ -268,7 +277,7 @@ export default function HomeTab() {
           </View>
         </View>
 
-        {/* Lado Direito: Os 3 Blocos Proporcionados (Filmes, Séries e Canais) */}
+        {/* Lado Direito: Os 3 Blocos Proporcionados */}
         <View style={styles.rightColumn}>
           <Pressable
             focusable={true}
@@ -364,16 +373,14 @@ const styles = StyleSheet.create({
   headerDate: { color: "#9CA3AF", fontSize: 14, fontWeight: "700" },
   headerTime: { color: "#FFF", fontSize: 18, fontWeight: "900" },
 
-  // Layout Principal Reposicionado
   mainLayoutContainer: { flexDirection: "row", gap: 20, height: "76%" },
   leftContainer: { flex: 1.4, justifyContent: "space-between" },
   rightColumn: { flex: 1, justifyContent: "space-between" },
   
-  // Bloco Principal de Destaque Ajustado (Proporção Completa das Capas)
   cardLarge: {
     flex: 1,
     borderRadius: 16,
-    backgroundColor: "#C2185B",
+    backgroundColor: "#000",
     overflow: "hidden",
     borderWidth: 2,
     borderColor: "transparent",
@@ -382,7 +389,7 @@ const styles = StyleSheet.create({
   cardLargeInner: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, backgroundColor: "rgba(100, 20, 80, 0.4)" },
   cardTitle: { color: "#FFF", fontSize: 24, fontWeight: "900", letterSpacing: 2 },
 
-  fullSizeContainer: { width: "100%", height: "100%", position: "relative" },
+  fullSizeContainer: { width: "100%", height: "100%", position: "relative", backgroundColor: "#000" },
   fullSize: { width: "100%", height: "100%" },
   carouselOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.85)", padding: 12, gap: 6 },
   carouselBadge: { backgroundColor: "#F59E0B", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: "flex-start" },
@@ -393,7 +400,6 @@ const styles = StyleSheet.create({
   carouselSwitchBtn: { backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   carouselSwitchText: { color: "#FFF", fontSize: 10, fontWeight: "700" },
 
-  // 3 Blocos Proporcionados da Direita
   cardTriple: {
     flex: 1,
     borderRadius: 14,
@@ -405,7 +411,6 @@ const styles = StyleSheet.create({
   cardTripleInner: { flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: 24, gap: 16 },
   cardTitleTriple: { color: "#FFF", fontSize: 18, fontWeight: "900", letterSpacing: 1.5 },
 
-  // Barra Inferior Reposicionada Abaixo do Destaque
   bottomBarBelow: { flexDirection: "row", gap: 12, height: "18%" },
   bottomCard: {
     flex: 1,
@@ -427,13 +432,12 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.02 }],
   },
 
-  // Modal Modernizado de Jogos de Hoje
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", padding: 20 },
   modalCard: { width: "100%", maxWidth: 680, height: "82%", backgroundColor: "#131622", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.25)", padding: 22, gap: 16 },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)", paddingBottom: 12 },
   modalIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(212,175,55,0.15)", alignItems: "center", justifyContent: "center" },
   modalTitle: { color: colors.gold, fontSize: 15, fontWeight: "900", letterSpacing: 0.8 },
-  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#1E2230", alignItems: "center", justifyContent: "center" },
+  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#1E2230",alignItems: "center", justifyContent: "center" },
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
   listContainer: { gap: 10, paddingVertical: 4 },
