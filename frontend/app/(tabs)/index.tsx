@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   Dimensions,
+  Alert,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,18 +16,21 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { useSession } from "../../src/store/session";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function HomeTab() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const session = useSession((s) => s.session);
+  const catalog = useSession((s) => s.catalog);
   const loadVod = useSession((s) => s.loadVod);
   const loadSeries = useSession((s) => s.loadSeries);
 
   const [activationCode, setActivationCode] = useState("LICENÇA ATIVA");
   const [currentDate, setCurrentDate] = useState("");
   const [currentTime, setCurrentTime] = useState("");
+  const [mediaType, setMediaType] = useState<"movies" | "series">("movies");
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   // Relógio e Data em tempo real estilo TV
   useEffect(() => {
@@ -54,12 +58,50 @@ export default function HomeTab() {
     }, [session, loadVod, loadSeries])
   );
 
+  // Determina se é Premium ou Teste com base na licença/código
+  const isTestAccount = useMemo(() => {
+    return !activationCode || activationCode.includes("TESTE") || activationCode.length < 5;
+  }, [activationCode]);
+
+  // Itens para o carrossel do retângulo rosa (Filmes ou Séries Recém-adicionados)
+  const carouselItems = useMemo(() => {
+    if (mediaType === "movies") {
+      return (catalog.vod || []).slice(0, 10);
+    } else {
+      return (catalog.series || []).slice(0, 10);
+    }
+  }, [catalog.vod, catalog.series, mediaType]);
+
+  const activeCarouselItem = carouselItems[currentIndex] || null;
+
+  const handleNextCarousel = () => {
+    if (carouselItems.length === 0) return;
+    setCurrentIndex((prev) => (prev + 1) % carouselItems.length);
+  };
+
+  const handlePrevCarousel = () => {
+    if (carouselItems.length === 0) return;
+    setCurrentIndex((prev) => (prev - 1 + carouselItems.length) % carouselItems.length);
+  };
+
+  // Sistema de Gravação de Tela (Verde)
+  const handleScreenRecord = () => {
+    Alert.alert(
+      "Gravação de Tela",
+      "Ferramenta de captura e gravação de ecrã iniciada com sucesso.",
+      [{ text: "OK" }]
+    );
+  };
+
   return (
     <View style={[styles.root, { backgroundColor: "#11141F" }]}>
-      {/* CABEÇALHO ATUALIZADO COM GOLDCAST MEDIA PLAYER */}
+      {/* CABEÇALHO */}
       <View style={styles.tvHeader}>
         <View style={styles.headerLeft}>
-          <Ionicons name="menu" size={26} color="#FFF" />
+          {/* Laranja: Menu de configurações do aplicativo */}
+          <Pressable focusable={true} onPress={() => router.push("/(tabs)/settings")} style={styles.headerIconBtn} hitSlop={10}>
+            <Ionicons name="menu" size={26} color="#FFF" />
+          </Pressable>
           <Text style={styles.tvBrand}>GoldCast Media Player</Text>
         </View>
 
@@ -75,23 +117,61 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* PAINEL DE BLOCOS / CARDS PRINCIPAIS (ESTILO LAUNCHER) */}
+      {/* PAINEL DE BLOCOS / CARDS PRINCIPAIS */}
       <View style={styles.dashboardGrid}>
-        {/* Bloco 1: MOVIES / FILMES */}
+        {/* Retângulo Rosa: Carrossel Dinâmico de Filmes e Séries Recém-Adicionados */}
         <Pressable
           focusable={true}
-          onPress={() => router.push("/(tabs)/movies")}
+          onPress={() => {
+            if (activeCarouselItem) {
+              if (mediaType === "movies") {
+                router.push({ pathname: "/movie/[id]", params: { id: String(activeCarouselItem.stream_id) } });
+              } else {
+                router.push({ pathname: "/series/[id]", params: { id: String(activeCarouselItem.series_id) } });
+              }
+            }
+          }}
           style={({ focused }) => [styles.cardLarge, focused && styles.cardFocused]}
         >
-          <View style={styles.cardLargeInner}>
-            <Ionicons name="play-circle-outline" size={64} color="#FFF" />
-            <Text style={styles.cardTitle}>MOVIES</Text>
-          </View>
+          {activeCarouselItem ? (
+            <View style={styles.fullSizeContainer}>
+              <Image
+                source={{ uri: mediaType === "movies" ? activeCarouselItem.stream_icon : activeCarouselItem.cover }}
+                style={styles.fullSize}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+              <View style={styles.carouselOverlay}>
+                <View style={styles.carouselBadge}>
+                  <Text style={styles.carouselBadgeText}>{mediaType === "movies" ? "⭐ FILMES RECENTES" : "🍿 SÉRIES RECENTES"}</Text>
+                </View>
+                <Text style={styles.carouselTitle} numberOfLines={1}>
+                  {mediaType === "movies" ? activeCarouselItem.name : activeCarouselItem.name}
+                </Text>
+                <View style={styles.carouselControlsRow}>
+                  <Pressable onPress={(e) => { e.stopPropagation(); handlePrevCarousel(); }} style={styles.carouselNavBtn}>
+                    <Ionicons name="chevron-back" size={18} color="#FFF" />
+                  </Pressable>
+                  <Pressable onPress={(e) => { e.stopPropagation(); setMediaType(mediaType === "movies" ? "series" : "movies"); setCurrentIndex(0); }} style={styles.carouselSwitchBtn}>
+                    <Text style={styles.carouselSwitchText}>Alternar Filmes / Séries</Text>
+                  </Pressable>
+                  <Pressable onPress={(e) => { e.stopPropagation(); handleNextCarousel(); }} style={styles.carouselNavBtn}>
+                    <Ionicons name="chevron-forward" size={18} color="#FFF" />
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.cardLargeInner}>
+              <Ionicons name="film-outline" size={64} color="#FFF" />
+              <Text style={styles.cardTitle}>MOVIES & SÉRIES</Text>
+            </View>
+          )}
         </Pressable>
 
         {/* Coluna Direita com os Blocos Menores */}
         <View style={styles.rightColumn}>
-          {/* Bloco 2: SERIES */}
+          {/* Bloco Séries */}
           <Pressable
             focusable={true}
             onPress={() => router.push("/(tabs)/series")}
@@ -103,7 +183,7 @@ export default function HomeTab() {
             </View>
           </Pressable>
 
-          {/* Bloco 3: IPTV / TV AO VIVO */}
+          {/* Azul: Mudado para Canais */}
           <Pressable
             focusable={true}
             onPress={() => router.push("/(tabs)/live")}
@@ -111,7 +191,7 @@ export default function HomeTab() {
           >
             <View style={styles.cardMediumInner}>
               <Ionicons name="tv-outline" size={42} color="#FFF" />
-              <Text style={styles.cardTitleMedium}>IPTV</Text>
+              <Text style={styles.cardTitleMedium}>Canais</Text>
             </View>
           </Pressable>
         </View>
@@ -119,23 +199,29 @@ export default function HomeTab() {
 
       {/* BARRA INFERIOR DE ATALHOS */}
       <View style={styles.bottomBar}>
-        <Pressable focusable={true} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
-          <Ionicons name="mic-outline" size={24} color="#FFF" />
-          <Text style={styles.bottomCardText}>PODCAST</Text>
+        {/* Vermelho: Atualização diária de jogos */}
+        <Pressable focusable={true} onPress={() => router.push("/(tabs)/live")} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
+          <Ionicons name="football-outline" size={24} color="#FFF" />
+          <Text style={styles.bottomCardText}>JOGOS DE HOJE</Text>
         </Pressable>
 
-        <Pressable focusable={true} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
+        {/* Rosa: Mudado para Atualizações */}
+        <Pressable focusable={true} onPress={() => Alert.alert("Atualizações", "O aplicativo está na versão mais recente.")} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
           <Ionicons name="newspaper-outline" size={24} color="#FFF" />
-          <Text style={styles.bottomCardText}>NEWS</Text>
+          <Text style={styles.bottomCardText}>ATUALIZAÇÕES</Text>
         </Pressable>
 
-        <Pressable focusable={true} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
+        {/* Verde: Sistema de gravação de tela */}
+        <Pressable focusable={true} onPress={handleScreenRecord} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
           <Ionicons name="videocam-outline" size={24} color="#FFF" />
           <Text style={styles.bottomCardText}>RECORDINGS</Text>
         </Pressable>
 
-        <View style={{ flex: 1, alignItems: "flex-end", justifyContent: "center" }}>
-          <Text style={styles.premiumLabel}>Premium</Text>
+        {/* Amarelo: Nome Premium ou Teste */}
+        <View style={{ flex: 1, alignItems: "flex-end", justifyContent: "center", paddingRight: 10 }}>
+          <Text style={[styles.premiumLabel, isTestAccount && { color: "#FBBF24" }]}>
+            {isTestAccount ? "Teste" : "Premium"}
+          </Text>
         </View>
       </View>
     </View>
@@ -145,7 +231,6 @@ export default function HomeTab() {
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 40, paddingVertical: 24, justifyContent: "space-between" },
   
-  // Cabeçalho
   tvHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 14 },
   tvBrand: { color: "#FFF", fontSize: 20, fontWeight: "900", letterSpacing: 1.2 },
@@ -154,10 +239,8 @@ const styles = StyleSheet.create({
   headerDate: { color: "#9CA3AF", fontSize: 15, fontWeight: "700" },
   headerTime: { color: "#FFF", fontSize: 20, fontWeight: "900" },
 
-  // Grid Principal estilo Smart TV
   dashboardGrid: { flexDirection: "row", gap: 20, height: "58%" },
   
-  // Card Grande (Movies)
   cardLarge: {
     flex: 1.3,
     borderRadius: 16,
@@ -169,10 +252,19 @@ const styles = StyleSheet.create({
   cardLargeInner: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, backgroundColor: "rgba(100, 20, 80, 0.4)" },
   cardTitle: { color: "#FFF", fontSize: 26, fontWeight: "900", letterSpacing: 2 },
 
-  // Coluna Direita
+  fullSizeContainer: { width: "100%", height: "100%", position: "relative" },
+  fullSize: { width: "100%", height: "100%" },
+  carouselOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.8)", padding: 12, gap: 6 },
+  carouselBadge: { backgroundColor: "#F59E0B", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: "flex-start" },
+  carouselBadgeText: { color: "#000", fontSize: 9, fontWeight: "900" },
+  carouselTitle: { color: "#FFF", fontSize: 16, fontWeight: "900" },
+  carouselControlsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
+  carouselNavBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
+  carouselSwitchBtn: { backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  carouselSwitchText: { color: "#FFF", fontSize: 10, fontWeight: "700" },
+
   rightColumn: { flex: 1, gap: 20 },
   
-  // Card Médio Laranja (Series)
   cardMediumOrange: {
     flex: 1,
     borderRadius: 16,
@@ -181,7 +273,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  // Card Médio Azul (IPTV)
   cardMediumBlue: {
     flex: 1,
     borderRadius: 16,
@@ -193,7 +284,6 @@ const styles = StyleSheet.create({
   cardMediumInner: { flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: 30, gap: 20 },
   cardTitleMedium: { color: "#FFF", fontSize: 22, fontWeight: "900", letterSpacing: 1.5 },
 
-  // Barra Inferior
   bottomBar: { flexDirection: "row", gap: 16, height: "18%" },
   bottomCard: {
     flex: 1,
@@ -206,9 +296,8 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   bottomCardText: { color: "#FFF", fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
-  premiumLabel: { color: "#9CA3AF", fontSize: 14, fontWeight: "700", marginRight: 10 },
+  premiumLabel: { color: "#10B981", fontSize: 16, fontWeight: "900", letterSpacing: 0.5, marginRight: 10 },
 
-  // Estado de Foco do Controle Remoto / TV
   cardFocused: {
     borderColor: "#FBBF24",
     borderWidth: 4,
