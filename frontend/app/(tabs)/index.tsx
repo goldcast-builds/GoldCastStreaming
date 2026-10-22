@@ -1,318 +1,469 @@
-import React, { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
+  Pressable,
   ScrollView,
-  TouchableOpacity,
-  Image,
-  Dimensions,
   Modal,
   TextInput,
-  Switch,
-} from 'react-native';
-import { useRouter } from 'expo-router';
+  Dimensions,
+  Alert,
+} from "react-native";
+import { Image } from "expo-image";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect, useRouter } from "expo-router";
+import Ionicons from "@react-native-vector-icons/ionicons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { colors, radius, spacing } from "../../src/utils/theme";
+import { useSession } from "../../src/store/session";
+import { xtream, LiveStream } from "../../src/services/xtream";
+import { liveUrls } from "../../src/services/xtream";
 
-const { width } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const DIAS_SEMANA = [
-  { id: '1', dia: 'QUA', data: '21/10', ativo: true },
-  { id: '2', dia: 'QUI', data: '22/10', ativo: false },
-  { id: '3', dia: 'SEX', data: '23/10', ativo: false },
-  { id: '4', dia: 'SÁB', data: '24/10', ativo: false },
-  { id: '5', dia: 'DOM', data: '25/10', ativo: false },
-];
+interface UserProfile {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+  type: "normal" | "kids" | "adult" | "football";
+}
 
-const JOGOS_POR_DATA = {
-  '21/10': [
-    {
-      campeonato: 'CONMEBOL Libertadores',
-      logoCamp: 'https://images.vexels.com/media/users/3/142995/isolated/preview/2ef1c19b679469607bf9a419266e92f2-icone-de-futebol-futebol.png',
-      partidas: [
-        {
-          id: '1',
-          horario: '21:30',
-          status: 'AO VIVO',
-          timeCasa: { nome: 'Flamengo', escudo: 'https://upload.wikimedia.org/wikipedia/commons/2/2e/Flamengo_braz_logo.svg' },
-          placar: '2 x 1',
-          timeVisitante: { nome: 'River Plate', escudo: 'https://upload.wikimedia.org/wikipedia/commons/c/cc/CA_River_Plate_logo_%282022%29.svg' },
-          canal: { nome: 'ESPN' },
-        },
-        {
-          id: '2',
-          horario: '21:30',
-          status: 'AO VIVO',
-          timeCasa: { nome: 'Palmeiras', escudo: 'https://upload.wikimedia.org/wikipedia/commons/1/10/Palmeiras_logo.svg' },
-          placar: '0 x 0',
-          timeVisitante: { nome: 'Boca Juniors', escudo: 'https://upload.wikimedia.org/wikipedia/commons/3/3a/Boca_Juniors_logo_1970.svg' },
-          canal: { nome: 'Paramount+' },
-        }
-      ]
-    },
-    {
-      campeonato: 'Brasileirão Série A',
-      logoCamp: 'https://upload.wikimedia.org/wikipedia/commons/9/94/Campeonato_Brasileiro_S%C3%A9rie_A_logo.png',
-      partidas: [
-        {
-          id: '3',
-          horario: '19:00',
-          status: 'ENC',
-          timeCasa: { nome: 'São Paulo', escudo: 'https://upload.wikimedia.org/wikipedia/commons/6/6f/Sao_Paulo_FC_%282020%29.svg' },
-          placar: '1 x 3',
-          timeVisitante: { nome: 'Corinthians', escudo: 'https://upload.wikimedia.org/wikipedia/commons/5/5e/Corinthians_simbolo.svg' },
-          canal: { nome: 'Premiere' },
-        }
-      ]
-    }
-  ]
-};
-
-export default function IndexScreen() {
+export default function HomeTab() {
   const router = useRouter();
-  const [dataSelecionada, setDataSelecionada] = useState('21/10');
-  const [dias, setDias] = useState(DIAS_SEMANA);
-  const [modalConfigVisible, setModalConfigVisible] = useState(false);
-  const [bloqueioAdulto, setBloqueioAdulto] = useState(true);
+  const insets = useSafeAreaInsets();
+  const session = useSession((s) => s.session);
+  const source = useSession((s) => s.source);
+  const setSource = useSession((s) => s.setSource);
+  const catalog = useSession((s) => s.catalog);
+  const loadVod = useSession((s) => s.loadVod);
+  const loadSeries = useSession((s) => s.loadSeries);
+  const setQueue = useSession((s) => s.setQueue);
+  const liveFormat = useSession((s) => s.prefs.liveFormat);
 
-  const [modalAdultPinVisible, setModalAdultPinVisible] = useState(false);
-  const [pinAdulto, setPinAdulto] = useState('');
-  const [erroPinAdulto, setErroPinAdulto] = useState(false);
+  const [cachedChannels, setCachedChannels] = useState<LiveStream[]>([]);
+  const [activationCode, setActivationCode] = useState<string>("LICENÇA ATIVA");
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
+  const [showProfileSheet, setShowProfileSheet] = useState(false);
 
-  const dadosUsuario = {
-    nome: 'Anderson da Silva',
-    usuario: 'mavi24',
-    codigoAtivacao: 'GOLDCAST-ASN-0310',
-    expiracao: '08/11/2026',
+  const [adultPin, setAdultPin] = useState("0000");
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [enteredPin, setEnteredPin] = useState("");
+  const [pendingItemToOpen, setPendingItemToOpen] = useState<any>(null);
+  const [adultLocked, setAdultLocked] = useState(true);
+
+  const { username, expFormatted } = useMemo(() => {
+    const user = session?.userInfo?.username || session?.username || "Cliente";
+    const exp = session?.userInfo?.exp_date;
+    if (!exp) return { username: user, expFormatted: "Ilimitado" };
+    const ts = Number(exp);
+    if (!ts || isNaN(ts)) return { username: user, expFormatted: "Indisponível" };
+    const expDate = new Date(ts * 1000);
+    const expFormatted = expDate.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      timeZone: "America/Sao_Paulo",
+    });
+    return { username: user, expFormatted };
+  }, [session]);
+
+  const currentProfile: UserProfile = useMemo(() => {
+    if (activeProfile) return activeProfile;
+    if (profiles.length > 0) return profiles[0];
+    return {
+      id: "default",
+      name: username || "Principal",
+      color: "#E50914",
+      icon: "film-outline",
+      type: "normal",
+    };
+  }, [activeProfile, profiles, username]);
+
+  const themeStyles = useMemo(() => {
+    if (currentProfile.type === "kids") {
+      return { bg: "#0C1B2A", accent: "#38BDF8", cardBg: "#172A45", sidebarBg: "#070E17", title: "ESPAÇO MÁGICO INFANTIL" };
+    }
+    if (currentProfile.type === "adult") {
+      return { bg: "#140808", accent: "#EF4444", cardBg: "#1F1111", sidebarBg: "#0B0404", title: "ÁREA ADULTA EXCLUSIVA (+18)" };
+    }
+    if (currentProfile.type === "football") {
+      return { bg: "#041C0F", accent: "#10B981", cardBg: "#0D2E1A", sidebarBg: "#02120A", title: "CENTRAL DE FUTEBOL & ESPORTES" };
+    }
+    return { bg: colors.bg, accent: colors.gold, cardBg: colors.surface, sidebarBg: "#12141C", title: "GOLDCAST STREAMING" };
+  }, [currentProfile.type]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      AsyncStorage.getItem("@goldcast_saved_code").then((code) => { if (code && isMounted) setActivationCode(code); });
+      AsyncStorage.getItem("@goldcast_adult_pin").then((val) => { if (val && isMounted) setAdultPin(val); });
+      AsyncStorage.getItem("@goldcast_adult_locked").then((val) => { if (val !== null && isMounted) setAdultLocked(val === "true"); });
+
+      Promise.all([
+        AsyncStorage.getItem("@goldcast_profiles"),
+        AsyncStorage.getItem("@goldcast_active_profile"),
+      ]).then(([rawProfiles, rawActive]) => {
+        if (!isMounted) return;
+        let loadedProfiles: UserProfile[] = [];
+        if (rawProfiles) {
+          try {
+            const parsed = JSON.parse(rawProfiles);
+            if (Array.isArray(parsed)) loadedProfiles = parsed;
+          } catch {}
+        }
+
+        if (loadedProfiles.length === 0) {
+          loadedProfiles = [{ id: `p_${Date.now()}`, name: username || "Principal", color: "#E50914", icon: "film-outline", type: "normal" }];
+          AsyncStorage.setItem("@goldcast_profiles", JSON.stringify(loadedProfiles));
+        }
+
+        setProfiles(loadedProfiles);
+        if (rawActive) {
+          try { setActiveProfile(JSON.parse(rawActive)); } catch { setActiveProfile(loadedProfiles[0]); }
+        } else {
+          setActiveProfile(loadedProfiles[0]);
+        }
+      });
+
+      if (session) {
+        if (loadVod) loadVod(true).catch(() => {});
+        if (loadSeries) loadSeries(true).catch(() => {});
+      }
+      return () => { isMounted = false; };
+    }, [session, loadVod, loadSeries, username])
+  );
+
+  const handleSelectProfile = async (p: UserProfile) => {
+    setActiveProfile(p);
+    setShowProfileSheet(false);
+    await AsyncStorage.setItem("@goldcast_active_profile", JSON.stringify(p));
   };
 
-  const selecionarDia = (data) => {
-    setDataSelecionada(data);
-    setDias(dias.map(d => ({ ...d, ativo: d.data === data })));
+  const isAdultContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates/i.test(text);
   };
 
-  const verificarPinAdulto = () => {
-    if (pinAdulto === '6969') {
-      setModalAdultPinVisible(false);
-      setPinAdulto('');
-      setErroPinAdulto(false);
-      router.push('/adult');
+  const isKidsContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    if (isAdultContent(name, categoryName)) return false;
+    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece/i.test(text);
+  };
+
+  const isFootballContent = (name: string, categoryName: string = "") => {
+    const text = (name + " " + categoryName).toLowerCase();
+    return /futebol|brasileirão|copa|libertadores|champions|premier|esporte|sportv|premiere|espn|cazé|combate|band sports|nfl|nba|ppv|jogos/i.test(text);
+  };
+
+  // Carrega todos os streams de TV ao vivo da API do IPTV
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    (async () => {
+      try {
+        const streams: LiveStream[] = await xtream.liveStreams(session);
+        if (active && streams.length > 0) setCachedChannels(streams);
+      } catch {}
+    })();
+    return () => { active = false; };
+  }, [session]);
+
+  const filteredMovies = useMemo(() => {
+    if (!catalog.vod?.length) return [];
+    return catalog.vod.filter((v) => {
+      if (!v.stream_icon) return false;
+      const name = v.name || "";
+      const cat = v.category_name || "";
+      if (currentProfile.type === "kids") return isKidsContent(name, cat);
+      if (currentProfile.type === "adult") return isAdultContent(name, cat);
+      if (currentProfile.type === "football") return isFootballContent(name, cat); // Permitir conteúdo de futebol se aplicável
+      if (adultLocked && isAdultContent(name, cat)) return false;
+      return true;
+    });
+  }, [catalog.vod, currentProfile.type, adultLocked]);
+
+  const filteredSeries = useMemo(() => {
+    if (currentProfile.type === "adult") return []; 
+    if (!catalog.series?.length) return [];
+    return catalog.series.filter((s) => {
+      if (!s.cover) return false;
+      const name = s.name || "";
+      const cat = s.category_name || "";
+      if (currentProfile.type === "kids") return isKidsContent(name, cat);
+      if (currentProfile.type === "football") return isFootballContent(name, cat);
+      if (adultLocked && isAdultContent(name, cat)) return false;
+      return true;
+    });
+  }, [catalog.series, currentProfile.type, adultLocked]);
+
+  const filteredChannels = useMemo(() => {
+    return cachedChannels.filter((ch) => {
+      const name = ch.name || "";
+      if (currentProfile.type === "kids") return isKidsContent(name);
+      if (currentProfile.type === "adult") return isAdultContent(name);
+      if (currentProfile.type === "football") return isFootballContent(name);
+      if (adultLocked && isAdultContent(name)) return false;
+      return true;
+    });
+  }, [cachedChannels, currentProfile.type, adultLocked]);
+
+  const handlePlayLiveChannel = (ch: LiveStream, index: number) => {
+    if (session && source?.kind !== "list") setSource({ kind: "xtream" });
+    const urls = liveUrls(session, ch.stream_id, liveFormat === "auto" ? undefined : liveFormat);
+
+    const items: PlayItem[] = filteredChannels.map((c) => ({
+      kind: "live",
+      id: String(c.stream_id),
+      title: c.name,
+      subtitle: currentProfile.type,
+      logo: c.stream_icon,
+      urls: liveUrls(session, c.stream_id, liveFormat === "auto" ? undefined : liveFormat),
+      streamId: c.stream_id,
+      raw: c,
+    }));
+    setQueue(items, index);
+
+    router.push({
+      pathname: "/player",
+      params: {
+        url: urls?.[0] || "",
+        streamUrl: urls?.[0] || "",
+        title: ch.name || "Canal",
+        name: ch.name || "",
+        id: String(ch.stream_id),
+        stream_id: String(ch.stream_id),
+        type: "live",
+      },
+    });
+  };
+
+  const handleOpenItemWithCheck = (action: () => void, isAdult: boolean) => {
+    if (adultLocked && currentProfile.type !== "adult" && isAdult) {
+      setPendingItemToOpen(() => action);
+      setEnteredPin("");
+      setShowPinModal(true);
     } else {
-      setErroPinAdulto(true);
+      action();
     }
   };
 
-  const jogosAtuais = JOGOS_POR_DATA[dataSelecionada] || [];
+  const verifyPinAndOpen = () => {
+    if (enteredPin === adultPin) {
+      setShowPinModal(false);
+      setEnteredPin("");
+      if (pendingItemToOpen) {
+        pendingItemToOpen();
+        setPendingItemToOpen(null);
+      }
+    } else {
+      Alert.alert("Senha incorreta", "A senha padrão é 0000.");
+      setEnteredPin("");
+    }
+  };
 
   return (
-    <View style={styles.container}>
-      {/* HEADER SUPERIOR (USUÁRIO, ATIVAÇÃO E CONFIGURAÇÕES) */}
-      <View style={styles.header}>
-        <View style={styles.userBox}>
-          <Text style={styles.welcomeText}>Usuário: <Text style={styles.highlightText}>{dadosUsuario.usuario}</Text></Text>
-          <Text style={styles.codeText}>Ativação: <Text style={styles.highlightCode}>{dadosUsuario.codigoAtivacao}</Text></Text>
+    <View style={[styles.root, { backgroundColor: themeStyles.bg }]}>
+      <View style={styles.layoutRoot}>
+        {/* MENU LATERAL ESQUERDO FIXO */}
+        <View style={[styles.sidebar, { backgroundColor: themeStyles.sidebarBg }]}>
+          <Pressable onPress={() => router.push("/(tabs)")} style={[styles.sidebarIconBtn, { backgroundColor: themeStyles.accent }]} focusable={true}>
+            <Ionicons name="home" size={20} color="#FFF" />
+          </Pressable>
+
+          <Pressable onPress={() => router.push("/(tabs)/live")} style={styles.sidebarIconBtn} focusable={true}>
+            <Ionicons name="tv" size={20} color="#FFF" />
+          </Pressable>
+
+          {currentProfile.type !== "adult" && (
+            <>
+              <Pressable onPress={() => router.push("/(tabs)/movies")} style={styles.sidebarIconBtn} focusable={true}>
+                <Ionicons name="film" size={20} color="#FFF" />
+              </Pressable>
+
+              <Pressable onPress={() => router.push("/(tabs)/series")} style={styles.sidebarIconBtn} focusable={true}>
+                <Ionicons name="albums" size={20} color="#FFF" />
+              </Pressable>
+            </>
+          )}
+
+          <Pressable onPress={() => setShowProfileSheet(true)} style={[styles.sidebarProfileBox, { borderColor: currentProfile.color }]} focusable={true}>
+            <Ionicons name={currentProfile.icon as any} size={18} color="#FFF" />
+            <Text style={styles.sidebarProfileName} numberOfLines={1}>{currentProfile.name}</Text>
+          </Pressable>
+
+          <View style={{ flex: 1 }} />
+
+          <Pressable onPress={() => router.replace("/login")} style={styles.sidebarExitBtn} focusable={true}>
+            <Ionicons name="exit-outline" size={16} color="#EF4444" />
+            <Text style={styles.sidebarExitText}>SAIR</Text>
+          </Pressable>
         </View>
 
-        <View style={styles.headerRight}>
-          <View style={styles.badgeContainer}>
-            <Text style={styles.badgeText}>EXP: {dadosUsuario.expiracao}</Text>
-          </View>
-          <TouchableOpacity style={styles.gearButton} onPress={() => setModalConfigVisible(true)}>
-            <Text style={styles.gearIcon}>⚙️</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* BARRA DE NAVEGAÇÃO DE ABAS */}
-      <View style={styles.navBar}>
-        <TouchableOpacity style={[styles.navItem, styles.navItemActive]}>
-          <Text style={[styles.navText, styles.navTextActive]}>Início & Futebol</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/live')}>
-          <Text style={styles.navText}>Canais</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/movies')}>
-          <Text style={styles.navText}>Filmes</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/series')}>
-          <Text style={styles.navText}>Séries</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {/* BOTÕES DE ACESSO RÁPIDO: KIDS E ADULTO */}
-        <View style={styles.specialModesRow}>
-          <TouchableOpacity 
-            style={styles.kidsModeBtn} 
-            onPress={() => router.push('/kids')}
-          >
-            <Text style={styles.specialEmoji}>🎈</Text>
-            <View>
-              <Text style={styles.specialTitleKids}>Espaço Kids</Text>
-              <Text style={styles.specialSub}>Desenhos e Canais</Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.adultModeBtn} 
-            onPress={() => setModalAdultPinVisible(true)}
-          >
-            <Text style={styles.specialEmoji}>🔒</Text>
-            <View>
-              <Text style={styles.specialTitleAdult}>Conteúdo +18</Text>
-              <Text style={styles.specialSub}>Protegido por Senha</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* ATALHOS: FAVORITOS E CONTINUAR ASSISTINDO */}
-        <View style={styles.shortcutsRow}>
-          <TouchableOpacity style={styles.shortcutCard}>
-            <Text style={styles.shortcutIcon}>⭐</Text>
-            <Text style={styles.shortcutText}>Favoritos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.shortcutCard}>
-            <Text style={styles.shortcutIcon}>▶️</Text>
-            <Text style={styles.shortcutText}>Continuar Assistindo</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* CANAIS EM DESTAQUE */}
-        <Text style={styles.sectionTitle}>Canais em Destaque</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.destaquesScroll}>
-          {['Premiere 1', 'ESPN Brasil', 'SporTV', 'TNT Sports'].map((canal, index) => (
-            <TouchableOpacity key={index} style={styles.destaqueCard} onPress={() => router.push('/live')}>
-              <View style={styles.liveTag}><Text style={styles.liveTagText}>AO VIVO</Text></View>
-              <Text style={styles.destaqueText}>{canal}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* CENTRAL DE JOGOS: CARROSSEL DE DATAS */}
-        <View style={styles.sectionHeaderContainer}>
-          <Text style={styles.sectionTitle}>⚽ Central de Jogos</Text>
-          <Text style={styles.sectionSub}>Partidas do dia e da semana</Text>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.datesScroll}>
-          {dias.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.dateCard, item.ativo && styles.dateCardActive]}
-              onPress={() => selecionarDia(item.data)}
-            >
-              <Text style={[styles.dateDay, item.ativo && styles.dateTextActive]}>{item.dia}</Text>
-              <Text style={[styles.dateNumber, item.ativo && styles.dateTextActive]}>{item.data}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* LISTA DE JOGOS */}
-        {jogosAtuais.length > 0 ? (
-          jogosAtuais.map((liga, index) => (
-            <View key={index} style={styles.leagueContainer}>
-              <View style={styles.leagueHeader}>
-                <Image source={{ uri: liga.logoCamp }} style={styles.leagueLogo} />
-                <Text style={styles.leagueTitle}>{liga.campeonato}</Text>
-              </View>
-
-              {liga.partidas.map((jogo) => (
-                <View key={jogo.id} style={styles.matchCard}>
-                  <View style={styles.matchTimeCol}>
-                    <Text style={styles.matchTime}>{jogo.horario}</Text>
-                    <Text style={[styles.matchStatus, jogo.status === 'AO VIVO' && { color: '#ef4444' }]}>
-                      {jogo.status}
-                    </Text>
-                  </View>
-
-                  <View style={styles.teamHome}>
-                    <Image source={{ uri: jogo.timeCasa.escudo }} style={styles.teamShield} />
-                    <Text style={styles.teamName} numberOfLines={1}>{jogo.timeCasa.nome}</Text>
-                  </View>
-
-                  <View style={styles.scoreContainer}>
-                    <Text style={styles.scoreText}>{jogo.placar}</Text>
-                  </View>
-
-                  <View style={styles.teamAway}>
-                    <Image source={{ uri: jogo.timeVisitante.escudo }} style={styles.teamShield} />
-                    <Text style={styles.teamName} numberOfLines={1}>{jogo.timeVisitante.nome}</Text>
-                  </View>
-
-                  <View style={styles.channelCol}>
-                    <Text style={styles.channelText} numberOfLines={1}>{jogo.canal.nome}</Text>
-                  </View>
+        {/* ÁREA PRINCIPAL DA DIREITA */}
+        <View style={styles.mainContent}>
+          <View style={styles.topBar}>
+            <View style={{ gap: 2 }}>
+              <Text style={[styles.headerTitle, { color: themeStyles.accent }]}>{themeStyles.title}</Text>
+              <View style={styles.rowAlign}>
+                <View style={styles.userInfoBadge}>
+                  <Ionicons name="person-circle" size={13} color={themeStyles.accent} />
+                  <Text style={styles.userInfoText}>{username}</Text>
                 </View>
-              ))}
+                <View style={styles.userInfoBadge}>
+                  <Ionicons name="key" size={12} color="#000" />
+                  <Text style={[styles.userInfoText, { color: "#000", fontWeight: "900" }]}>{activationCode}</Text>
+                </View>
+                <View style={styles.userInfoBadge}>
+                  <Ionicons name="time" size={12} color={colors.textDim} />
+                  <Text style={styles.userInfoText}>Exp: {expFormatted}</Text>
+                </View>
+              </View>
             </View>
-          ))
-        ) : (
-          <View style={styles.noGamesContainer}>
-            <Text style={styles.noGamesText}>Nenhum jogo programado para esta data.</Text>
+
+            <Pressable onPress={() => router.push("/(tabs)/settings")} style={styles.settingsBtn} focusable={true}>
+              <Ionicons name="settings-outline" size={20} color={themeStyles.accent} />
+            </Pressable>
           </View>
-        )}
 
-      </ScrollView>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 50 }}>
+            {filteredMovies.length > 0 && (
+              <Pressable
+                focusable={true}
+                onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/movie/[id]", params: { id: String(filteredMovies[0].stream_id) } }), isAdultContent(filteredMovies[0].name))}
+                style={styles.heroBanner}
+              >
+                <Image source={{ uri: filteredMovies[0].stream_icon }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                <View style={styles.heroOverlay}>
+                  <View style={[styles.heroBadge, { backgroundColor: themeStyles.accent }]}><Text style={styles.heroBadgeText}>⭐ DESTAQUE</Text></View>
+                  <Text style={styles.heroTitle} numberOfLines={1}>{filteredMovies[0].name}</Text>
+                </View>
+              </Pressable>
+            )}
 
-      {/* MODAL DE SENHA PARA CONTEÚDO ADULTO */}
-      <Modal animationType="fade" transparent={true} visible={modalAdultPinVisible} onRequestClose={() => setModalAdultPinVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>🔒 Área Restrita (+18)</Text>
-            <Text style={styles.modalSub}>Digite o PIN de segurança para acessar:</Text>
+            {filteredMovies.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🎬 FILMES EM DESTAQUE</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersRow}>
+                  {filteredMovies.slice(0, 12).map((item) => (
+                    <Pressable
+                      key={item.stream_id}
+                      focusable={true}
+                      onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } }), isAdultContent(item.name))}
+                      style={styles.posterCard}
+                    >
+                      <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                      <View style={styles.posterGradient}>
+                        <Text style={styles.posterTitle} numberOfLines={2}>{item.name}</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {filteredSeries.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>🍿 SÉRIES RECENTES</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersRow}>
+                  {filteredSeries.slice(0, 12).map((s) => (
+                    <Pressable
+                      key={s.series_id}
+                      focusable={true}
+                      onPress={() => handleOpenItemWithCheck(() => router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } }), isAdultContent(s.name))}
+                      style={styles.posterCard}
+                    >
+                      <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                      <View style={styles.posterGradient}>
+                        <Text style={styles.posterTitle} numberOfLines={2}>{s.name}</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <View style={{ gap: 8 }}>
+              <Text style={[styles.sectionLabel, { color: themeStyles.accent }]}>📺 CANAIS AO VIVO EM DESTAQUE</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                {filteredChannels.slice(0, 12).map((ch, idx) => (
+                  <Pressable
+                    key={ch.stream_id}
+                    focusable={true}
+                    onPress={() => handleOpenItemWithCheck(() => handlePlayLiveChannel(ch, idx), isAdultContent(ch.name))}
+                    style={styles.liveThumbCard}
+                  >
+                    {ch.stream_icon ? (
+                      <Image source={{ uri: ch.stream_icon }} style={styles.fullSize} contentFit="contain" cachePolicy="memory-disk" transition={200} />
+                    ) : (
+                      <Ionicons name="tv" size={28} color="#FFF" />
+                    )}
+                    <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>AO VIVO</Text></View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+
+      <Modal visible={showPinModal} animationType="fade" transparent={true}>
+        <View style={styles.modalBg}>
+          <View style={styles.pinCard}>
+            <Ionicons name="lock-closed" size={36} color="#EF4444" />
+            <Text style={styles.pinTitle}>Conteúdo Protegido (+18)</Text>
+            <Text style={styles.pinSub}>Digite a senha PIN (padrão: 0000)</Text>
             <TextInput
-              style={styles.pinInput}
-              placeholder="PIN"
-              placeholderTextColor="#71717a"
-              secureTextEntry={true}
+              secureTextEntry
               keyboardType="numeric"
               maxLength={4}
-              value={pinAdulto}
-              onChangeText={setPinAdulto}
+              placeholder="••••"
+              placeholderTextColor="#777"
+              value={enteredPin}
+              onChangeText={setEnteredPin}
+              style={styles.pinInput}
             />
-            {erroPinAdulto && <Text style={styles.errorText}>PIN incorreto. Acesso negado.</Text>}
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={[styles.modalBtn, styles.cancelBtn]} onPress={() => setModalAdultPinVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, styles.confirmAdultBtn]} onPress={verificarPinAdulto}>
-                <Text style={styles.confirmBtnText}>Entrar</Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 10 }}>
+              <Pressable onPress={() => { setShowPinModal(false); setEnteredPin(""); }} style={[styles.pinBtn, { backgroundColor: "#262936" }]}>
+                <Text style={{ color: "#FFF", fontWeight: "800" }}>CANCELAR</Text>
+              </Pressable>
+              <Pressable onPress={verifyPinAndOpen} style={[styles.pinBtn, { backgroundColor: "#EF4444" }]}>
+                <Text style={{ color: "#FFF", fontWeight: "900" }}>LIBERAR</Text>
+              </Pressable>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* MODAL DE CONFIGURAÇÕES */}
-      <Modal animationType="slide" transparent={true} visible={modalConfigVisible} onRequestClose={() => setModalConfigVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Configurações</Text>
-            
-            <View style={styles.configItem}>
-              <View>
-                <Text style={styles.configText}>Bloqueio de Conteúdo Adulto</Text>
-                <Text style={styles.configSubText}>Exigir PIN na tela inicial</Text>
-              </View>
-              <Switch
-                trackColor={{ false: '#27272a', true: '#d4af37' }}
-                thumbColor={bloqueioAdulto ? '#ffffff' : '#a1a1aa'}
-                onValueChange={() => setBloqueioAdulto(!bloqueioAdulto)}
-                value={bloqueioAdulto}
-              />
+      <Modal visible={showProfileSheet} animationType="slide" transparent={true}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheetContainer, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeaderRow}>
+              <Text style={styles.sheetTitle}>Quem está assistindo?</Text>
+              <Pressable onPress={() => setShowProfileSheet(false)} style={styles.sheetCloseBtn}>
+                <Ionicons name="close" size={20} color="#FFF" />
+              </Pressable>
             </View>
 
-            <View style={styles.accountInfoBox}>
-              <Text style={styles.accountTitle}>Informações da Conta</Text>
-              <Text style={styles.accountDetail}>Nome: {dadosUsuario.nome}</Text>
-              <Text style={styles.accountDetail}>Usuário: {dadosUsuario.usuario}</Text>
-              <Text style={styles.accountDetail}>Código: {dadosUsuario.codigoAtivacao}</Text>
-              <Text style={styles.accountDetail}>Expiração: {dadosUsuario.expiracao}</Text>
-            </View>
-
-            <TouchableOpacity style={styles.closeButton} onPress={() => setModalConfigVisible(false)}>
-              <Text style={styles.closeButtonText}>Fechar</Text>
-            </TouchableOpacity>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sheetProfilesRow}>
+              {profiles.map((p) => (
+                <Pressable
+                  key={p.id}
+                  onPress={() => handleSelectProfile(p)}
+                  style={styles.sheetProfileMiniItem}
+                >
+                  <View style={[styles.sheetMiniAvatar, { backgroundColor: p.color, borderWidth: currentProfile.id === p.id ? 3 : 0, borderColor: "#FFF" }]}>
+                    <Ionicons name={p.icon as any} size={28} color="#FFF" />
+                    {p.type === "kids" && <View style={styles.kidsTagBadge}><Text style={styles.kidsTagText}>KIDS</Text></View>}
+                    {p.type === "adult" && <View style={styles.adultTagBadge}><Text style={styles.adultTagText}>+18</Text></View>}
+                  </View>
+                  <Text style={styles.sheetMiniName} numberOfLines={1}>{p.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -321,85 +472,60 @@ export default function IndexScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#09090b' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingTop: 40, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#1f1f23', backgroundColor: '#0d0d0f' },
-  userBox: { flex: 1 },
-  welcomeText: { color: '#a1a1aa', fontSize: 11 },
-  highlightText: { color: '#d4af37', fontWeight: 'bold' },
-  codeText: { color: '#71717a', fontSize: 10, marginTop: 2 },
-  highlightCode: { color: '#fbbf24', fontWeight: '600' },
-  headerRight: { flexDirection: 'row', alignItems: 'center' },
-  badgeContainer: { backgroundColor: '#18181b', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, borderWidth: 1, borderColor: '#27272a', marginRight: 8 },
-  badgeText: { color: '#fbbf24', fontSize: 9, fontWeight: '600' },
-  gearButton: { padding: 6, backgroundColor: '#18181b', borderRadius: 6, borderWidth: 1, borderColor: '#27272a' },
-  gearIcon: { fontSize: 14 },
-  navBar: { flexDirection: 'row', backgroundColor: '#121215', paddingVertical: 6, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: '#1f1f23' },
-  navItem: { flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 6 },
-  navItemActive: { backgroundColor: '#1f1f23', borderBottomWidth: 2, borderBottomColor: '#d4af37' },
-  navText: { color: '#a1a1aa', fontSize: 11, fontWeight: '500' },
-  navTextActive: { color: '#d4af37', fontWeight: 'bold' },
-  scrollContent: { padding: 12, paddingBottom: 40 },
-  specialModesRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  kidsModeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e293b', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12, marginRight: 6, borderWidth: 1, borderColor: '#3b82f6' },
-  adultModeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#181215', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12, marginLeft: 6, borderWidth: 1, borderColor: '#ef4444' },
-  specialEmoji: { fontSize: 20, marginRight: 8 },
-  specialTitleKids: { color: '#38bdf8', fontSize: 12, fontWeight: 'bold' },
-  specialTitleAdult: { color: '#ef4444', fontSize: 12, fontWeight: 'bold' },
-  specialSub: { color: '#a1a1aa', fontSize: 9 },
-  shortcutsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
-  shortcutCard: { flex: 1, backgroundColor: '#121215', borderRadius: 8, paddingVertical: 10, alignItems: 'center', marginHorizontal: 4, borderWidth: 1, borderColor: '#1f1f23' },
-  shortcutIcon: { fontSize: 16, marginBottom: 4 },
-  shortcutText: { color: '#d4af37', fontSize: 11, fontWeight: '600' },
-  sectionTitle: { color: '#ffffff', fontSize: 15, fontWeight: 'bold', marginBottom: 8 },
-  sectionHeaderContainer: { marginTop: 14, marginBottom: 8 },
-  sectionSub: { color: '#71717a', fontSize: 11 },
-  destaquesScroll: { marginBottom: 10 },
-  destaqueCard: { width: 110, height: 65, backgroundColor: '#121215', borderRadius: 8, marginRight: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#27272a', position: 'relative' },
-  liveTag: { position: 'absolute', top: 4, left: 4, backgroundColor: '#ef4444', paddingHorizontal: 3, paddingVertical: 1, borderRadius: 2 },
-  liveTagText: { color: '#fff', fontSize: 7, fontWeight: 'bold' },
-  destaqueText: { color: '#f4f4f5', fontSize: 11, fontWeight: '600', marginTop: 8 },
-  datesScroll: { marginBottom: 12 },
-  dateCard: { width: 55, height: 55, backgroundColor: '#121215', borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 6, borderWidth: 1, borderColor: '#27272a' },
-  dateCardActive: { backgroundColor: '#d4af37', borderColor: '#fbbf24' },
-  dateDay: { color: '#a1a1aa', fontSize: 10, fontWeight: 'bold' },
-  dateNumber: { color: '#ffffff', fontSize: 12, fontWeight: 'bold' },
-  dateTextActive: { color: '#000000' },
-  leagueContainer: { marginBottom: 14, backgroundColor: '#121215', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#1f1f23' },
-  leagueHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#1f1f23' },
-  leagueLogo: { width: 18, height: 18, marginRight: 6, resizeMode: 'contain' },
-  leagueTitle: { color: '#d4af37', fontSize: 12, fontWeight: 'bold' },
-  matchCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#18181b', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 6, marginBottom: 6, borderWidth: 1, borderColor: '#27272a' },
-  matchTimeCol: { width: 42, alignItems: 'center' },
-  matchTime: { color: '#ffffff', fontSize: 11, fontWeight: 'bold' },
-  matchStatus: { color: '#71717a', fontSize: 8, fontWeight: '600' },
-  teamHome: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 4 },
-  teamAway: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 4 },
-  teamShield: { width: 24, height: 24, marginHorizontal: 4, resizeMode: 'contain' },
-  teamName: { color: '#e4e4e7', fontSize: 11, fontWeight: '500', maxWidth: 60 },
-  scoreContainer: { width: 38, alignItems: 'center' },
-  scoreText: { color: '#d4af37', fontSize: 11, fontWeight: 'bold' },
-  channelCol: { width: 48, alignItems: 'center', borderLeftWidth: 1, borderLeftColor: '#27272a', paddingLeft: 4 },
-  channelText: { color: '#94a3b8', fontSize: 9, fontWeight: 'bold' },
-  noGamesContainer: { padding: 20, alignItems: 'center' },
-  noGamesText: { color: '#71717a', fontSize: 12 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '85%', backgroundColor: '#121215', borderRadius: 12, padding: 20, borderWidth: 1, borderColor: '#27272a' },
-  modalTitle: { color: '#ffffff', fontSize: 16, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
-  modalSub: { color: '#a1a1aa', fontSize: 11, textAlign: 'center', marginBottom: 14 },
-  pinInput: { width: '100%', backgroundColor: '#18181b', borderRadius: 8, padding: 10, color: '#ffffff', fontSize: 16, textAlign: 'center', borderWidth: 1, borderColor: '#3f3f46', marginBottom: 10, letterSpacing: 4 },
-  errorText: { color: '#ef4444', fontSize: 11, textAlign: 'center', marginBottom: 10 },
-  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 6 },
-  modalBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center', marginHorizontal: 4 },
-  cancelBtn: { backgroundColor: '#27272a' },
-  cancelBtnText: { color: '#a1a1aa', fontWeight: 'bold', fontSize: 12 },
-  confirmAdultBtn: { backgroundColor: '#ef4444' },
-  confirmBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 12 },
-  configItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1f1f23', marginBottom: 14 },
-  configText: { color: '#e4e4e7', fontSize: 13, fontWeight: '600' },
-  configSubText: { color: '#71717a', fontSize: 10 },
-  accountInfoBox: { backgroundColor: '#18181b', borderRadius: 8, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: '#27272a' },
-  accountTitle: { color: '#d4af37', fontSize: 12, fontWeight: 'bold', marginBottom: 6 },
-  accountDetail: { color: '#a1a1aa', fontSize: 11, marginBottom: 3 },
-  closeButton: { backgroundColor: '#d4af37', borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
-  closeButtonText: { color: '#000000', fontWeight: 'bold', fontSize: 13 },
+  root: { flex: 1 },
+  layoutRoot: { flex: 1, flexDirection: "row" },
+  sidebar: { width: 72, paddingVertical: 18, alignItems: "center", justifyContent: "flex-start", gap: 14, borderRightWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
+  sidebarIconBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+  sidebarProfileBox: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#1E293B", alignItems: "center", justifyContent: "center", borderWidth: 2, gap: 2, marginTop: 8 },
+  sidebarProfileName: { color: "#FFF", fontSize: 8, fontWeight: "700" },
+  sidebarExitBtn: { alignItems: "center", gap: 2, paddingBottom: 10 },
+  sidebarExitText: { color: "#EF4444", fontSize: 8, fontWeight: "900" },
+
+  mainContent: { flex: 1, paddingHorizontal: 16, paddingTop: 14, gap: 14 },
+  topBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  headerTitle: { fontSize: 15, fontWeight: "900", letterSpacing: 0.6 },
+  rowAlign: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  userInfoBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.08)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  userInfoText: { color: "#FFF", fontSize: 9.5, fontWeight: "700" },
+  settingsBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+
+  heroBanner: { width: "100%", height: 150, borderRadius: 16, overflow: "hidden", position: "relative", backgroundColor: "#1A1D29" },
+  heroOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.82)", padding: 12, gap: 4 },
+  heroBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: "flex-start" },
+  heroBadgeText: { color: "#000", fontSize: 8.5, fontWeight: "900" },
+  heroTitle: { color: "#FFF", fontSize: 15, fontWeight: "900" },
+
+  sectionLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.8 },
+  postersRow: { gap: 12, paddingVertical: 2 },
+  posterCard: { width: 120, height: 180, borderRadius: 14, overflow: "hidden", position: "relative", backgroundColor: "#1A1D29" },
+  posterGradient: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.8)", padding: 6 },
+  posterTitle: { color: "#FFF", fontSize: 10.5, fontWeight: "900" },
+
+  liveThumbCard: { width: 105, height: 68, borderRadius: 10, backgroundColor: "#1E293B", overflow: "hidden", position: "relative", alignItems: "center", justifyContent: "center" },
+  liveBadge: { position: "absolute", top: 3, left: 3, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 },
+  liveBadgeText: { color: "#FFF", fontSize: 6.5, fontWeight: "900" },
+
+  fullSize: { width: "100%", height: "100%" },
+
+  modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", padding: 20 },
+  pinCard: { width: "100%", maxWidth: 360, backgroundColor: "#181818", borderRadius: 20, padding: 22, alignItems: "center", gap: 12, borderWidth: 1.5, borderColor: "#EF4444" },
+  pinTitle: { color: "#FFF", fontSize: 18, fontWeight: "800" },
+  pinSub: { color: "#9CA3AF", fontSize: 12, textAlign: "center" },
+  pinInput: { width: "100%", height: 48, backgroundColor: "#262626", borderRadius: 10, paddingHorizontal: 14, color: "#FFF", fontSize: 22, textAlign: "center", letterSpacing: 8 },
+  pinBtn: { flex: 1, height: 40, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+
+  sheetOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "flex-end" },
+  sheetContainer: { backgroundColor: "#181818", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 18, paddingTop: 10, gap: 14 },
+  sheetHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: "#4B5563", alignSelf: "center" },
+  sheetHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sheetTitle: { color: "#FFF", fontSize: 18, fontWeight: "800" },
+  sheetCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: "#2B2B2B", alignItems: "center", justifyContent: "center" },
+  sheetProfilesRow: { gap: 14, paddingVertical: 10 },
+  sheetProfileMiniItem: { alignItems: "center", gap: 6, width: 72 },
+  sheetMiniAvatar: { width: 64, height: 64, borderRadius: 16, alignItems: "center", justifyContent: "center", position: "relative" },
+  sheetMiniName: { color: "#E5E7EB", fontSize: 11, fontWeight: "600" },
+  kidsTagBadge: { position: "absolute", bottom: 2, right: 2, backgroundColor: "#1E88E5", paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 },
+  kidsTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
+  adultTagBadge: { position: "absolute", bottom: 2, right: 2, backgroundColor: "#EF4444", paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 },
+  adultTagText: { color: "#FFF", fontSize: 7, fontWeight: "900" },
 });
