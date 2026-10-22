@@ -114,6 +114,10 @@ jobs:
           sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' frontend/android/app/src/main/AndroidManifest.xml
           grep -n "usesCleartextTraffic" frontend/android/app/src/main/AndroidManifest.xml
 
+      - name: Instalar NDK correto e ferramentas do Android
+        run: |
+          echo "y" | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "ndk;27.1.12297006"
+
       - name: Dar permissão ao executável Gradle
         run: |
           chmod +x frontend/android/gradlew
