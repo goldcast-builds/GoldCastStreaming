@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  Modal,
+  Switch,
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -32,7 +34,7 @@ const JOGOS_POR_DATA = {
           timeCasa: { nome: 'Flamengo', escudo: 'https://upload.wikimedia.org/wikipedia/commons/2/2e/Flamengo_braz_logo.svg' },
           placar: '2 x 1',
           timeVisitante: { nome: 'River Plate', escudo: 'https://upload.wikimedia.org/wikipedia/commons/c/cc/CA_River_Plate_logo_%282022%29.svg' },
-          canal: { nome: 'ESPN', icone: 'https://upload.wikimedia.org/wikipedia/commons/2/2f/ESPN_wordmark.svg' },
+          canal: { nome: 'ESPN' },
         },
         {
           id: '2',
@@ -41,7 +43,7 @@ const JOGOS_POR_DATA = {
           timeCasa: { nome: 'Palmeiras', escudo: 'https://upload.wikimedia.org/wikipedia/commons/1/10/Palmeiras_logo.svg' },
           placar: '0 x 0',
           timeVisitante: { nome: 'Boca Juniors', escudo: 'https://upload.wikimedia.org/wikipedia/commons/3/3a/Boca_Juniors_logo_1970.svg' },
-          canal: { nome: 'Paramount+', icone: 'https://upload.wikimedia.org/wikipedia/commons/5/54/Paramount%2B_Logo.svg' },
+          canal: { nome: 'Paramount+' },
         }
       ]
     },
@@ -56,24 +58,7 @@ const JOGOS_POR_DATA = {
           timeCasa: { nome: 'São Paulo', escudo: 'https://upload.wikimedia.org/wikipedia/commons/6/6f/Sao_Paulo_FC_%282020%29.svg' },
           placar: '1 x 3',
           timeVisitante: { nome: 'Corinthians', escudo: 'https://upload.wikimedia.org/wikipedia/commons/5/5e/Corinthians_simbolo.svg' },
-          canal: { nome: 'Premiere', icone: 'https://upload.wikimedia.org/wikipedia/commons/3/38/Premiere_2020.svg' },
-        }
-      ]
-    }
-  ],
-  '22/10': [
-    {
-      campeonato: 'UEFA Champions League',
-      logoCamp: 'https://upload.wikimedia.org/wikipedia/commons/f/f1/UEFA_Champions_League_Logo.svg',
-      partidas: [
-        {
-          id: '4',
-          horario: '16:00',
-          status: 'AMANHÃ',
-          timeCasa: { nome: 'Real Madrid', escudo: 'https://upload.wikimedia.org/wikipedia/commons/5/56/Real_Madrid_CF.svg' },
-          placar: 'VS',
-          timeVisitante: { nome: 'Manchester City', escudo: 'https://upload.wikimedia.org/wikipedia/commons/e/eb/Manchester_City_FC_badge.svg' },
-          canal: { nome: 'TNT', icone: 'https://upload.wikimedia.org/wikipedia/commons/c/ce/TNT_logo_2016.svg' },
+          canal: { nome: 'Premiere' },
         }
       ]
     }
@@ -83,6 +68,16 @@ const JOGOS_POR_DATA = {
 export default function IndexScreen({ navigation }) {
   const [dataSelecionada, setDataSelecionada] = useState('21/10');
   const [dias, setDias] = useState(DIAS_SEMANA);
+  const [modalConfigVisible, setModalConfigVisible] = useState(false);
+  const [bloqueioAdulto, setBloqueioAdulto] = useState(true);
+
+  // Dados da Conta / Ativação
+  const dadosUsuario = {
+    nome: 'Anderson da Silva',
+    usuario: 'mavi24',
+    codigoAtivacao: 'GOLDCAST-ASN-0310',
+    expiracao: '08/11/2026',
+  };
 
   const selecionarDia = (data) => {
     setDataSelecionada(data);
@@ -93,18 +88,24 @@ export default function IndexScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* HEADER SUPERIOR PREMIUM */}
+      {/* HEADER SUPERIOR COM USUÁRIO, ATIVAÇÃO E ENGRENAGEM */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.welcomeText}>Bem-vindo,</Text>
-          <Text style={styles.userName}>GoldCast VIP</Text>
+        <View style={styles.userBox}>
+          <Text style={styles.welcomeText}>Usuário: <Text style={styles.highlightText}>{dadosUsuario.usuario}</Text></Text>
+          <Text style={styles.codeText}>Ativação: <Text style={styles.highlightCode}>{dadosUsuario.codigoAtivacao}</Text></Text>
         </View>
-        <View style={styles.badgeContainer}>
-          <Text style={styles.badgeText}>EXP: 08/11/2026</Text>
+
+        <View style={styles.headerRight}>
+          <View style={styles.badgeContainer}>
+            <Text style={styles.badgeText}>EXP: {dadosUsuario.expiracao}</Text>
+          </View>
+          <TouchableOpacity style={styles.gearButton} onPress={() => setModalConfigVisible(true)}>
+            <Text style={styles.gearIcon}>⚙️</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* BARRA DE NAVEGAÇÃO ENTRE AS TELAS */}
+      {/* BARRA DE NAVEGAÇÃO ENTRE AS TELAS (Ligando Live, Movies e Series) */}
       <View style={styles.navBar}>
         <TouchableOpacity style={[styles.navItem, styles.navItemActive]}>
           <Text style={[styles.navText, styles.navTextActive]}>Início & Futebol</Text>
@@ -122,11 +123,23 @@ export default function IndexScreen({ navigation }) {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
+        {/* ATALHOS RÁPIDOS: FAVORITOS E CONTINUAR ASSISTINDO */}
+        <View style={styles.shortcutsRow}>
+          <TouchableOpacity style={styles.shortcutCard}>
+            <Text style={styles.shortcutIcon}>⭐</Text>
+            <Text style={styles.shortcutText}>Favoritos</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.shortcutCard}>
+            <Text style={styles.shortcutIcon}>▶️</Text>
+            <Text style={styles.shortcutText}>Continuar Assistindo</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* CANAIS EM DESTAQUE */}
         <Text style={styles.sectionTitle}>Canais em Destaque</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.destaquesScroll}>
           {['Premiere 1', 'ESPN Brasil', 'SporTV', 'TNT Sports'].map((canal, index) => (
-            <TouchableOpacity key={index} style={styles.destaqueCard}>
+            <TouchableOpacity key={index} style={styles.destaqueCard} onPress={() => navigation.navigate('Live')}>
               <View style={styles.liveTag}><Text style={styles.liveTagText}>AO VIVO</Text></View>
               <Text style={styles.destaqueText}>{canal}</Text>
             </TouchableOpacity>
@@ -162,8 +175,7 @@ export default function IndexScreen({ navigation }) {
               </View>
 
               {liga.partidas.map((jogo) => (
-                <TouchableOpacity key={jogo.id} style={styles.matchCard} activeOpacity={0.8}>
-                  {/* Horário e Status */}
+                <View key={jogo.id} style={styles.matchCard}>
                   <View style={styles.matchTimeCol}>
                     <Text style={styles.matchTime}>{jogo.horario}</Text>
                     <Text style={[styles.matchStatus, jogo.status === 'AO VIVO' && { color: '#ef4444' }]}>
@@ -171,28 +183,24 @@ export default function IndexScreen({ navigation }) {
                     </Text>
                   </View>
 
-                  {/* Time Casa (Escudo Maior) */}
                   <View style={styles.teamHome}>
                     <Image source={{ uri: jogo.timeCasa.escudo }} style={styles.teamShield} />
                     <Text style={styles.teamName} numberOfLines={1}>{jogo.timeCasa.nome}</Text>
                   </View>
 
-                  {/* Placar / VS */}
                   <View style={styles.scoreContainer}>
                     <Text style={styles.scoreText}>{jogo.placar}</Text>
                   </View>
 
-                  {/* Time Visitante (Escudo Maior) */}
                   <View style={styles.teamAway}>
                     <Image source={{ uri: jogo.timeVisitante.escudo }} style={styles.teamShield} />
                     <Text style={styles.teamName} numberOfLines={1}>{jogo.timeVisitante.nome}</Text>
                   </View>
 
-                  {/* Canal de Transmissão */}
                   <View style={styles.channelCol}>
                     <Text style={styles.channelText} numberOfLines={1}>{jogo.canal.nome}</Text>
                   </View>
-                </TouchableOpacity>
+                </View>
               ))}
             </View>
           ))
@@ -203,6 +211,48 @@ export default function IndexScreen({ navigation }) {
         )}
 
       </ScrollView>
+
+      {/* MODAL DE CONFIGURAÇÕES E CONTROLE PARENTAL */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalConfigVisible}
+        onRequestClose={() => setModalConfigVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Configurações</Text>
+            
+            <View style={styles.configItem}>
+              <View>
+                <Text style={styles.configText}>Bloqueio de Conteúdo Adulto</Text>
+                <Text style={styles.configSubText}>Exibir PIN de segurança para liberar</Text>
+              </View>
+              <Switch
+                trackColor={{ false: '#27272a', true: '#d4af37' }}
+                thumbColor={bloqueioAdulto ? '#ffffff' : '#a1a1aa'}
+                onValueChange={() => setBloqueioAdulto(!bloqueioAdulto)}
+                value={bloqueioAdulto}
+              />
+            </View>
+
+            <View style={styles.accountInfoBox}>
+              <Text style={styles.accountTitle}>Informações da Conta</Text>
+              <Text style={styles.accountDetail}>Nome: {dadosUsuario.nome}</Text>
+              <Text style={styles.accountDetail}>Usuário: {dadosUsuario.usuario}</Text>
+              <Text style={styles.accountDetail}>Código: {dadosUsuario.codigoAtivacao}</Text>
+              <Text style={styles.accountDetail}>Expiração: {dadosUsuario.expiracao}</Text>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.closeButton} 
+              onPress={() => setModalConfigVisible(false)}
+            >
+              <Text style={styles.closeButtonText}>Fechar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -216,33 +266,60 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingTop: 45,
-    paddingBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#1f1f23',
+    backgroundColor: '#0d0d0f',
+  },
+  userBox: {
+    flex: 1,
   },
   welcomeText: {
     color: '#a1a1aa',
     fontSize: 11,
   },
-  userName: {
+  highlightText: {
     color: '#d4af37',
-    fontSize: 15,
     fontWeight: 'bold',
   },
+  codeText: {
+    color: '#71717a',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  highlightCode: {
+    color: '#fbbf24',
+    fontWeight: '600',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   badgeContainer: {
-    backgroundColor: '#121215',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: '#18181b',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#27272a',
+    marginRight: 8,
+  },
+  badgeText: {
+    color: '#fbbf24',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  gearButton: {
+    padding: 6,
+    backgroundColor: '#18181b',
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#27272a',
   },
-  badgeText: {
-    color: '#fbbf24',
-    fontSize: 10,
-    fontWeight: '600',
+  gearIcon: {
+    fontSize: 14,
   },
   navBar: {
     flexDirection: 'row',
@@ -275,6 +352,30 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 12,
     paddingBottom: 40,
+  },
+  shortcutsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  shortcutCard: {
+    flex: 1,
+    backgroundColor: '#121215',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#1f1f23',
+  },
+  shortcutIcon: {
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  shortcutText: {
+    color: '#d4af37',
+    fontSize: 11,
+    fontWeight: '600',
   },
   sectionTitle: {
     color: '#ffffff',
@@ -462,5 +563,74 @@ const styles = StyleSheet.create({
   noGamesText: {
     color: '#71717a',
     fontSize: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: '#121215',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  modalTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  configItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1f1f23',
+    marginBottom: 14,
+  },
+  configText: {
+    color: '#e4e4e7',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  configSubText: {
+    color: '#71717a',
+    fontSize: 10,
+  },
+  accountInfoBox: {
+    backgroundColor: '#18181b',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  accountTitle: {
+    color: '#d4af37',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  accountDetail: {
+    color: '#a1a1aa',
+    fontSize: 11,
+    marginBottom: 3,
+  },
+  closeButton: {
+    backgroundColor: '#d4af37',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#000000',
+    fontWeight: 'bold',
+    fontSize: 13,
   },
 });
