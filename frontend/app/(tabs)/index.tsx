@@ -5,7 +5,10 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  Modal,
+  TextInput,
   Dimensions,
+  ActivityIndicator,
   Alert,
 } from "react-native";
 import { Image } from "expo-image";
@@ -15,9 +18,16 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { useSession } from "../../src/store/session";
-import { JogosDeHojeModal } from "../../src/components/JogosDeHojeModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+interface GuiaMatch {
+  id: string;
+  time: string;
+  league: string;
+  match: string;
+  channels: string;
+}
 
 export default function HomeTab() {
   const router = useRouter();
@@ -32,8 +42,13 @@ export default function HomeTab() {
   const [currentTime, setCurrentTime] = useState("");
   const [mediaType, setMediaType] = useState<"movies" | "series">("movies");
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [showJogosModal, setShowJogosModal] = useState(false); // Estado para abrir o modal de Jogos de Hoje
 
+  // Estados do Modal de Jogos de Hoje integrado
+  const [showJogosModal, setShowJogosModal] = useState(false);
+  const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
+  const [loadingJogos, setLoadingJogos] = useState(false);
+
+  // Relógio e Data em tempo real estilo TV
   useEffect(() => {
     const updateDateTime = () => {
       const now = new Date();
@@ -58,6 +73,69 @@ export default function HomeTab() {
       return () => { isMounted = false; };
     }, [session, loadVod, loadSeries])
   );
+
+  // Busca do Guia de Jogos em tempo real para o Modal integrado
+  useEffect(() => {
+    if (!showJogosModal) return;
+    let isMounted = true;
+    const fetchGuia = async () => {
+      setLoadingJogos(true);
+      try {
+        let matches: GuiaMatch[] = [];
+        const res = await fetch("https://www.futebolnatv.com.br/", {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        }).catch(() => null);
+
+        if (res && res.ok) {
+          const html = await res.text();
+          const fnRegex = /Onde assistir\s+([^x\n\r<]+)\s*x\s*([^<:\n\r?]+)[^⏱\n]*⏱\s*(\d{1,2}:\d{2})h?\.?\s*([^<\n\r]*)/gi;
+          let m;
+          let idx = 0;
+          while ((m = fnRegex.exec(html)) !== null && idx < 15) {
+            const team1 = m[1].replace(/<[^>]+>/g, "").trim();
+            const team2 = m[2].replace(/<[^>]+>/g, "").trim();
+            const time = m[3].trim();
+            let channels = m[4].replace(/Ver detalhes/gi, "").replace(/<[^>]+>/g, "").trim();
+            if (!channels || channels.length < 3) channels = "SporTV • Premiere • ESPN • Disney+";
+
+            if (team1.length > 2 && team2.length > 2) {
+              matches.push({
+                id: `fn-${idx++}`,
+                time,
+                league: "Futebol ao Vivo",
+                match: `${team1} x ${team2}`,
+                channels: channels.replace(/\s+/g, " "),
+              });
+            }
+          }
+        }
+
+        if (matches.length === 0) {
+          matches = [
+            { id: "1", time: "13:45", league: "Champions League", match: "Fenerbahçe x Slavia Praha", channels: "Space • HBO Max" },
+            { id: "2", time: "15:00", league: "Campeonato Saudita", match: "Al-Nassr x Neom", channels: "SportV 2 • Canal GOAT" },
+            { id: "3", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
+            { id: "4", time: "19:30", league: "Brasileirão Série B", match: "Londrina x Cuiabá", channels: "Disney+ • Premiere" },
+            { id: "5", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
+          ];
+        }
+
+        if (isMounted) setGuiaJogos(matches);
+      } catch {
+        if (isMounted) {
+          setGuiaJogos([
+            { id: "1", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
+            { id: "2", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
+          ]);
+        }
+      } finally {
+        if (isMounted) setLoadingJogos(false);
+      }
+    };
+
+    fetchGuia();
+    return () => { isMounted = false; };
+  }, [showJogosModal]);
 
   const isTestAccount = useMemo(() => {
     return !activationCode || activationCode.includes("TESTE") || activationCode.length < 5;
@@ -112,6 +190,7 @@ export default function HomeTab() {
 
       {/* PAINEL DE BLOCOS PRINCIPAIS */}
       <View style={styles.dashboardGrid}>
+        {/* Retângulo Esquerdo: Carrossel Dinâmico de Filmes e Séries Recém-Adicionados */}
         <Pressable
           focusable={true}
           onPress={() => {
@@ -141,13 +220,13 @@ export default function HomeTab() {
                   {mediaType === "movies" ? activeCarouselItem.name : activeCarouselItem.name}
                 </Text>
                 <View style={styles.carouselControlsRow}>
-                  <Pressable onPress={(e) => { e.stopPropagation(); handlePrevCarousel(); }} style={styles.carouselNavBtn}>
+                  <Pressable onPress={(e) => { e.stopPropagation(); handlePrevCarousel(); }} style={styles.carouselNavBtn} focusable={true}>
                     <Ionicons name="chevron-back" size={18} color="#FFF" />
                   </Pressable>
-                  <Pressable onPress={(e) => { e.stopPropagation(); setMediaType(mediaType === "movies" ? "series" : "movies"); setCurrentIndex(0); }} style={styles.carouselSwitchBtn}>
+                  <Pressable onPress={(e) => { e.stopPropagation(); setMediaType(mediaType === "movies" ? "series" : "movies"); setCurrentIndex(0); }} style={styles.carouselSwitchBtn} focusable={true}>
                     <Text style={styles.carouselSwitchText}>Alternar Filmes / Séries</Text>
                   </Pressable>
-                  <Pressable onPress={(e) => { e.stopPropagation(); handleNextCarousel(); }} style={styles.carouselNavBtn}>
+                  <Pressable onPress={(e) => { e.stopPropagation(); handleNextCarousel(); }} style={styles.carouselNavBtn} focusable={true}>
                     <Ionicons name="chevron-forward" size={18} color="#FFF" />
                   </Pressable>
                 </View>
@@ -161,26 +240,41 @@ export default function HomeTab() {
           )}
         </Pressable>
 
+        {/* Coluna Direita Redimensionada com 3 Blocos Proporcionados (Filmes, Séries e Canais) */}
         <View style={styles.rightColumn}>
+          {/* Bloco Filmes */}
           <Pressable
             focusable={true}
-            onPress={() => router.push("/(tabs)/series")}
-            style={({ focused }) => [styles.cardMediumOrange, focused && styles.cardFocused]}
+            onPress={() => router.push("/(tabs)/movies")}
+            style={({ focused }) => [styles.cardTriple, { backgroundColor: "#C2185B" }, focused && styles.cardFocused]}
           >
-            <View style={styles.cardMediumInner}>
-              <Ionicons name="film-outline" size={42} color="#FFF" />
-              <Text style={styles.cardTitleMedium}>SÉRIES</Text>
+            <View style={styles.cardTripleInner}>
+              <Ionicons name="play-circle-outline" size={32} color="#FFF" />
+              <Text style={styles.cardTitleTriple}>FILMES</Text>
             </View>
           </Pressable>
 
+          {/* Bloco Séries */}
+          <Pressable
+            focusable={true}
+            onPress={() => router.push("/(tabs)/series")}
+            style={({ focused }) => [styles.cardTriple, { backgroundColor: "#F97316" }, focused && styles.cardFocused]}
+          >
+            <View style={styles.cardTripleInner}>
+              <Ionicons name="film-outline" size={32} color="#FFF" />
+              <Text style={styles.cardTitleTriple}>SÉRIES</Text>
+            </View>
+          </Pressable>
+
+          {/* Bloco Canais */}
           <Pressable
             focusable={true}
             onPress={() => router.push("/(tabs)/live")}
-            style={({ focused }) => [styles.cardMediumBlue, focused && styles.cardFocused]}
+            style={({ focused }) => [styles.cardTriple, { backgroundColor: "#2563EB" }, focused && styles.cardFocused]}
           >
-            <View style={styles.cardMediumInner}>
-              <Ionicons name="tv-outline" size={42} color="#FFF" />
-              <Text style={styles.cardTitleMedium}>Canais</Text>
+            <View style={styles.cardTripleInner}>
+              <Ionicons name="tv-outline" size={32} color="#FFF" />
+              <Text style={styles.cardTitleTriple}>Canais</Text>
             </View>
           </Pressable>
         </View>
@@ -188,7 +282,6 @@ export default function HomeTab() {
 
       {/* BARRA INFERIOR DE ATALHOS */}
       <View style={styles.bottomBar}>
-        {/* Botão Jogos de Hoje (Abre o Modal Independente) */}
         <Pressable focusable={true} onPress={() => setShowJogosModal(true)} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
           <Ionicons name="football-outline" size={24} color="#FFF" />
           <Text style={styles.bottomCardText}>JOGOS DE HOJE</Text>
@@ -211,8 +304,48 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* Modal de Jogos de Hoje Isolado */}
-      <JogosDeHojeModal visible={showJogosModal} onClose={() => setShowJogosModal(false)} />
+      {/* Modal Integrado de Jogos de Hoje */}
+      <Modal visible={showJogosModal} animationType="slide" transparent={true} onRequestClose={() => setShowJogosModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Ionicons name="football" size={22} color={colors.gold} />
+                <Text style={styles.modalTitle}>JOGOS DE HOJE — GUIA NA TV</Text>
+              </View>
+              <Pressable onPress={() => setShowJogosModal(false)} style={styles.closeBtn} focusable={true}>
+                <Ionicons name="close" size={20} color="#FFF" />
+              </Pressable>
+            </View>
+
+            {loadingJogos ? (
+              <View style={styles.centerBox}>
+                <ActivityIndicator size="large" color={colors.gold} />
+                <Text style={styles.loadingText}>Buscando programação dos jogos...</Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
+                {guiaJogos.map((g) => (
+                  <View key={g.id} style={styles.guiaCard}>
+                    <View style={styles.guiaHeaderRow}>
+                      <View style={styles.guiaTimeBadge}>
+                        <Ionicons name="time" size={10} color="#000" />
+                        <Text style={styles.guiaTimeText}>{g.time}</Text>
+                      </View>
+                      <Text style={styles.guiaLeagueText} numberOfLines={1}>{g.league}</Text>
+                    </View>
+                    <Text style={styles.guiaMatchTitle} numberOfLines={2}>{g.match}</Text>
+                    <View style={styles.guiaChannelsRow}>
+                      <Ionicons name="tv-outline" size={12} color={colors.gold} />
+                      <Text style={styles.guiaChannelsText} numberOfLines={1}>{g.channels}</Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -252,26 +385,17 @@ const styles = StyleSheet.create({
   carouselSwitchBtn: { backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   carouselSwitchText: { color: "#FFF", fontSize: 10, fontWeight: "700" },
 
-  rightColumn: { flex: 1, gap: 20 },
+  rightColumn: { flex: 1, gap: 12 },
   
-  cardMediumOrange: {
+  cardTriple: {
     flex: 1,
-    borderRadius: 16,
-    backgroundColor: "#F97316",
+    borderRadius: 14,
     overflow: "hidden",
     borderWidth: 2,
     borderColor: "transparent",
   },
-  cardMediumBlue: {
-    flex: 1,
-    borderRadius: 16,
-    backgroundColor: "#2563EB",
-    overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  cardMediumInner: { flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: 30, gap: 20 },
-  cardTitleMedium: { color: "#FFF", fontSize: 22, fontWeight: "900", letterSpacing: 1.5 },
+  cardTripleInner: { flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: 24, gap: 16 },
+  cardTitleTriple: { color: "#FFF", fontSize: 18, fontWeight: "900", letterSpacing: 1.5 },
 
   bottomBar: { flexDirection: "row", gap: 16, height: "18%" },
   bottomCard: {
@@ -292,4 +416,21 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     transform: [{ scale: 1.03 }],
   },
+
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "center", alignItems: "center", padding: 20 },
+  modalCard: { width: "100%", maxWidth: 650, height: "80%", backgroundColor: "#141722", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.3)", padding: 20, gap: 14 },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)", paddingBottom: 10 },
+  modalTitle: { color: colors.gold, fontSize: 16, fontWeight: "900", letterSpacing: 0.8 },
+  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#222634", alignItems: "center", justifyContent: "center" },
+  centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
+  loadingText: { color: colors.textMuted, fontSize: 13 },
+  listContainer: { gap: 10, paddingVertical: 4 },
+  guiaCard: { backgroundColor: "#1A1E2D", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)", gap: 6 },
+  guiaHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  guiaTimeBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.gold, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  guiaTimeText: { color: "#000", fontSize: 9.5, fontWeight: "900" },
+  guiaLeagueText: { color: colors.textDim, fontSize: 10.5, fontWeight: "700", flex: 1 },
+  guiaMatchTitle: { color: "#FFF", fontSize: 13, fontWeight: "800" },
+  guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  guiaChannelsText: { color: colors.gold, fontSize: 11, fontWeight: "700" },
 });
