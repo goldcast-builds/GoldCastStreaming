@@ -22,15 +22,10 @@ export default function HomeTab() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const session = useSession((s) => s.session);
-  const catalog = useSession((s) => s.catalog);
-  const loadVod = useSession((s) => s.loadVod);
-  const loadSeries = useSession((s) => s.loadSeries);
 
   const [activationCode, setActivationCode] = useState("LICENÇA ATIVA");
   const [currentDate, setCurrentDate] = useState("");
   const [currentTime, setCurrentTime] = useState("");
-  const [mediaType, setMediaType] = useState<"movies" | "series">("movies");
-  const [currentIndex, setCurrentIndex] = useState(0);
 
   // Relógio e Data em tempo real estilo TV
   useEffect(() => {
@@ -50,39 +45,9 @@ export default function HomeTab() {
     useCallback(() => {
       let isMounted = true;
       AsyncStorage.getItem("@goldcast_saved_code").then((code) => { if (code && isMounted) setActivationCode(code); });
-      if (session) {
-        if (loadVod) loadVod(true).catch(() => {});
-        if (loadSeries) loadSeries(true).catch(() => {});
-      }
       return () => { isMounted = false; };
-    }, [session, loadVod, loadSeries])
+    }, [])
   );
-
-  // Determina se é Premium ou Teste com base na licença/código
-  const isTestAccount = useMemo(() => {
-    return !activationCode || activationCode.includes("TESTE") || activationCode.length < 5;
-  }, [activationCode]);
-
-  // Itens para o carrossel do retângulo rosa (Filmes ou Séries Recém-adicionados)
-  const carouselItems = useMemo(() => {
-    if (mediaType === "movies") {
-      return (catalog.vod || []).slice(0, 10);
-    } else {
-      return (catalog.series || []).slice(0, 10);
-    }
-  }, [catalog.vod, catalog.series, mediaType]);
-
-  const activeCarouselItem = carouselItems[currentIndex] || null;
-
-  const handleNextCarousel = () => {
-    if (carouselItems.length === 0) return;
-    setCurrentIndex((prev) => (prev + 1) % carouselItems.length);
-  };
-
-  const handlePrevCarousel = () => {
-    if (carouselItems.length === 0) return;
-    setCurrentIndex((prev) => (prev - 1 + carouselItems.length) % carouselItems.length);
-  };
 
   // Sistema de Gravação de Tela (Verde)
   const handleScreenRecord = () => {
@@ -119,71 +84,33 @@ export default function HomeTab() {
 
       {/* PAINEL DE BLOCOS / CARDS PRINCIPAIS */}
       <View style={styles.dashboardGrid}>
-        {/* Retângulo Rosa: Carrossel Dinâmico de Filmes e Séries Recém-Adicionados */}
+        {/* Retângulo Vermelho: Bloco fixo de Filmes com a sua cor padrão */}
         <Pressable
           focusable={true}
-          onPress={() => {
-            if (activeCarouselItem) {
-              if (mediaType === "movies") {
-                router.push({ pathname: "/movie/[id]", params: { id: String(activeCarouselItem.stream_id) } });
-              } else {
-                router.push({ pathname: "/series/[id]", params: { id: String(activeCarouselItem.series_id) } });
-              }
-            }
-          }}
+          onPress={() => router.push("/(tabs)/movies")}
           style={({ focused }) => [styles.cardLarge, focused && styles.cardFocused]}
         >
-          {activeCarouselItem ? (
-            <View style={styles.fullSizeContainer}>
-              <Image
-                source={{ uri: mediaType === "movies" ? activeCarouselItem.stream_icon : activeCarouselItem.cover }}
-                style={styles.fullSize}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-              />
-              <View style={styles.carouselOverlay}>
-                <View style={styles.carouselBadge}>
-                  <Text style={styles.carouselBadgeText}>{mediaType === "movies" ? "⭐ FILMES RECENTES" : "🍿 SÉRIES RECENTES"}</Text>
-                </View>
-                <Text style={styles.carouselTitle} numberOfLines={1}>
-                  {mediaType === "movies" ? activeCarouselItem.name : activeCarouselItem.name}
-                </Text>
-                <View style={styles.carouselControlsRow}>
-                  <Pressable onPress={(e) => { e.stopPropagation(); handlePrevCarousel(); }} style={styles.carouselNavBtn}>
-                    <Ionicons name="chevron-back" size={18} color="#FFF" />
-                  </Pressable>
-                  <Pressable onPress={(e) => { e.stopPropagation(); setMediaType(mediaType === "movies" ? "series" : "movies"); setCurrentIndex(0); }} style={styles.carouselSwitchBtn}>
-                    <Text style={styles.carouselSwitchText}>Alternar Filmes / Séries</Text>
-                  </Pressable>
-                  <Pressable onPress={(e) => { e.stopPropagation(); handleNextCarousel(); }} style={styles.carouselNavBtn}>
-                    <Ionicons name="chevron-forward" size={18} color="#FFF" />
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.cardLargeInner}>
-              <Ionicons name="film-outline" size={64} color="#FFF" />
-              <Text style={styles.cardTitle}>MOVIES & SÉRIES</Text>
-            </View>
-          )}
+          <View style={styles.cardLargeInner}>
+            <Ionicons name="film-outline" size={64} color="#FFF" />
+            <Text style={styles.cardTitle}>MOVIES</Text>
+          </View>
         </Pressable>
 
         {/* Coluna Direita com os Blocos Menores */}
         <View style={styles.rightColumn}>
-          {/* Bloco Séries */}
+          {/* Retângulo Laranja: Nome alterado para SÉRIES */}
           <Pressable
             focusable={true}
             onPress={() => router.push("/(tabs)/series")}
             style={({ focused }) => [styles.cardMediumOrange, focused && styles.cardFocused]}
           >
             <View style={styles.cardMediumInner}>
-              <Ionicons name="film-outline" size={42} color="#FFF" />
-              <Text style={styles.cardTitleMedium}>SERIES</Text>
+              <Ionicons name="albums-outline" size={42} color="#FFF" />
+              <Text style={styles.cardTitleMedium}>SÉRIES</Text>
             </View>
           </Pressable>
 
-          {/* Azul: Mudado para Canais */}
+          {/* Azul: Canais */}
           <Pressable
             focusable={true}
             onPress={() => router.push("/(tabs)/live")}
@@ -205,22 +132,22 @@ export default function HomeTab() {
           <Text style={styles.bottomCardText}>JOGOS DE HOJE</Text>
         </Pressable>
 
-        {/* Rosa: Mudado para Atualizações */}
+        {/* Rosa: Atualizações */}
         <Pressable focusable={true} onPress={() => Alert.alert("Atualizações", "O aplicativo está na versão mais recente.")} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
           <Ionicons name="newspaper-outline" size={24} color="#FFF" />
           <Text style={styles.bottomCardText}>ATUALIZAÇÕES</Text>
         </Pressable>
 
-        {/* Verde: Sistema de gravação de tela */}
+        {/* Verde: Gravação de tela */}
         <Pressable focusable={true} onPress={handleScreenRecord} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
           <Ionicons name="videocam-outline" size={24} color="#FFF" />
           <Text style={styles.bottomCardText}>RECORDINGS</Text>
         </Pressable>
 
-        {/* Amarelo: Nome Premium ou Teste */}
+        {/* Amarelo: Premium ou Teste */}
         <View style={{ flex: 1, alignItems: "flex-end", justifyContent: "center", paddingRight: 10 }}>
-          <Text style={[styles.premiumLabel, isTestAccount && { color: "#FBBF24" }]}>
-            {isTestAccount ? "Teste" : "Premium"}
+          <Text style={styles.premiumLabel}>
+            {(!activationCode || activationCode.includes("TESTE") || activationCode.length < 5) ? "Teste" : "Premium"}
           </Text>
         </View>
       </View>
@@ -251,17 +178,6 @@ const styles = StyleSheet.create({
   },
   cardLargeInner: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, backgroundColor: "rgba(100, 20, 80, 0.4)" },
   cardTitle: { color: "#FFF", fontSize: 26, fontWeight: "900", letterSpacing: 2 },
-
-  fullSizeContainer: { width: "100%", height: "100%", position: "relative" },
-  fullSize: { width: "100%", height: "100%" },
-  carouselOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.8)", padding: 12, gap: 6 },
-  carouselBadge: { backgroundColor: "#F59E0B", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: "flex-start" },
-  carouselBadgeText: { color: "#000", fontSize: 9, fontWeight: "900" },
-  carouselTitle: { color: "#FFF", fontSize: 16, fontWeight: "900" },
-  carouselControlsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
-  carouselNavBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
-  carouselSwitchBtn: { backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  carouselSwitchText: { color: "#FFF", fontSize: 10, fontWeight: "700" },
 
   rightColumn: { flex: 1, gap: 20 },
   
