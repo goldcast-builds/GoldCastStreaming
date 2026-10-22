@@ -7,12 +7,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert, Modal, View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
 
-interface UserProfile {
-  id: string;
-  name: string;
-  type: "normal" | "kids" | "adult" | "football";
-}
-
 export default function SeriesTab() {
   const router = useRouter();
   const source = useSession((s) => s.source);
@@ -24,7 +18,6 @@ export default function SeriesTab() {
   const recents = useSession((s) => s.ud.recents.series);
   const toggleFav = useSession((s) => s.toggleFav);
 
-  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
   const [adultPin, setAdultPin] = useState("0000");
   const [adultLocked, setAdultLocked] = useState(true);
   const [showPinModal, setShowPinModal] = useState(false);
@@ -34,11 +27,6 @@ export default function SeriesTab() {
   useFocusEffect(useCallback(() => {
     if (source?.kind === "xtream") loadSeries();
     let isMounted = true;
-    AsyncStorage.getItem("@goldcast_active_profile").then((raw) => {
-      if (raw && isMounted) {
-        try { setCurrentProfile(JSON.parse(raw)); } catch {}
-      }
-    });
     AsyncStorage.getItem("@goldcast_adult_pin").then((val) => { if (val && isMounted) setAdultPin(val); });
     AsyncStorage.getItem("@goldcast_adult_locked").then((val) => { if (val !== null && isMounted) setAdultLocked(val === "true"); });
     return () => { isMounted = false; };
@@ -49,28 +37,18 @@ export default function SeriesTab() {
     return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates|séries xxx/i.test(text);
   };
 
-  const isKidsContent = (name: string, categoryName: string = "") => {
-    const text = (name + " " + categoryName).toLowerCase();
-    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece|crunchyroll/i.test(text);
-  };
-
-  // Filtragem estrita das séries pelo perfil ativo
+  // Exibe todas as séries da API livremente, ocultando o conteúdo adulto apenas se o bloqueio PIN estiver ativo
   const filteredSeries = useMemo(() => {
     if (!catalog.series) return [];
-    const profileType = currentProfile?.type;
 
     return catalog.series.filter((s) => {
       const name = s.name || "";
       const cat = s.category_name || "";
 
-      if (profileType === "kids") return isKidsContent(name, cat);
-      if (profileType === "adult") return isAdultContent(name, cat);
-      if (profileType === "football") return false; // Perfil de futebol não foca em séries
-
       if (adultLocked && isAdultContent(name, cat)) return false;
       return true;
     });
-  }, [catalog.series, currentProfile?.type, adultLocked]);
+  }, [catalog.series, adultLocked]);
 
   const items: GridItem[] = useMemo(() => filteredSeries.map((s) => ({
     id: String(s.series_id), name: s.name, poster: s.cover, categoryId: s.category_id,
@@ -82,12 +60,7 @@ export default function SeriesTab() {
       router.push({ pathname: "/series/[id]", params: { id: item.id } });
     };
 
-    if (currentProfile?.type === "kids" && isAdultContent(item.name)) {
-      Alert.alert("Conteúdo Restrito", "Este perfil infantil não tem permissão para aceder a esta série.");
-      return;
-    }
-
-    if (adultLocked && currentProfile?.type !== "adult" && isAdultContent(item.name)) {
+    if (adultLocked && isAdultContent(item.name)) {
       setPendingItemToOpen(() => openAction);
       setEnteredPin("");
       setShowPinModal(true);
@@ -115,9 +88,9 @@ export default function SeriesTab() {
   return (
     <>
       <CatalogGrid
-        title={currentProfile?.type === "kids" ? "Séries Infantis & Animes" : currentProfile?.type === "adult" ? "Séries Adultas (+18)" : "Séries"}
+        title="Séries"
         testIDPrefix="series"
-        searchPlaceholder={currentProfile?.type === "kids" ? "Buscar animes, desenhos..." : "Buscar séries..."}
+        searchPlaceholder="Buscar séries..."
         items={items}
         cats={catalog.seriesCats}
         loading={loading && !catalog.seriesLoaded}
@@ -127,7 +100,7 @@ export default function SeriesTab() {
         recentIds={recents.map((r) => String(r.series_id))}
         onOpen={handleOpenSeries}
         onFav={(i) => toggleFav("series", i.id)}
-        emptyText="Nenhuma série disponível para este perfil."
+        emptyText="Nenhuma série disponível."
       />
 
       <Modal visible={showPinModal} transparent animationType="fade" onRequestClose={() => setShowPinModal(false)}>
