@@ -8,6 +8,7 @@ import {
   Image,
   Dimensions,
   Modal,
+  TextInput,
   Switch,
 } from 'react-native';
 
@@ -71,7 +72,11 @@ export default function IndexScreen({ navigation }) {
   const [modalConfigVisible, setModalConfigVisible] = useState(false);
   const [bloqueioAdulto, setBloqueioAdulto] = useState(true);
 
-  // Dados da Conta / Ativação
+  // Estados para o Modal de Senha do Conteúdo Adulto na Home
+  const [modalAdultPinVisible, setModalAdultPinVisible] = useState(false);
+  const [pinAdulto, setPinAdulto] = useState('');
+  const [erroPinAdulto, setErroPinAdulto] = useState(false);
+
   const dadosUsuario = {
     nome: 'Anderson da Silva',
     usuario: 'mavi24',
@@ -84,11 +89,22 @@ export default function IndexScreen({ navigation }) {
     setDias(dias.map(d => ({ ...d, ativo: d.data === data })));
   };
 
+  const verificarPinAdulto = () => {
+    if (pinAdulto === '6969') { // Senha padrão da área adulta
+      setModalAdultPinVisible(false);
+      setPinAdulto('');
+      setErroPinAdulto(false);
+      navigation.navigate('Adult'); // Vai para o arquivo adult.tsx
+    } else {
+      setErroPinAdulto(true);
+    }
+  };
+
   const jogosAtuais = JOGOS_POR_DATA[dataSelecionada] || [];
 
   return (
     <View style={styles.container}>
-      {/* HEADER SUPERIOR COM USUÁRIO, ATIVAÇÃO E ENGRENAGEM */}
+      {/* HEADER SUPERIOR */}
       <View style={styles.header}>
         <View style={styles.userBox}>
           <Text style={styles.welcomeText}>Usuário: <Text style={styles.highlightText}>{dadosUsuario.usuario}</Text></Text>
@@ -105,7 +121,7 @@ export default function IndexScreen({ navigation }) {
         </View>
       </View>
 
-      {/* BARRA DE NAVEGAÇÃO ENTRE AS TELAS (Ligando Live, Movies e Series) */}
+      {/* BARRA DE NAVEGAÇÃO PRINCIPAL */}
       <View style={styles.navBar}>
         <TouchableOpacity style={[styles.navItem, styles.navItemActive]}>
           <Text style={[styles.navText, styles.navTextActive]}>Início & Futebol</Text>
@@ -123,7 +139,32 @@ export default function IndexScreen({ navigation }) {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        {/* ATALHOS RÁPIDOS: FAVORITOS E CONTINUAR ASSISTINDO */}
+        {/* BOTÕES DE ACESSO RÁPIDO: KIDS E CONTEÚDO ADULTO */}
+        <View style={styles.specialModesRow}>
+          <TouchableOpacity 
+            style={styles.kidsModeBtn} 
+            onPress={() => navigation.navigate('Kids')}
+          >
+            <Text style={styles.specialEmoji}>🎈</Text>
+            <View>
+              <Text style={styles.specialTitleKids}>Espaço Kids</Text>
+              <Text style={styles.specialSub}>Desenhos e Canais</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.adultModeBtn} 
+            onPress={() => setModalAdultPinVisible(true)}
+          >
+            <Text style={styles.specialEmoji}>🔒</Text>
+            <View>
+              <Text style={styles.specialTitleAdult}>Conteúdo +18</Text>
+              <Text style={styles.specialSub}>Protegido por Senha</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* ATALHOS: FAVORITOS E CONTINUAR ASSISTINDO */}
         <View style={styles.shortcutsRow}>
           <TouchableOpacity style={styles.shortcutCard}>
             <Text style={styles.shortcutIcon}>⭐</Text>
@@ -212,7 +253,51 @@ export default function IndexScreen({ navigation }) {
 
       </ScrollView>
 
-      {/* MODAL DE CONFIGURAÇÕES E CONTROLE PARENTAL */}
+      {/* MODAL DE SENHA PARA O CONTEÚDO ADULTO */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalAdultPinVisible}
+        onRequestClose={() => setModalAdultPinVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>🔒 Área Restrita (+18)</Text>
+            <Text style={styles.modalSub}>Digite o PIN de segurança para acessar:</Text>
+            
+            <TextInput
+              style={styles.pinInput}
+              placeholder="PIN"
+              placeholderTextColor="#71717a"
+              secureTextEntry={true}
+              keyboardType="numeric"
+              maxLength={4}
+              value={pinAdulto}
+              onChangeText={setPinAdulto}
+            />
+
+            {erroPinAdulto && <Text style={styles.errorText}>PIN incorreto. Acesso negado.</Text>}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.cancelBtn]} 
+                onPress={() => { setModalAdultPinVisible(false); setPinAdulto(''); setErroPinAdulto(false); }}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.confirmAdultBtn]} 
+                onPress={verificarPinAdulto}
+              >
+                <Text style={styles.confirmBtnText}>Entrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL DE CONFIGURAÇÕES */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -226,7 +311,7 @@ export default function IndexScreen({ navigation }) {
             <View style={styles.configItem}>
               <View>
                 <Text style={styles.configText}>Bloqueio de Conteúdo Adulto</Text>
-                <Text style={styles.configSubText}>Exibir PIN de segurança para liberar</Text>
+                <Text style={styles.configSubText}>Exigir PIN na tela inicial</Text>
               </View>
               <Switch
                 trackColor={{ false: '#27272a', true: '#d4af37' }}
@@ -352,6 +437,53 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 12,
     paddingBottom: 40,
+  },
+  specialModesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  kidsModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  adultModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#181215',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginLeft: 6,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  specialEmoji: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  specialTitleKids: {
+    color: '#38bdf8',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  specialTitleAdult: {
+    color: '#ef4444',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  specialSub: {
+    color: '#a1a1aa',
+    fontSize: 9,
   },
   shortcutsRow: {
     flexDirection: 'row',
@@ -566,7 +698,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -580,10 +712,64 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 16,
+    marginBottom: 8,
     textAlign: 'center',
+  },
+  modalSub: {
+    color: '#a1a1aa',
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  pinInput: {
+    width: '100%',
+    backgroundColor: '#18181b',
+    borderRadius: 8,
+    padding: 10,
+    color: '#ffffff',
+    fontSize: 16,
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: '#3f3f46',
+    marginBottom: 10,
+    letterSpacing: 4,
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 6,
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  cancelBtn: {
+    backgroundColor: '#27272a',
+  },
+  cancelBtnText: {
+    color: '#a1a1aa',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  confirmAdultBtn: {
+    backgroundColor: '#ef4444',
+  },
+  confirmBtnText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 12,
   },
   configItem: {
     flexDirection: 'row',
