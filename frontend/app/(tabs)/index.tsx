@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   TextInput,
   Dimensions,
   ActivityIndicator,
+  Animated,
+  Easing,
   Alert,
 } from "react-native";
 import { Image } from "expo-image";
@@ -16,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { colors, radius, spacing } from "../../src/utils/theme";
+import { colors } from "../../src/utils/theme";
 import { useSession } from "../../src/store/session";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -40,12 +42,14 @@ export default function HomeTab() {
   const [activationCode, setActivationCode] = useState("LICENÇA ATIVA");
   const [currentDate, setCurrentDate] = useState("");
   const [currentTime, setCurrentTime] = useState("");
-  const [mediaType, setMediaType] = useState<"movies" | "series">("movies");
-  const [currentIndex, setCurrentIndex] = useState(0);
 
   const [showJogosModal, setShowJogosModal] = useState(false);
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingJogos, setLoadingJogos] = useState(false);
+
+  // Animações de movimento para os dois carrosseles
+  const scrollAnimMovies = useRef(new Animated.Value(0)).current;
+  const scrollAnimSeries = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const updateDateTime = () => {
@@ -71,6 +75,36 @@ export default function HomeTab() {
       return () => { isMounted = false; };
     }, [session, loadVod, loadSeries])
   );
+
+  // Efeito de movimento contínuo automático
+  useEffect(() => {
+    // Esquerda para a direita (Filmes)
+    const animMovies = Animated.loop(
+      Animated.timing(scrollAnimMovies, {
+        toValue: 1,
+        duration: 25000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    animMovies.start();
+
+    // Direita para a esquerda (Séries)
+    const animSeries = Animated.loop(
+      Animated.timing(scrollAnimSeries, {
+        toValue: 1,
+        duration: 25000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    animSeries.start();
+
+    return () => {
+      animMovies.stop();
+      animSeries.stop();
+    };
+  }, [scrollAnimMovies, scrollAnimSeries]);
 
   useEffect(() => {
     if (!showJogosModal) return;
@@ -109,11 +143,8 @@ export default function HomeTab() {
 
         if (matches.length === 0) {
           matches = [
-            { id: "1", time: "13:45", league: "Champions League", match: "Fenerbahçe x Slavia Praha", channels: "Space • HBO Max" },
-            { id: "2", time: "15:00", league: "Campeonato Saudita", match: "Al-Nassr x Neom", channels: "SportV 2 • Canal GOAT" },
-            { id: "3", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
-            { id: "4", time: "19:30", league: "Brasileirão Série B", match: "Londrina x Cuiabá", channels: "Disney+ • Premiere" },
-            { id: "5", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
+            { id: "1", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
+            { id: "2", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
           ];
         }
 
@@ -122,7 +153,6 @@ export default function HomeTab() {
         if (isMounted) {
           setGuiaJogos([
             { id: "1", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
-            { id: "2", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
           ]);
         }
       } finally {
@@ -131,34 +161,25 @@ export default function HomeTab() {
     };
 
     fetchGuia();
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [showJogosModal]);
 
   const isTestAccount = useMemo(() => {
     return !activationCode || activationCode.includes("TESTE") || activationCode.length < 5;
   }, [activationCode]);
 
-  const carouselItems = useMemo(() => {
-    if (mediaType === "movies") {
-      return (catalog.vod || []).slice(0, 10);
-    } else {
-      return (catalog.series || []).slice(0, 10);
-    }
-  }, [catalog.vod, catalog.series, mediaType]);
+  const moviesList = useMemo(() => (catalog.vod || []).slice(0, 15), [catalog.vod]);
+  const seriesList = useMemo(() => (catalog.series || []).slice(0, 15), [catalog.series]);
 
-  const activeCarouselItem = carouselItems[currentIndex] || null;
+  const translateXMovies = scrollAnimMovies.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -400],
+  });
 
-  const handleNextCarousel = () => {
-    if (carouselItems.length === 0) return;
-    setCurrentIndex((prev) => (prev + 1) % carouselItems.length);
-  };
-
-  const handlePrevCarousel = () => {
-    if (carouselItems.length === 0) return;
-    setCurrentIndex((prev) => (prev - 1 + carouselItems.length) % carouselItems.length);
-  };
+  const translateXSeries = scrollAnimSeries.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-400, 0],
+  });
 
   const handleScreenRecord = () => {
     Alert.alert("Gravação de Tela", "Ferramenta de captura e gravação de ecrã iniciada com sucesso.", [{ text: "OK" }]);
@@ -166,13 +187,19 @@ export default function HomeTab() {
 
   return (
     <View style={[styles.root, { backgroundColor: "#11141F" }]}>
-      {/* CABEÇALHO */}
+      {/* CABEÇALHO COM CÓDIGO DE ATIVAÇÃO NO CENTRO SUPERIOR */}
       <View style={styles.tvHeader}>
         <View style={styles.headerLeft}>
           <Pressable focusable={true} onPress={() => router.push("/(tabs)/settings")} style={styles.headerIconBtn} hitSlop={10}>
             <Ionicons name="menu" size={26} color="#FFF" />
           </Pressable>
           <Text style={styles.tvBrand}>GoldCast Media Player</Text>
+        </View>
+
+        {/* Código de Ativação no Centro Superior */}
+        <View style={styles.headerCenterCode}>
+          <Ionicons name="key" size={13} color={colors.gold} />
+          <Text style={styles.codeText}>{activationCode}</Text>
         </View>
 
         <View style={styles.headerRight}>
@@ -189,70 +216,53 @@ export default function HomeTab() {
 
       {/* PAINEL DE CONTEÚDO PRINCIPAL */}
       <View style={styles.mainLayoutContainer}>
-        {/* Lado Esquerdo: Destaque com visual corrigido (contentFit="contain" com fundo elegante) */}
+        {/* Lado Esquerdo: Substituído o banner antigo por Filmes | Novidades e Séries | Em Alta com animação */}
         <View style={styles.leftContainer}>
-          <Pressable
-            focusable={true}
-            onPress={() => {
-              if (activeCarouselItem) {
-                if (mediaType === "movies") {
-                  router.push({ pathname: "/movie/[id]", params: { id: String(activeCarouselItem.stream_id) } });
-                } else {
-                  router.push({ pathname: "/series/[id]", params: { id: String(activeCarouselItem.series_id) } });
-                }
-              }
-            }}
-            style={({ focused }) => [styles.cardLarge, focused && styles.cardFocused]}
-          >
-            {activeCarouselItem ? (
-              <View style={styles.fullSizeContainer}>
-                {/* Fundo desfocado/estendido para preencher o espaço lateral sem cortar o pôster */}
-                <Image
-                  source={{ uri: mediaType === "movies" ? activeCarouselItem.stream_icon : activeCarouselItem.cover }}
-                  style={[styles.fullSize, StyleSheet.absoluteFillObject]}
-                  contentFit="cover"
-                  blurRadius={20}
-                  cachePolicy="memory-disk"
-                />
-                <View style={[styles.fullSize, { backgroundColor: "rgba(0,0,0,0.4)" }, StyleSheet.absoluteFillObject]} />
+          {/* Grade 1: Filmes | Novidades (Esquerda para a Direita) */}
+          <View style={styles.dynamicRowSection}>
+            <Text style={styles.sectionCategoryTitle}>🎬 Filmes | Novidades</Text>
+            <View style={styles.tickerWrapper}>
+              <Animated.View style={[styles.tickerTrack, { transform: [{ translateX: translateXMovies }] }]}>
+                {moviesList.concat(moviesList).map((item, idx) => (
+                  <Pressable
+                    key={`mov-${item.stream_id}-${idx}`}
+                    focusable={true}
+                    onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
+                    style={styles.tickerCard}
+                  >
+                    <Image source={{ uri: item.stream_icon }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" />
+                    <View style={styles.tickerGradient}>
+                      <Text style={styles.tickerTitle} numberOfLines={1}>{item.name}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </Animated.View>
+            </View>
+          </View>
 
-                {/* Imagem principal por completo (contentFit="contain") */}
-                <Image
-                  source={{ uri: mediaType === "movies" ? activeCarouselItem.stream_icon : activeCarouselItem.cover }}
-                  style={styles.fullSize}
-                  contentFit="contain"
-                  cachePolicy="memory-disk"
-                />
+          {/* Grade 2: Séries | Em Alta (Direita para a Esquerda) */}
+          <View style={styles.dynamicRowSection}>
+            <Text style={styles.sectionCategoryTitle}>🍿 Séries | Em Alta</Text>
+            <View style={styles.tickerWrapper}>
+              <Animated.View style={[styles.tickerTrack, { transform: [{ translateX: translateXSeries }] }]}>
+                {seriesList.concat(seriesList).map((s, idx) => (
+                  <Pressable
+                    key={`ser-${s.series_id}-${idx}`}
+                    focusable={true}
+                    onPress={() => router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } })}
+                    style={styles.tickerCard}
+                  >
+                    <Image source={{ uri: s.cover }} style={styles.fullSize} contentFit="cover" cachePolicy="memory-disk" />
+                    <View style={styles.tickerGradient}>
+                      <Text style={styles.tickerTitle} numberOfLines={1}>{s.name}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </Animated.View>
+            </View>
+          </View>
 
-                <View style={styles.carouselOverlay}>
-                  <View style={styles.carouselBadge}>
-                    <Text style={styles.carouselBadgeText}>{mediaType === "movies" ? "⭐ FILMES RECENTES" : "🍿 SÉRIES RECENTES"}</Text>
-                  </View>
-                  <Text style={styles.carouselTitle} numberOfLines={1}>
-                    {mediaType === "movies" ? activeCarouselItem.name : activeCarouselItem.name}
-                  </Text>
-                  <View style={styles.carouselControlsRow}>
-                    <Pressable onPress={(e) => { e.stopPropagation(); handlePrevCarousel(); }} style={styles.carouselNavBtn} focusable={true}>
-                      <Ionicons name="chevron-back" size={18} color="#FFF" />
-                    </Pressable>
-                    <Pressable onPress={(e) => { e.stopPropagation(); setMediaType(mediaType === "movies" ? "series" : "movies"); setCurrentIndex(0); }} style={styles.carouselSwitchBtn} focusable={true}>
-                      <Text style={styles.carouselSwitchText}>Alternar Filmes / Séries</Text>
-                    </Pressable>
-                    <Pressable onPress={(e) => { e.stopPropagation(); handleNextCarousel(); }} style={styles.carouselNavBtn} focusable={true}>
-                      <Ionicons name="chevron-forward" size={18} color="#FFF" />
-                    </Pressable>
-                  </View>
-                </View>
-              </View>
-            ) : (
-              <View style={styles.cardLargeInner}>
-                <Ionicons name="film-outline" size={64} color="#FFF" />
-                <Text style={styles.cardTitle}>MOVIES & SÉRIES</Text>
-              </View>
-            )}
-          </Pressable>
-
-          {/* BARRA INFERIOR DE ATALHOS */}
+          {/* Barra Inferior com Atalhos */}
           <View style={styles.bottomBarBelow}>
             <Pressable focusable={true} onPress={() => setShowJogosModal(true)} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
               <Ionicons name="football-outline" size={20} color="#FFF" />
@@ -277,7 +287,7 @@ export default function HomeTab() {
           </View>
         </View>
 
-        {/* Lado Direito: Os 3 Blocos Proporcionados */}
+        {/* Lado Direito: Os 3 Blocos Proporcionados (Filmes, Séries e Canais) */}
         <View style={styles.rightColumn}>
           <Pressable
             focusable={true}
@@ -314,7 +324,7 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* Modal Modernizado de Jogos de Hoje */}
+      {/* Modal de Jogos de Hoje */}
       <Modal visible={showJogosModal} animationType="slide" transparent={true} onRequestClose={() => setShowJogosModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -365,9 +375,26 @@ export default function HomeTab() {
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 36, paddingVertical: 20, justifyContent: "space-between" },
   
-  tvHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  tvHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", position: "relative" },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 14 },
   tvBrand: { color: "#FFF", fontSize: 18, fontWeight: "900", letterSpacing: 1.2 },
+  
+  headerCenterCode: {
+    position: "absolute",
+    left: "50%",
+    transform: [{ translateX: -75 }],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(212,175,55,0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,0.4)",
+  },
+  codeText: { color: colors.gold, fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
+
   headerRight: { flexDirection: "row", alignItems: "center", gap: 18 },
   headerIconBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   headerDate: { color: "#9CA3AF", fontSize: 14, fontWeight: "700" },
@@ -377,28 +404,13 @@ const styles = StyleSheet.create({
   leftContainer: { flex: 1.4, justifyContent: "space-between" },
   rightColumn: { flex: 1, justifyContent: "space-between" },
   
-  cardLarge: {
-    flex: 1,
-    borderRadius: 16,
-    backgroundColor: "#000",
-    overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "transparent",
-    maxHeight: "78%",
-  },
-  cardLargeInner: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, backgroundColor: "rgba(100, 20, 80, 0.4)" },
-  cardTitle: { color: "#FFF", fontSize: 24, fontWeight: "900", letterSpacing: 2 },
-
-  fullSizeContainer: { width: "100%", height: "100%", position: "relative", backgroundColor: "#000" },
-  fullSize: { width: "100%", height: "100%" },
-  carouselOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.85)", padding: 12, gap: 6 },
-  carouselBadge: { backgroundColor: "#F59E0B", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: "flex-start" },
-  carouselBadgeText: { color: "#000", fontSize: 9, fontWeight: "900" },
-  carouselTitle: { color: "#FFF", fontSize: 15, fontWeight: "900" },
-  carouselControlsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 },
-  carouselNavBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
-  carouselSwitchBtn: { backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  carouselSwitchText: { color: "#FFF", fontSize: 10, fontWeight: "700" },
+  dynamicRowSection: { gap: 6 },
+  sectionCategoryTitle: { color: "#FFF", fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
+  tickerWrapper: { height: 115, overflow: "hidden", position: "relative" },
+  tickerTrack: { flexDirection: "row", gap: 10, position: "absolute", left: 0 },
+  tickerCard: { width: 85, height: 115, borderRadius: 10, overflow: "hidden", backgroundColor: "#1A1D29", position: "relative" },
+  tickerGradient: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.85)", padding: 4 },
+  tickerTitle: { color: "#FFF", fontSize: 9, fontWeight: "800", textAlign: "center" },
 
   cardTriple: {
     flex: 1,
@@ -426,18 +438,14 @@ const styles = StyleSheet.create({
   statusBadgeWrap: { flex: 0.8, alignItems: "flex-end", justifyContent: "center", paddingRight: 4 },
   premiumLabel: { color: "#10B981", fontSize: 14, fontWeight: "900", letterSpacing: 0.5 },
 
-  cardFocused: {
-    borderColor: "#FBBF24",
-    borderWidth: 4,
-    transform: [{ scale: 1.02 }],
-  },
+  fullSize: { width: "100%", height: "100%" },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", padding: 20 },
   modalCard: { width: "100%", maxWidth: 680, height: "82%", backgroundColor: "#131622", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.25)", padding: 22, gap: 16 },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)", paddingBottom: 12 },
   modalIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(212,175,55,0.15)", alignItems: "center", justifyContent: "center" },
   modalTitle: { color: colors.gold, fontSize: 15, fontWeight: "900", letterSpacing: 0.8 },
-  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#1E2230",alignItems: "center", justifyContent: "center" },
+  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#1E2230", alignItems: "center", justifyContent: "center" },
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
   listContainer: { gap: 10, paddingVertical: 4 },
