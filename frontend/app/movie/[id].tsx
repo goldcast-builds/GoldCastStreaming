@@ -1,4 +1,5 @@
 import { TrailerPreviewBox } from "../../src/components/TrailerPreviewBox";
+import { MovieMetadataPanel } from "../../src/components/MovieMetadataPanel";
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
@@ -65,7 +66,10 @@ export default function MovieDetails() {
           {poster ? <Image source={{ uri: poster }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={12} /> : null}
           <LinearGradient colors={["rgba(0,0,0,0.3)", colors.bg]} style={StyleSheet.absoluteFill} />
           
-          {/* TRAILER DO YOUTUBE EXIBIDO NO ESPAÇO MARCADO */}
+          {/* PAINEL DE AVALIAÇÕES (IMDb, Rotten, Metacritic) E FICHA TÉCNICA */}
+          <MovieMetadataPanel title={title} />
+
+          {/* TRAILER DO YOUTUBE */}
           <TrailerPreviewBox title={title} />
 
           <View style={[styles.heroRow, { paddingTop: insets.top + spacing.sm }]}>
@@ -93,7 +97,7 @@ export default function MovieDetails() {
             </View>
           )}
 
-          {/* BOTÕES DE AÇÃO COM FOCO DE ALTO CONTRASTE */}
+          {/* BOTÕES DE AÇÃO */}
           <View style={styles.actionRow}>
             <TVMoviePlayBtn label={playLabel} onPress={play} />
             <TVFavBtn fav={fav} onPress={() => toggleFav("vod", String(id))} />
@@ -125,7 +129,7 @@ export default function MovieDetails() {
         </View>
       </ScrollView>
 
-      {/* BOTÃO VOLTAR NAVEGÁVEL PELO COMANDO */}
+      {/* BOTÃO VOLTAR */}
       <TVBackButton onPress={() => router.back()} top={insets.top + 8} />
     </View>
   );
@@ -141,10 +145,7 @@ function TVMoviePlayBtn({ label, onPress }: { label: string; onPress: () => void
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
-      style={[
-        styles.playBtn,
-        isFocused && styles.playBtnFocused,
-      ]}
+      style={[styles.playBtn, isFocused && styles.playBtnFocused]}
     >
       <Ionicons name="play" size={20} color={isFocused ? "#000000" : colors.onGold} />
       <Text style={[styles.playBtnText, isFocused && { color: "#000000", fontWeight: "900" }]}>
@@ -163,17 +164,9 @@ function TVFavBtn({ fav, onPress }: { fav: boolean; onPress: () => void }) {
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
-      style={[
-        styles.favBtn,
-        fav && styles.favBtnActive,
-        isFocused && styles.favBtnFocused,
-      ]}
+      style={[styles.favBtn, fav && styles.favBtnActive, isFocused && styles.favBtnFocused]}
     >
-      <Ionicons
-        name={fav ? "star" : "star-outline"}
-        size={22}
-        color={isFocused ? "#000000" : colors.gold}
-      />
+      <Ionicons name={fav ? "star" : "star-outline"} size={22} color={isFocused ? "#000000" : colors.gold} />
     </Pressable>
   );
 }
@@ -188,17 +181,9 @@ function TVBackButton({ onPress, top }: { onPress: () => void; top: number }) {
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
       hitSlop={10}
-      style={[
-        styles.backBtn,
-        { top },
-        isFocused && styles.backBtnFocused,
-      ]}
+      style={[styles.backBtn, { top }, isFocused && styles.backBtnFocused]}
     >
-      <Ionicons
-        name="chevron-back"
-        size={22}
-        color={isFocused ? "#000000" : colors.text}
-      />
+      <Ionicons name="chevron-back" size={22} color={isFocused ? "#000000" : colors.text} />
     </Pressable>
   );
 }
@@ -217,52 +202,12 @@ const styles = StyleSheet.create({
   progTrack: { height: 4, backgroundColor: colors.surface3, borderRadius: 2 },
   progFill: { height: 4, backgroundColor: colors.gold, borderRadius: 2 },
   actionRow: { flexDirection: "row", gap: spacing.md, alignItems: "center" },
-  playBtn: {
-    flex: 1,
-    height: 52,
-    backgroundColor: colors.gold,
-    borderRadius: radius.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  playBtnFocused: {
-    backgroundColor: "#FFD700",
-    borderColor: "#FFFFFF",
-    borderWidth: 3.5,
-    transform: [{ scale: 1.04 }],
-    elevation: 16,
-    zIndex: 99,
-  },
-  playBtnText: {
-    color: colors.onGold,
-    fontSize: 14,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  favBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 2,
-    borderColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "transparent",
-  },
-  favBtnActive: {
-    backgroundColor: "rgba(229, 169, 59, 0.2)",
-  },
-  favBtnFocused: {
-    backgroundColor: "#FFD700",
-    borderColor: "#FFFFFF",
-    borderWidth: 3,
-    transform: [{ scale: 1.12 }],
-    elevation: 12,
-  },
+  playBtn: { flex: 1, height: 52, backgroundColor: colors.gold, borderRadius: radius.md, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 2, borderColor: "transparent" },
+  playBtnFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3.5, transform: [{ scale: 1.04 }], elevation: 16, zIndex: 99 },
+  playBtnText: { color: colors.onGold, fontSize: 14, fontWeight: "800", letterSpacing: 0.5 },
+  favBtn: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: colors.gold, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
+  favBtnActive: { backgroundColor: "rgba(229, 169, 59, 0.2)" },
+  favBtnFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3, transform: [{ scale: 1.12 }], elevation: 12 },
   sectionTitle: { color: colors.gold, fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6, marginTop: spacing.sm },
   plot: { color: colors.textMuted, fontSize: 14, lineHeight: 21 },
   infoCard: { backgroundColor: colors.surface2, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
