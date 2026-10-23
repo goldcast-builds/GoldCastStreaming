@@ -61,6 +61,10 @@ export default function SeriesDetails() {
       <View style={styles.hero}>
         {poster ? <Image source={{ uri: poster }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={12} /> : null}
         <LinearGradient colors={["rgba(0,0,0,0.3)", colors.bg]} style={StyleSheet.absoluteFill} />
+        
+        {/* TRAILER DO YOUTUBE EXIBIDO NO ESPAÇO MARCADO */}
+        <TrailerPreviewBox title={title} />
+
         <View style={[styles.heroRow, { paddingTop: insets.top + 56 }]}>
           <View style={styles.posterWrap}>
             {poster ? <Image source={{ uri: poster }} style={{ width: "100%", height: "100%" }} contentFit="cover" /> : <Ionicons name="albums" size={40} color={colors.textDim} />}
