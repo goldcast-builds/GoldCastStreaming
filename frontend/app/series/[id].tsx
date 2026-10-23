@@ -1,4 +1,5 @@
 import { TrailerPreviewBox } from "../../src/components/TrailerPreviewBox";
+import { MovieMetadataPanel } from "../../src/components/MovieMetadataPanel";
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, FlatList } from "react-native";
 import { Image } from "expo-image";
@@ -62,7 +63,10 @@ export default function SeriesDetails() {
         {poster ? <Image source={{ uri: poster }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={12} /> : null}
         <LinearGradient colors={["rgba(0,0,0,0.3)", colors.bg]} style={StyleSheet.absoluteFill} />
         
-        {/* TRAILER DO YOUTUBE EXIBIDO NO ESPAÇO MARCADO */}
+        {/* PAINEL DE AVALIAÇÕES E FICHA TÉCNICA */}
+        <MovieMetadataPanel title={title} />
+
+        {/* TRAILER DO YOUTUBE */}
         <TrailerPreviewBox title={title} />
 
         <View style={[styles.heroRow, { paddingTop: insets.top + 56 }]}>
@@ -82,7 +86,7 @@ export default function SeriesDetails() {
       <View style={styles.body}>
         {!!meta.plot && <Text style={styles.plot} numberOfLines={5}>{meta.plot}</Text>}
         
-        {/* SELETOR DE TEMPORADAS NAVEGÁVEL */}
+        {/* SELETOR DE TEMPORADAS */}
         {seasons.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }} style={{ marginTop: spacing.sm, paddingVertical: 4 }}>
             {seasons.map((s) => (
@@ -127,7 +131,7 @@ export default function SeriesDetails() {
         />
       )}
 
-      {/* BOTÃO VOLTAR NAVEGÁVEL */}
+      {/* BOTÃO VOLTAR */}
       <TVBackButton onPress={() => router.back()} top={insets.top + 8} />
     </View>
   );
@@ -142,11 +146,7 @@ function TVSeriesFavBtn({ fav, onPress }: { fav: boolean; onPress: () => void })
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
-      style={[
-        styles.favBtn,
-        fav && styles.favBtnActive,
-        isFocused && styles.favBtnFocused,
-      ]}
+      style={[styles.favBtn, fav && styles.favBtnActive, isFocused && styles.favBtnFocused]}
     >
       <Ionicons name={fav ? "star" : "star-outline"} size={16} color={isFocused ? "#000000" : colors.gold} />
       <Text style={[styles.favText, isFocused && { color: "#000000", fontWeight: "900" }]}>
@@ -156,15 +156,7 @@ function TVSeriesFavBtn({ fav, onPress }: { fav: boolean; onPress: () => void })
   );
 }
 
-function SeasonChipItem({
-  seasonName,
-  active,
-  onSelect,
-}: {
-  seasonName: string;
-  active: boolean;
-  onSelect: () => void;
-}) {
+function SeasonChipItem({ seasonName, active, onSelect }: { seasonName: string; active: boolean; onSelect: () => void }) {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
@@ -173,35 +165,16 @@ function SeasonChipItem({
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onSelect}
-      style={[
-        styles.chip,
-        active && styles.chipActive,
-        isFocused && styles.chipFocused,
-      ]}
+      style={[styles.chip, active && styles.chipActive, isFocused && styles.chipFocused]}
     >
-      <Text
-        style={[
-          styles.chipText,
-          (active || isFocused) && { color: "#000000", fontWeight: "900" },
-        ]}
-      >
+      <Text style={[styles.chipText, (active || isFocused) && { color: "#000000", fontWeight: "900" }]}>
         Temporada {seasonName}
       </Text>
     </Pressable>
   );
 }
 
-function TVEpisodeRowItem({
-  ep,
-  pct,
-  index,
-  onPress,
-}: {
-  ep: Episode;
-  pct: number;
-  index: number;
-  onPress: () => void;
-}) {
+function TVEpisodeRowItem({ ep, pct, index, onPress }: { ep: Episode; pct: number; index: number; onPress: () => void }) {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
@@ -211,10 +184,7 @@ function TVEpisodeRowItem({
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
-      style={[
-        styles.epRow,
-        isFocused && styles.epRowFocused,
-      ]}
+      style={[styles.epRow, isFocused && styles.epRowFocused]}
     >
       <View style={styles.epThumb}>
         {ep.info?.movie_image ? (
@@ -254,17 +224,9 @@ function TVBackButton({ onPress, top }: { onPress: () => void; top: number }) {
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
       hitSlop={10}
-      style={[
-        styles.backBtn,
-        { top },
-        isFocused && styles.backBtnFocused,
-      ]}
+      style={[styles.backBtn, { top }, isFocused && styles.backBtnFocused]}
     >
-      <Ionicons
-        name="chevron-back"
-        size={22}
-        color={isFocused ? "#000000" : colors.text}
-      />
+      <Ionicons name="chevron-back" size={22} color={isFocused ? "#000000" : colors.text} />
     </Pressable>
   );
 }
