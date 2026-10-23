@@ -1,3 +1,4 @@
+import { TrailerPreviewBox } from "../../src/components/TrailerPreviewBox";
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, FlatList } from "react-native";
 import { Image } from "expo-image";
