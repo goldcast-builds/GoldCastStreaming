@@ -7,12 +7,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert, Modal, View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
 
-interface UserProfile {
-  id: string;
-  name: string;
-  type: "normal" | "kids" | "adult" | "football";
-}
-
 export default function MoviesTab() {
   const router = useRouter();
   const source = useSession((s) => s.source);
@@ -25,7 +19,6 @@ export default function MoviesTab() {
   const progress = useSession((s) => s.ud.progress);
   const toggleFav = useSession((s) => s.toggleFav);
 
-  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
   const [adultPin, setAdultPin] = useState("0000");
   const [adultLocked, setAdultLocked] = useState(true);
   const [showPinModal, setShowPinModal] = useState(false);
@@ -35,11 +28,6 @@ export default function MoviesTab() {
   useFocusEffect(useCallback(() => {
     if (source?.kind === "xtream") loadVod();
     let isMounted = true;
-    AsyncStorage.getItem("@goldcast_active_profile").then((raw) => {
-      if (raw && isMounted) {
-        try { setCurrentProfile(JSON.parse(raw)); } catch {}
-      }
-    });
     AsyncStorage.getItem("@goldcast_adult_pin").then((val) => { if (val && isMounted) setAdultPin(val); });
     AsyncStorage.getItem("@goldcast_adult_locked").then((val) => { if (val !== null && isMounted) setAdultLocked(val === "true"); });
     return () => { isMounted = false; };
@@ -50,29 +38,18 @@ export default function MoviesTab() {
     return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates|filmes xxx/i.test(text);
   };
 
-  const isKidsContent = (name: string, categoryName: string = "") => {
-    const text = (name + " " + categoryName).toLowerCase();
-    return /infantil|kids|anima|desenho|disney|pixar|cartoon|turma|peppa|patrulha|barbie|lego|baby|nickelodeon|turma da mônica|galinha pintadinha|patrulha canina|ben 10|frozen|princesa|sonic|pokemon|minions|super onze|dragon ball|naruto|one piece/i.test(text);
-  };
-
-  // Filtragem estrita dos filmes pelo perfil ativo
+  // Exibe todos os filmes da API livremente, ocultando o conteúdo adulto apenas se o bloqueio PIN estiver ativo
   const filteredVod = useMemo(() => {
     if (!catalog.vod) return [];
-    const profileType = currentProfile?.type;
 
     return catalog.vod.filter((v) => {
       const name = v.name || "";
       const cat = v.category_name || "";
 
-      if (profileType === "kids") return isKidsContent(name, cat);
-      if (profileType === "adult") return isAdultContent(name, cat);
-      if (profileType === "football") return false; 
-
-      // Se o bloqueio adulto estiver ativo num perfil normal, oculta da listagem inicial
-      if (adultLocked && currentProfile?.type !== "adult" && isAdultContent(name, cat)) return false;
+      if (adultLocked && isAdultContent(name, cat)) return false;
       return true;
     });
-  }, [catalog.vod, currentProfile?.type, adultLocked]);
+  }, [catalog.vod, adultLocked]);
 
   const progressById = useMemo(() => {
     const m: Record<string, number> = {};
@@ -92,13 +69,8 @@ export default function MoviesTab() {
       router.push({ pathname: "/movie/[id]", params: { id: item.id } });
     };
 
-    if (currentProfile?.type === "kids" && isAdultContent(item.name)) {
-      Alert.alert("Conteúdo Restrito", "Este perfil infantil não tem permissão para aceder a este filme.");
-      return;
-    }
-
     // Solicita o PIN de segurança se for conteúdo adulto e o bloqueio estiver ativo
-    if (adultLocked && currentProfile?.type !== "adult" && isAdultContent(item.name)) {
+    if (adultLocked && isAdultContent(item.name)) {
       setPendingItemToOpen(() => openAction);
       setEnteredPin("");
       setShowPinModal(true);
@@ -126,9 +98,9 @@ export default function MoviesTab() {
   return (
     <>
       <CatalogGrid
-        title={currentProfile?.type === "kids" ? "Filmes Infantis & Animações" : currentProfile?.type === "adult" ? "Filmes Adultos (+18)" : "Filmes"}
+        title="Filmes"
         testIDPrefix="movies"
-        searchPlaceholder={currentProfile?.type === "kids" ? "Buscar filmes infantis..." : "Buscar filmes..."}
+        searchPlaceholder="Buscar filmes..."
         items={items}
         cats={catalog.vodCats}
         loading={loading && !catalog.vodLoaded}
@@ -139,7 +111,7 @@ export default function MoviesTab() {
         continueIds={continueIds}
         onOpen={handleOpenMovie}
         onFav={(i) => toggleFav("vod", i.id)}
-        emptyText="Nenhum filme disponível para este perfil."
+        emptyText="Nenhum filme disponível."
       />
 
       <Modal visible={showPinModal} transparent animationType="fade" onRequestClose={() => setShowPinModal(false)}>
