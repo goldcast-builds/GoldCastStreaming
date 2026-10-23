@@ -53,8 +53,7 @@
       "expo-status-bar",
       "expo-video",
       "expo-document-picker",
-      "@react-native-vector-icons/ionicons",
-      "react-native-webview"
+      "@react-native-vector-icons/ionicons"
     ],
     "experiments": {
       "typedRoutes": true
