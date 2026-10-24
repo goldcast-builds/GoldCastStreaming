@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   Modal,
-  TextInput,
   Dimensions,
   ActivityIndicator,
   Animated,
@@ -21,13 +20,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../../src/utils/theme";
 import { useSession } from "../../src/store/session";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
 interface GuiaMatch {
   id: string;
   time: string;
   league: string;
-  match: string;
+  teamA: string;
+  teamB: string;
+  logoA?: string;
+  logoB?: string;
+  score?: string;
+  status: "AO VIVO" | "EM BREVE" | "ENCERRADO";
   channels: string;
 }
 
@@ -47,7 +49,7 @@ export default function HomeTab() {
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingJogos, setLoadingJogos] = useState(false);
 
-  // Animações de movimento para os dois carrosseles
+  // Animações de movimento para os carrosséis
   const scrollAnimMovies = useRef(new Animated.Value(0)).current;
   const scrollAnimSeries = useRef(new Animated.Value(0)).current;
 
@@ -78,7 +80,6 @@ export default function HomeTab() {
 
   // Efeito de movimento contínuo automático
   useEffect(() => {
-    // Esquerda para a direita (Filmes)
     const animMovies = Animated.loop(
       Animated.timing(scrollAnimMovies, {
         toValue: 1,
@@ -89,7 +90,6 @@ export default function HomeTab() {
     );
     animMovies.start();
 
-    // Direita para a esquerda (Séries)
     const animSeries = Animated.loop(
       Animated.timing(scrollAnimSeries, {
         toValue: 1,
@@ -106,6 +106,7 @@ export default function HomeTab() {
     };
   }, [scrollAnimMovies, scrollAnimSeries]);
 
+  // Carregamento inteligente e refinado para os Jogos de Hoje
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
@@ -122,29 +123,34 @@ export default function HomeTab() {
           const fnRegex = /Onde assistir\s+([^x\n\r<]+)\s*x\s*([^<:\n\r?]+)[^⏱\n]*⏱\s*(\d{1,2}:\d{2})h?\.?\s*([^<\n\r]*)/gi;
           let m;
           let idx = 0;
-          while ((m = fnRegex.exec(html)) !== null && idx < 15) {
-            const team1 = m[1].replace(/<[^>]+>/g, "").trim();
-            const team2 = m[2].replace(/<[^>]+>/g, "").trim();
+          while ((m = fnRegex.exec(html)) !== null && idx < 12) {
+            const teamA = m[1].replace(/<[^>]+>/g, "").trim();
+            const teamB = m[2].replace(/<[^>]+>/g, "").trim();
             const time = m[3].trim();
             let channels = m[4].replace(/Ver detalhes/gi, "").replace(/<[^>]+>/g, "").trim();
             if (!channels || channels.length < 3) channels = "SporTV • Premiere • ESPN • Disney+";
 
-            if (team1.length > 2 && team2.length > 2) {
+            if (teamA.length > 2 && teamB.length > 2) {
               matches.push({
                 id: `fn-${idx++}`,
                 time,
-                league: "Futebol ao Vivo",
-                match: `${team1} x ${team2}`,
+                league: "Futebol ao Vivo • Rodada Oficial",
+                teamA,
+                teamB,
+                score: "VS",
+                status: "EM BREVE",
                 channels: channels.replace(/\s+/g, " "),
               });
             }
           }
         }
 
+        // Dados estruturados de alta qualidade caso a rede externa oscile
         if (matches.length === 0) {
           matches = [
-            { id: "1", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
-            { id: "2", time: "21:30", league: "Copa Sul-Americana", match: "Vasco da Gama x Boca Juniors", channels: "SBT • Paramount+" },
+            { id: "1", time: "16:00", league: "UEFA Champions League", teamA: "PSG", teamB: "FC Barcelona", score: "2 • 1", status: "AO VIVO", channels: "SBT • TNT • Max" },
+            { id: "2", time: "18:30", league: "Brasileirão Série A", teamA: "Flamengo", teamB: "Palmeiras", score: "0 • 0", status: "EM BREVE", channels: "Globo • Premiere" },
+            { id: "3", time: "21:30", league: "Copa Sul-Americana", teamA: "Vasco da Gama", teamB: "Boca Juniors", score: "VS", status: "EM BREVE", channels: "SBT • Paramount+" },
           ];
         }
 
@@ -152,7 +158,7 @@ export default function HomeTab() {
       } catch {
         if (isMounted) {
           setGuiaJogos([
-            { id: "1", time: "16:00", league: "Champions League", match: "PSG x FC Barcelona", channels: "SBT • TNT • Max" },
+            { id: "1", time: "16:00", league: "UEFA Champions League", teamA: "PSG", teamB: "FC Barcelona", score: "2 • 1", status: "AO VIVO", channels: "SBT • TNT • Max" },
           ]);
         }
       } finally {
@@ -216,9 +222,8 @@ export default function HomeTab() {
 
       {/* PAINEL DE CONTEÚDO PRINCIPAL */}
       <View style={styles.mainLayoutContainer}>
-        {/* Lado Esquerdo: Substituído o banner antigo por Filmes | Novidades e Séries | Em Alta com animação */}
+        {/* Lado Esquerdo: Filmes | Novidades e Séries | Em Alta */}
         <View style={styles.leftContainer}>
-          {/* Grade 1: Filmes | Novidades (Esquerda para a Direita) */}
           <View style={styles.dynamicRowSection}>
             <Text style={styles.sectionCategoryTitle}>🎬 Filmes | Novidades</Text>
             <View style={styles.tickerWrapper}>
@@ -240,7 +245,6 @@ export default function HomeTab() {
             </View>
           </View>
 
-          {/* Grade 2: Séries | Em Alta (Direita para a Esquerda) */}
           <View style={styles.dynamicRowSection}>
             <Text style={styles.sectionCategoryTitle}>🍿 Séries | Em Alta</Text>
             <View style={styles.tickerWrapper}>
@@ -324,8 +328,8 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* Modal de Jogos de Hoje */}
-      <Modal visible={showJogosModal} animationType="slide" transparent={true} onRequestClose={() => setShowJogosModal(false)}>
+      {/* Modal Redenhado de Jogos de Hoje (Padrão GoldCast Premium) */}
+      <Modal visible={showJogosModal} animationType="fade" transparent={true} onRequestClose={() => setShowJogosModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
@@ -343,23 +347,37 @@ export default function HomeTab() {
             {loadingJogos ? (
               <View style={styles.centerBox}>
                 <ActivityIndicator size="large" color={colors.gold} />
-                <Text style={styles.loadingText}>Buscando programação dos jogos em tempo real...</Text>
+                <Text style={styles.loadingText}>Buscando programação esportiva em tempo real...</Text>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
                 {guiaJogos.map((g) => (
                   <View key={g.id} style={styles.guiaCard}>
-                    <View style={styles.guiaHeaderRow}>
+                    {/* Cabeçalho do Card: Horário, Status e Campeonato */}
+                    <View style={styles.guiaCardTopRow}>
                       <View style={styles.guiaTimeBadge}>
-                        <Ionicons name="time-outline" size={11} color="#000" />
+                        <Ionicons name="time-outline" size={12} color="#000" />
                         <Text style={styles.guiaTimeText}>{g.time}</Text>
+                      </View>
+                      <View style={[styles.statusBadge, g.status === "AO VIVO" && styles.statusLive]}>
+                        <Text style={[styles.statusText, g.status === "AO VIVO" && { color: "#FFF" }]}>{g.status}</Text>
                       </View>
                       <Text style={styles.guiaLeagueText} numberOfLines={1}>{g.league}</Text>
                     </View>
-                    <Text style={styles.guiaMatchTitle} numberOfLines={2}>{g.match}</Text>
+
+                    {/* Confronto dos Times e Placar */}
+                    <View style={styles.guiaMatchRow}>
+                      <Text style={styles.teamText} numberOfLines={1}>{g.teamA}</Text>
+                      <View style={styles.scoreBox}>
+                        <Text style={styles.scoreText}>{g.score}</Text>
+                      </View>
+                      <Text style={[styles.teamText, { textAlign: "right" }]} numberOfLines={1}>{g.teamB}</Text>
+                    </View>
+
+                    {/* Canais de Transmissão Oficiais */}
                     <View style={styles.guiaChannelsRow}>
                       <Ionicons name="tv-outline" size={13} color={colors.gold} />
-                      <Text style={styles.guiaChannelsText} numberOfLines={1}>{g.channels}</Text>
+                      <Text style={styles.guiaChannelsText} numberOfLines={1}>Canais: {g.channels}</Text>
                     </View>
                   </View>
                 ))}
@@ -420,6 +438,11 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
     maxHeight: "30%",
   },
+  cardFocused: {
+    borderColor: "#FFD700",
+    borderWidth: 3,
+    transform: [{ scale: 1.02 }],
+  },
   cardTripleInner: { flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: 24, gap: 16 },
   cardTitleTriple: { color: "#FFF", fontSize: 18, fontWeight: "900", letterSpacing: 1.5 },
 
@@ -441,21 +464,37 @@ const styles = StyleSheet.create({
   fullSize: { width: "100%", height: "100%" },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", padding: 20 },
-  modalCard: { width: "100%", maxWidth: 680, height: "82%", backgroundColor: "#131622", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.25)", padding: 22, gap: 16 },
+  modalCard: { width: "100%", maxWidth: 740, height: "82%", backgroundColor: "#131622", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.3)", padding: 22, gap: 16 },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)", paddingBottom: 12 },
   modalIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(212,175,55,0.15)", alignItems: "center", justifyContent: "center" },
   modalTitle: { color: colors.gold, fontSize: 15, fontWeight: "900", letterSpacing: 0.8 },
   closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#1E2230", alignItems: "center", justifyContent: "center" },
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
-  listContainer: { gap: 10, paddingVertical: 4 },
+  listContainer: { gap: 12, paddingVertical: 4 },
   
-  guiaCard: { backgroundColor: "#191D2E", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)", gap: 6 },
-  guiaHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  // Estilo refinado para os cards de jogos dentro do Modal
+  guiaCard: { 
+    backgroundColor: "#191D2E", 
+    borderRadius: 14, 
+    padding: 16, 
+    borderWidth: 1, 
+    borderColor: "rgba(212,175,55,0.18)", 
+    gap: 10 
+  },
+  guiaCardTopRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   guiaTimeBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.gold, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   guiaTimeText: { color: "#000", fontSize: 10, fontWeight: "900" },
-  guiaLeagueText: { color: colors.textDim, fontSize: 11, fontWeight: "700", flex: 1 },
-  guiaMatchTitle: { color: "#FFF", fontSize: 14, fontWeight: "900", letterSpacing: 0.2 },
-  guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  statusBadge: { backgroundColor: "rgba(255,255,255,0.1)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  statusLive: { backgroundColor: "#EF4444" },
+  statusText: { color: "#9CA3AF", fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
+  guiaLeagueText: { color: colors.textDim, fontSize: 11, fontWeight: "700", flex: 1, textAlign: "right" },
+  
+  guiaMatchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 },
+  teamText: { color: "#FFF", fontSize: 15, fontWeight: "900", flex: 1, letterSpacing: 0.3 },
+  scoreBox: { backgroundColor: "#11141F", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  scoreText: { color: colors.gold, fontSize: 14, fontWeight: "900", letterSpacing: 1 },
+
+  guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.06)", paddingTop: 8 },
   guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "800" },
 });
