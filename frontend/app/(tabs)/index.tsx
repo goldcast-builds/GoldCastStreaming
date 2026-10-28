@@ -106,59 +106,46 @@ export default function HomeTab() {
     };
   }, [scrollAnimMovies, scrollAnimSeries]);
 
-  // Carregamento inteligente e refinado para os Jogos de Hoje
+  // Carregamento estruturado com a grade exata enviada diariamente
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
     const fetchGuia = async () => {
       setLoadingJogos(true);
       try {
-        let matches: GuiaMatch[] = [];
-        const res = await fetch("https://www.futebolnatv.com.br/", {
-          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
-        }).catch(() => null);
+        let matches: GuiaMatch[] = [
+          // 🏆 CAMPEONATO BRASILEIRO — SÉRIE A
+          { id: "br-1", time: "19:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Fluminense", teamB: "Internacional", score: "VS", status: "EM BREVE", channels: "RECORD • Premiere" },
+          { id: "br-2", time: "19:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Santos", teamB: "Palmeiras", score: "VS", status: "EM BREVE", channels: "SPORTV • Premiere" },
+          { id: "br-3", time: "19:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "RB Bragantino", teamB: "Chapecoense", score: "VS", status: "EM BREVE", channels: "Premiere" },
+          { id: "br-4", time: "21:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Bahia", teamB: "São Paulo", score: "VS", status: "EM BREVE", channels: "Globo • Premiere" },
+          { id: "br-5", time: "21:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Remo", teamB: "Botafogo", score: "VS", status: "EM BREVE", channels: "Globo • Premiere" },
 
-        if (res && res.ok) {
-          const html = await res.text();
-          const fnRegex = /Onde assistir\s+([^x\n\r<]+)\s*x\s*([^<:\n\r?]+)[^⏱\n]*⏱\s*(\d{1,2}:\d{2})h?\.?\s*([^<\n\r]*)/gi;
-          let m;
-          let idx = 0;
-          while ((m = fnRegex.exec(html)) !== null && idx < 12) {
-            const teamA = m[1].replace(/<[^>]+>/g, "").trim();
-            const teamB = m[2].replace(/<[^>]+>/g, "").trim();
-            const time = m[3].trim();
-            let channels = m[4].replace(/Ver detalhes/gi, "").replace(/<[^>]+>/g, "").trim();
-            if (!channels || channels.length < 3) channels = "SporTV • Premiere • ESPN • Disney+";
-
-            if (teamA.length > 2 && teamB.length > 2) {
-              matches.push({
-                id: `fn-${idx++}`,
-                time,
-                league: "Futebol ao Vivo • Rodada Oficial",
-                teamA,
-                teamB,
-                score: "VS",
-                status: "EM BREVE",
-                channels: channels.replace(/\s+/g, " "),
-              });
-            }
-          }
-        }
-
-        // Dados estruturados de alta qualidade caso a rede externa oscile
-        if (matches.length === 0) {
-          matches = [
-            { id: "1", time: "16:00", league: "UEFA Champions League", teamA: "PSG", teamB: "FC Barcelona", score: "2 • 1", status: "AO VIVO", channels: "SBT • TNT • Max" },
-            { id: "2", time: "18:30", league: "Brasileirão Série A", teamA: "Flamengo", teamB: "Palmeiras", score: "0 • 0", status: "EM BREVE", channels: "Globo • Premiere" },
-            { id: "3", time: "21:30", league: "Copa Sul-Americana", teamA: "Vasco da Gama", teamB: "Boca Juniors", score: "VS", status: "EM BREVE", channels: "SBT • Paramount+" },
-          ];
-        }
+          // 🌍 FUTEBOL INTERNACIONAL
+          { id: "int-1", time: "14:30", league: "FUTEBOL INTERNACIONAL", teamA: "AC Milan", teamB: "Bologna", score: "VS", status: "EM BREVE", channels: "ESPN 4 • Disney+" },
+          { id: "int-2", time: "14:30", league: "FUTEBOL INTERNACIONAL", teamA: "Parma", teamB: "Udinese", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-3", time: "14:30", league: "FUTEBOL INTERNACIONAL", teamA: "Venezia", teamB: "Inter", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-4", time: "15:00", league: "FUTEBOL INTERNACIONAL", teamA: "Anaitasuna", teamB: "Deportivo Alavés", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-5", time: "15:00", league: "FUTEBOL INTERNACIONAL", teamA: "Tarancón", teamB: "Levante", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-6", time: "16:30", league: "FUTEBOL INTERNACIONAL", teamA: "Manchester City", teamB: "Brighton", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-7", time: "16:45", league: "FUTEBOL INTERNACIONAL", teamA: "Genoa", teamB: "Juventus", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-8", time: "16:45", league: "FUTEBOL INTERNACIONAL", teamA: "Monza", teamB: "Napoli", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-9", time: "16:45", league: "FUTEBOL INTERNACIONAL", teamA: "AFC Bournemouth", teamB: "Aston Villa", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-10", time: "16:45", league: "FUTEBOL INTERNACIONAL", teamA: "Fulham", teamB: "Crystal Palace", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-11", time: "16:45", league: "FUTEBOL INTERNACIONAL", teamA: "Sunderland", teamB: "Brentford", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-12", time: "17:00", league: "FUTEBOL INTERNACIONAL", teamA: "Liverpool FC", teamB: "Chelsea", score: "VS", status: "EM BREVE", channels: "ESPN • Disney+" },
+          { id: "int-13", time: "17:00", league: "FUTEBOL INTERNACIONAL", teamA: "Navalcarnero", teamB: "Real Betis", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-14", time: "17:00", league: "FUTEBOL INTERNACIONAL", teamA: "Salamanca", teamB: "Celta de Vigo", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-15", time: "17:00", league: "FUTEBOL INTERNACIONAL", teamA: "Tavernes", teamB: "Valencia", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-16", time: "20:30", league: "FUTEBOL INTERNACIONAL", teamA: "Inter Miami", teamB: "FC Cincinnati", score: "VS", status: "EM BREVE", channels: "Apple TV" },
+        ];
 
         if (isMounted) setGuiaJogos(matches);
       } catch {
+        // Fallback de segurança caso ocorra qualquer exceção
         if (isMounted) {
           setGuiaJogos([
-            { id: "1", time: "16:00", league: "UEFA Champions League", teamA: "PSG", teamB: "FC Barcelona", score: "2 • 1", status: "AO VIVO", channels: "SBT • TNT • Max" },
+            { id: "1", time: "19:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Fluminense", teamB: "Internacional", score: "VS", status: "EM BREVE", channels: "RECORD • Premiere" },
           ]);
         }
       } finally {
@@ -337,7 +324,7 @@ export default function HomeTab() {
                 <View style={styles.modalIconBox}>
                   <Ionicons name="football" size={18} color={colors.gold} />
                 </View>
-                <Text style={styles.modalTitle}>JOGOS DE HOJE — GUIA NA TV</Text>
+                <Text style={styles.modalTitle}>🔥 JOGOS DE HOJE — GUIA NA TV</Text>
               </View>
               <Pressable onPress={() => setShowJogosModal(false)} style={styles.closeBtn} focusable={true}>
                 <Ionicons name="close" size={18} color="#FFF" />
@@ -347,13 +334,13 @@ export default function HomeTab() {
             {loadingJogos ? (
               <View style={styles.centerBox}>
                 <ActivityIndicator size="large" color={colors.gold} />
-                <Text style={styles.loadingText}>Buscando programação esportiva em tempo real...</Text>
+                <Text style={styles.loadingText}>Carregando programação oficial do dia...</Text>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
                 {guiaJogos.map((g) => (
                   <View key={g.id} style={styles.guiaCard}>
-                    {/* Cabeçalho do Card: Horário, Status e Campeonato */}
+                    {/* Cabeçalho do Card: Horário, Status e Categoria/Campeonato */}
                     <View style={styles.guiaCardTopRow}>
                       <View style={styles.guiaTimeBadge}>
                         <Ionicons name="time-outline" size={12} color="#000" />
@@ -473,7 +460,6 @@ const styles = StyleSheet.create({
   loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
   listContainer: { gap: 12, paddingVertical: 4 },
   
-  // Estilo refinado para os cards de jogos dentro do Modal
   guiaCard: { 
     backgroundColor: "#191D2E", 
     borderRadius: 14, 
