@@ -49,7 +49,6 @@ export default function HomeTab() {
   const [dailyCardsImages, setDailyCardsImages] = useState<string[]>([]);
   const [loadingJogos, setLoadingJogos] = useState(false);
 
-  // Animações de movimento para os carrosséis
   const scrollAnimMovies = useRef(new Animated.Value(0)).current;
   const scrollAnimSeries = useRef(new Animated.Value(0)).current;
 
@@ -78,7 +77,6 @@ export default function HomeTab() {
     }, [session, loadVod, loadSeries])
   );
 
-  // Efeito de movimento contínuo automático
   useEffect(() => {
     const animMovies = Animated.loop(
       Animated.timing(scrollAnimMovies, {
@@ -106,37 +104,39 @@ export default function HomeTab() {
     };
   }, [scrollAnimMovies, scrollAnimSeries]);
 
-  // Carregamento da grade e dos banners direto do Supabase
+  // Carregamento direto da tabela do Supabase (daily_matches)
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
     const fetchGuiaAndBanners = async () => {
       setLoadingJogos(true);
       try {
-        // 1. Busca os cards de imagem cadastrados no Supabase (substitua URL e chave conforme seu projeto ou utilize o client do Supabase)
-        // Exemplo de requisição REST para a tabela do Supabase:
-        /*
-        const resImages = await fetch("https://SEU_PROJETO.supabase.co/rest/v1/daily_matches?select=image_url", {
+        // Busca os links das imagens diretamente da tabela criada no Supabase
+        const resImages = await fetch("https://lijsnoovwvxebzbaal.supabase.co/rest/v1/daily_matches?select=image_url", {
           headers: {
-            "apikey": "SUA_SUPABASE_ANON_KEY",
-            "Authorization": "Bearer SUA_SUPABASE_ANON_KEY"
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", // Substitua pela sua chave anon real se necessário ou use o client
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
           }
-        });
-        const imagesJson = await resImages.json();
-        if (imagesJson && Array.isArray(imagesJson)) {
-          setDailyCardsImages(imagesJson.map((i: any) => i.image_url));
-        }
-        */
+        }).catch(() => null);
 
-        // Fallback estruturado com as imagens de exemplo caso queira testar imediatamente
-        if (dailyCardsImages.length === 0 && isMounted) {
-          setDailyCardsImages([
+        let fetchedImages: string[] = [];
+        if (resImages && resImages.ok) {
+          const json = await resImages.json();
+          if (Array.isArray(json)) {
+            fetchedImages = json.map((item: any) => item.image_url).filter(Boolean);
+          }
+        }
+
+        // Se não encontrar na base de dados, usa as imagens padrão para teste
+        if (fetchedImages.length === 0) {
+          fetchedImages = [
             "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1000&auto=format&fit=crop",
             "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1000&auto=format&fit=crop",
-          ]);
+          ];
         }
 
-        // 2. Grade de Jogos do Dia
+        if (isMounted) setDailyCardsImages(fetchedImages);
+
         let matches: GuiaMatch[] = [
           { id: "br-1", time: "19:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Fluminense", teamB: "Internacional", score: "VS", status: "EM BREVE", channels: "RECORD • Premiere" },
           { id: "br-2", time: "19:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Santos", teamB: "Palmeiras", score: "VS", status: "EM BREVE", channels: "SPORTV • Premiere" },
@@ -152,7 +152,7 @@ export default function HomeTab() {
 
         if (isMounted) setGuiaJogos(matches);
       } catch {
-        // Fallback de segurança
+        // Fallback
       } finally {
         if (isMounted) setLoadingJogos(false);
       }
@@ -185,7 +185,6 @@ export default function HomeTab() {
 
   return (
     <View style={[styles.root, { backgroundColor: "#11141F" }]}>
-      {/* CABEÇALHO COM CÓDIGO DE ATIVAÇÃO NO CENTRO SUPERIOR */}
       <View style={styles.tvHeader}>
         <View style={styles.headerLeft}>
           <Pressable focusable={true} onPress={() => router.push("/(tabs)/settings")} style={styles.headerIconBtn} hitSlop={10}>
@@ -194,7 +193,6 @@ export default function HomeTab() {
           <Text style={styles.tvBrand}>GoldCast Media Player</Text>
         </View>
 
-        {/* Código de Ativação no Centro Superior */}
         <View style={styles.headerCenterCode}>
           <Ionicons name="key" size={13} color={colors.gold} />
           <Text style={styles.codeText}>{activationCode}</Text>
@@ -212,9 +210,7 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* PAINEL DE CONTEÚDO PRINCIPAL */}
       <View style={styles.mainLayoutContainer}>
-        {/* Lado Esquerdo: Filmes | Novidades e Séries | Em Alta */}
         <View style={styles.leftContainer}>
           <View style={styles.dynamicRowSection}>
             <Text style={styles.sectionCategoryTitle}>🎬 Filmes | Novidades</Text>
@@ -258,7 +254,6 @@ export default function HomeTab() {
             </View>
           </View>
 
-          {/* Barra Inferior com Atalhos */}
           <View style={styles.bottomBarBelow}>
             <Pressable focusable={true} onPress={() => setShowJogosModal(true)} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
               <Ionicons name="football-outline" size={20} color="#FFF" />
@@ -283,7 +278,6 @@ export default function HomeTab() {
           </View>
         </View>
 
-        {/* Lado Direito: Os 3 Blocos Proporcionados (Filmes, Séries e Canais) */}
         <View style={styles.rightColumn}>
           <Pressable
             focusable={true}
@@ -320,7 +314,6 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* Modal Redenhado de Jogos de Hoje com Alternador de Abas */}
       <Modal visible={showJogosModal} animationType="fade" transparent={true} onRequestClose={() => setShowJogosModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -332,7 +325,6 @@ export default function HomeTab() {
                 <Text style={styles.modalTitle}>🔥 JOGOS DE HOJE — GUIA NA TV</Text>
               </View>
 
-              {/* Botões de Alternância de Abas (Lista vs Cards Oficiais) */}
               <View style={styles.tabToggleRow}>
                 <Pressable
                   focusable={true}
@@ -394,7 +386,7 @@ export default function HomeTab() {
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
                 {dailyCardsImages.map((imgUrl, index) => (
                   <View key={`img-${index}`} style={styles.imageCardWrapper}>
-                    <Image source={{ uri: imgUrl }} style={styles.dailyCardImage} contentFit="contain" />
+                    <Image source={{ uri: imgUrl }} style={styles.dailyCardImage} contentFit="cover" />
                   </View>
                 ))}
               </ScrollView>
@@ -480,7 +472,7 @@ const styles = StyleSheet.create({
   fullSize: { width: "100%", height: "100%" },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", padding: 20 },
-  modalCard: { width: "100%", maxWidth: 800, height: "85%", backgroundColor: "#131622", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.3)", padding: 22, gap: 16 },
+  modalCard: { width: "100%", maxWidth: 850, height: "88%", backgroundColor: "#131622", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.3)", padding: 22, gap: 16 },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)", paddingBottom: 12 },
   modalIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(212,175,55,0.15)", alignItems: "center", justifyContent: "center" },
   modalTitle: { color: colors.gold, fontSize: 15, fontWeight: "900", letterSpacing: 0.8 },
@@ -494,7 +486,7 @@ const styles = StyleSheet.create({
   closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#1E2230", alignItems: "center", justifyContent: "center" },
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
-  listContainer: { gap: 12, paddingVertical: 4 },
+  listContainer: { gap: 16, paddingVertical: 4 },
   
   guiaCard: { 
     backgroundColor: "#191D2E", 
@@ -520,6 +512,6 @@ const styles = StyleSheet.create({
   guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.06)", paddingTop: 8 },
   guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "800" },
 
-  imageCardWrapper: { width: "100%", height: 420, backgroundColor: "#000", borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  imageCardWrapper: { width: "100%", height: 460, backgroundColor: "#11141F", borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: "rgba(212,175,55,0.2)" },
   dailyCardImage: { width: "100%", height: "100%" },
 });
