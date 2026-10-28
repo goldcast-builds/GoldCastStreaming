@@ -104,22 +104,23 @@ export default function HomeTab() {
     };
   }, [scrollAnimMovies, scrollAnimSeries]);
 
-  // Carregamento direto da tabela do Supabase (daily_matches)
+  // Carregamento rigoroso direto da tabela daily_matches do seu Supabase
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
     const fetchGuiaAndBanners = async () => {
       setLoadingJogos(true);
       try {
-        // Busca os links das imagens diretamente da tabela criada no Supabase
+        let fetchedImages: string[] = [];
+        
+        // Requisição para buscar exatamente os links salvos na sua tabela daily_matches
         const resImages = await fetch("https://lijsnoovwvxebzbaal.supabase.co/rest/v1/daily_matches?select=image_url", {
           headers: {
-            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", // Substitua pela sua chave anon real se necessário ou use o client
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpanNub292d3Z4ZWJ6YmFhbCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzY2OTY5NTI1LCJleHAiOjIwODI1NDU1MjV9.exemplo_chave_public_anon", // Certifique-se de usar a sua chave anon real se necessário
             "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
           }
         }).catch(() => null);
 
-        let fetchedImages: string[] = [];
         if (resImages && resImages.ok) {
           const json = await resImages.json();
           if (Array.isArray(json)) {
@@ -127,14 +128,7 @@ export default function HomeTab() {
           }
         }
 
-        // Se não encontrar na base de dados, usa as imagens padrão para teste
-        if (fetchedImages.length === 0) {
-          fetchedImages = [
-            "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1000&auto=format&fit=crop",
-            "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1000&auto=format&fit=crop",
-          ];
-        }
-
+        // Se por ventura a tabela estiver vazia ou offline, exibe array limpo sem dados fictícios errados
         if (isMounted) setDailyCardsImages(fetchedImages);
 
         let matches: GuiaMatch[] = [
@@ -152,7 +146,7 @@ export default function HomeTab() {
 
         if (isMounted) setGuiaJogos(matches);
       } catch {
-        // Fallback
+        // Fallback seguro
       } finally {
         if (isMounted) setLoadingJogos(false);
       }
@@ -384,11 +378,18 @@ export default function HomeTab() {
               </ScrollView>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
-                {dailyCardsImages.map((imgUrl, index) => (
-                  <View key={`img-${index}`} style={styles.imageCardWrapper}>
-                    <Image source={{ uri: imgUrl }} style={styles.dailyCardImage} contentFit="cover" />
+                {dailyCardsImages.length === 0 ? (
+                  <View style={styles.centerBox}>
+                    <Ionicons name="images-outline" size={40} color={colors.gold} />
+                    <Text style={styles.loadingText}>Nenhum card oficial cadastrado no Supabase para hoje.</Text>
                   </View>
-                ))}
+                ) : (
+                  dailyCardsImages.map((imgUrl, index) => (
+                    <View key={`img-${index}`} style={styles.imageCardWrapper}>
+                      <Image source={{ uri: imgUrl }} style={styles.dailyCardImage} contentFit="contain" />
+                    </View>
+                  ))
+                )}
               </ScrollView>
             )}
           </View>
@@ -485,7 +486,7 @@ const styles = StyleSheet.create({
 
   closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#1E2230", alignItems: "center", justifyContent: "center" },
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
+  loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "600", textAlign: "center" },
   listContainer: { gap: 16, paddingVertical: 4 },
   
   guiaCard: { 
@@ -512,6 +513,6 @@ const styles = StyleSheet.create({
   guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.06)", paddingTop: 8 },
   guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "800" },
 
-  imageCardWrapper: { width: "100%", height: 460, backgroundColor: "#11141F", borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: "rgba(212,175,55,0.2)" },
+  imageCardWrapper: { width: "100%", height: 440, backgroundColor: "#000000", borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: "rgba(212,175,55,0.2)", marginBottom: 10 },
   dailyCardImage: { width: "100%", height: "100%" },
 });
