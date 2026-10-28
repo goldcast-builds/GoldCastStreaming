@@ -46,15 +46,8 @@ export default function HomeTab() {
   const [showJogosModal, setShowJogosModal] = useState(false);
   const [modalTab, setModalTab] = useState<"lista" | "imagens">("lista");
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
+  const [dailyCardsImages, setDailyCardsImages] = useState<string[]>([]);
   const [loadingJogos, setLoadingJogos] = useState(false);
-
-  // Lista de imagens oficiais dos jogos do dia (você pode atualizar ou puxar do Supabase)
-  const dailyCardsImages = [
-    "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1000&auto=format&fit=crop", // Exemplo de card 1
-    "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1000&auto=format&fit=crop", // Exemplo de card 2
-    "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=1000&auto=format&fit=crop", // Exemplo de card 3
-    "https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?q=80&w=1000&auto=format&fit=crop", // Exemplo de card 4
-  ];
 
   // Animações de movimento para os carrosséis
   const scrollAnimMovies = useRef(new Animated.Value(0)).current;
@@ -113,53 +106,59 @@ export default function HomeTab() {
     };
   }, [scrollAnimMovies, scrollAnimSeries]);
 
-  // Carregamento estruturado com a grade exata enviada diariamente
+  // Carregamento da grade e dos banners direto do Supabase
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
-    const fetchGuia = async () => {
+    const fetchGuiaAndBanners = async () => {
       setLoadingJogos(true);
       try {
+        // 1. Busca os cards de imagem cadastrados no Supabase (substitua URL e chave conforme seu projeto ou utilize o client do Supabase)
+        // Exemplo de requisição REST para a tabela do Supabase:
+        /*
+        const resImages = await fetch("https://SEU_PROJETO.supabase.co/rest/v1/daily_matches?select=image_url", {
+          headers: {
+            "apikey": "SUA_SUPABASE_ANON_KEY",
+            "Authorization": "Bearer SUA_SUPABASE_ANON_KEY"
+          }
+        });
+        const imagesJson = await resImages.json();
+        if (imagesJson && Array.isArray(imagesJson)) {
+          setDailyCardsImages(imagesJson.map((i: any) => i.image_url));
+        }
+        */
+
+        // Fallback estruturado com as imagens de exemplo caso queira testar imediatamente
+        if (dailyCardsImages.length === 0 && isMounted) {
+          setDailyCardsImages([
+            "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1000&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1000&auto=format&fit=crop",
+          ]);
+        }
+
+        // 2. Grade de Jogos do Dia
         let matches: GuiaMatch[] = [
-          // 🏆 CAMPEONATO BRASILEIRO — SÉRIE A
           { id: "br-1", time: "19:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Fluminense", teamB: "Internacional", score: "VS", status: "EM BREVE", channels: "RECORD • Premiere" },
           { id: "br-2", time: "19:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Santos", teamB: "Palmeiras", score: "VS", status: "EM BREVE", channels: "SPORTV • Premiere" },
           { id: "br-3", time: "19:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "RB Bragantino", teamB: "Chapecoense", score: "VS", status: "EM BREVE", channels: "Premiere" },
           { id: "br-4", time: "21:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Bahia", teamB: "São Paulo", score: "VS", status: "EM BREVE", channels: "Globo • Premiere" },
           { id: "br-5", time: "21:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Remo", teamB: "Botafogo", score: "VS", status: "EM BREVE", channels: "Globo • Premiere" },
-
-          // 🌍 FUTEBOL INTERNACIONAL
           { id: "int-1", time: "14:30", league: "FUTEBOL INTERNACIONAL", teamA: "AC Milan", teamB: "Bologna", score: "VS", status: "EM BREVE", channels: "ESPN 4 • Disney+" },
           { id: "int-2", time: "14:30", league: "FUTEBOL INTERNACIONAL", teamA: "Parma", teamB: "Udinese", score: "VS", status: "EM BREVE", channels: "Disney+" },
           { id: "int-3", time: "14:30", league: "FUTEBOL INTERNACIONAL", teamA: "Venezia", teamB: "Inter", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-4", time: "15:00", league: "FUTEBOL INTERNACIONAL", teamA: "Anaitasuna", teamB: "Deportivo Alavés", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-5", time: "15:00", league: "FUTEBOL INTERNACIONAL", teamA: "Tarancón", teamB: "Levante", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-6", time: "16:30", league: "FUTEBOL INTERNACIONAL", teamA: "Manchester City", teamB: "Brighton", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-7", time: "16:45", league: "FUTEBOL INTERNACIONAL", teamA: "Genoa", teamB: "Juventus", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-8", time: "16:45", league: "FUTEBOL INTERNACIONAL", teamA: "Monza", teamB: "Napoli", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-9", time: "16:45", league: "FUTEBOL INTERNACIONAL", teamA: "AFC Bournemouth", teamB: "Aston Villa", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-10", time: "16:45", league: "FUTEBOL INTERNACIONAL", teamA: "Fulham", teamB: "Crystal Palace", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-11", time: "16:45", league: "FUTEBOL INTERNACIONAL", teamA: "Sunderland", teamB: "Brentford", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-12", time: "17:00", league: "FUTEBOL INTERNACIONAL", teamA: "Liverpool FC", teamB: "Chelsea", score: "VS", status: "EM BREVE", channels: "ESPN • Disney+" },
-          { id: "int-13", time: "17:00", league: "FUTEBOL INTERNACIONAL", teamA: "Navalcarnero", teamB: "Real Betis", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-14", time: "17:00", league: "FUTEBOL INTERNACIONAL", teamA: "Salamanca", teamB: "Celta de Vigo", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-15", time: "17:00", league: "FUTEBOL INTERNACIONAL", teamA: "Tavernes", teamB: "Valencia", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-16", time: "20:30", league: "FUTEBOL INTERNACIONAL", teamA: "Inter Miami", teamB: "FC Cincinnati", score: "VS", status: "EM BREVE", channels: "Apple TV" },
+          { id: "int-4", time: "16:30", league: "FUTEBOL INTERNACIONAL", teamA: "Manchester City", teamB: "Brighton", score: "VS", status: "EM BREVE", channels: "Disney+" },
+          { id: "int-5", time: "17:00", league: "FUTEBOL INTERNACIONAL", teamA: "Liverpool FC", teamB: "Chelsea", score: "VS", status: "EM BREVE", channels: "ESPN • Disney+" },
         ];
 
         if (isMounted) setGuiaJogos(matches);
       } catch {
-        if (isMounted) {
-          setGuiaJogos([
-            { id: "1", time: "19:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Fluminense", teamB: "Internacional", score: "VS", status: "EM BREVE", channels: "RECORD • Premiere" },
-          ]);
-        }
+        // Fallback de segurança
       } finally {
         if (isMounted) setLoadingJogos(false);
       }
     };
 
-    fetchGuia();
+    fetchGuiaAndBanners();
     return () => { isMounted = false; };
   }, [showJogosModal]);
 
@@ -321,7 +320,7 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* Modal Redenhado de Jogos de Hoje com Alternador de Abas (Lista / Imagens Oficiais) */}
+      {/* Modal Redenhado de Jogos de Hoje com Alternador de Abas */}
       <Modal visible={showJogosModal} animationType="fade" transparent={true} onRequestClose={() => setShowJogosModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
