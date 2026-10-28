@@ -1,4 +1,4 @@
-Name: Build Android APK (Expo)
+name: Build Android APK (Expo)
 
 on:
   push:
