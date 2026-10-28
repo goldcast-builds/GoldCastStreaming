@@ -26,8 +26,6 @@ interface GuiaMatch {
   league: string;
   teamA: string;
   teamB: string;
-  logoA?: string;
-  logoB?: string;
   score?: string;
   status: "AO VIVO" | "EM BREVE" | "ENCERRADO";
   channels: string;
@@ -46,8 +44,17 @@ export default function HomeTab() {
   const [currentTime, setCurrentTime] = useState("");
 
   const [showJogosModal, setShowJogosModal] = useState(false);
+  const [modalTab, setModalTab] = useState<"lista" | "imagens">("lista");
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [loadingJogos, setLoadingJogos] = useState(false);
+
+  // Lista de imagens oficiais dos jogos do dia (você pode atualizar ou puxar do Supabase)
+  const dailyCardsImages = [
+    "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1000&auto=format&fit=crop", // Exemplo de card 1
+    "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1000&auto=format&fit=crop", // Exemplo de card 2
+    "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=1000&auto=format&fit=crop", // Exemplo de card 3
+    "https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?q=80&w=1000&auto=format&fit=crop", // Exemplo de card 4
+  ];
 
   // Animações de movimento para os carrosséis
   const scrollAnimMovies = useRef(new Animated.Value(0)).current;
@@ -142,7 +149,6 @@ export default function HomeTab() {
 
         if (isMounted) setGuiaJogos(matches);
       } catch {
-        // Fallback de segurança caso ocorra qualquer exceção
         if (isMounted) {
           setGuiaJogos([
             { id: "1", time: "19:30", league: "CAMPEONATO BRASILEIRO — SÉRIE A", teamA: "Fluminense", teamB: "Internacional", score: "VS", status: "EM BREVE", channels: "RECORD • Premiere" },
@@ -315,7 +321,7 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* Modal Redenhado de Jogos de Hoje (Padrão GoldCast Premium) */}
+      {/* Modal Redenhado de Jogos de Hoje com Alternador de Abas (Lista / Imagens Oficiais) */}
       <Modal visible={showJogosModal} animationType="fade" transparent={true} onRequestClose={() => setShowJogosModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -326,6 +332,25 @@ export default function HomeTab() {
                 </View>
                 <Text style={styles.modalTitle}>🔥 JOGOS DE HOJE — GUIA NA TV</Text>
               </View>
+
+              {/* Botões de Alternância de Abas (Lista vs Cards Oficiais) */}
+              <View style={styles.tabToggleRow}>
+                <Pressable
+                  focusable={true}
+                  onPress={() => setModalTab("lista")}
+                  style={[styles.tabBtn, modalTab === "lista" && styles.tabBtnActive]}
+                >
+                  <Text style={[styles.tabBtnText, modalTab === "lista" && styles.tabBtnTextActive]}>📅 Horários</Text>
+                </Pressable>
+                <Pressable
+                  focusable={true}
+                  onPress={() => setModalTab("imagens")}
+                  style={[styles.tabBtn, modalTab === "imagens" && styles.tabBtnActive]}
+                >
+                  <Text style={[styles.tabBtnText, modalTab === "imagens" && styles.tabBtnTextActive]}>🖼️ Cards Oficiais</Text>
+                </Pressable>
+              </View>
+
               <Pressable onPress={() => setShowJogosModal(false)} style={styles.closeBtn} focusable={true}>
                 <Ionicons name="close" size={18} color="#FFF" />
               </Pressable>
@@ -336,11 +361,10 @@ export default function HomeTab() {
                 <ActivityIndicator size="large" color={colors.gold} />
                 <Text style={styles.loadingText}>Carregando programação oficial do dia...</Text>
               </View>
-            ) : (
+            ) : modalTab === "lista" ? (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
                 {guiaJogos.map((g) => (
                   <View key={g.id} style={styles.guiaCard}>
-                    {/* Cabeçalho do Card: Horário, Status e Categoria/Campeonato */}
                     <View style={styles.guiaCardTopRow}>
                       <View style={styles.guiaTimeBadge}>
                         <Ionicons name="time-outline" size={12} color="#000" />
@@ -352,7 +376,6 @@ export default function HomeTab() {
                       <Text style={styles.guiaLeagueText} numberOfLines={1}>{g.league}</Text>
                     </View>
 
-                    {/* Confronto dos Times e Placar */}
                     <View style={styles.guiaMatchRow}>
                       <Text style={styles.teamText} numberOfLines={1}>{g.teamA}</Text>
                       <View style={styles.scoreBox}>
@@ -361,11 +384,18 @@ export default function HomeTab() {
                       <Text style={[styles.teamText, { textAlign: "right" }]} numberOfLines={1}>{g.teamB}</Text>
                     </View>
 
-                    {/* Canais de Transmissão Oficiais */}
                     <View style={styles.guiaChannelsRow}>
                       <Ionicons name="tv-outline" size={13} color={colors.gold} />
                       <Text style={styles.guiaChannelsText} numberOfLines={1}>Canais: {g.channels}</Text>
                     </View>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
+                {dailyCardsImages.map((imgUrl, index) => (
+                  <View key={`img-${index}`} style={styles.imageCardWrapper}>
+                    <Image source={{ uri: imgUrl }} style={styles.dailyCardImage} contentFit="contain" />
                   </View>
                 ))}
               </ScrollView>
@@ -451,10 +481,17 @@ const styles = StyleSheet.create({
   fullSize: { width: "100%", height: "100%" },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", padding: 20 },
-  modalCard: { width: "100%", maxWidth: 740, height: "82%", backgroundColor: "#131622", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.3)", padding: 22, gap: 16 },
+  modalCard: { width: "100%", maxWidth: 800, height: "85%", backgroundColor: "#131622", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.3)", padding: 22, gap: 16 },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)", paddingBottom: 12 },
   modalIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(212,175,55,0.15)", alignItems: "center", justifyContent: "center" },
   modalTitle: { color: colors.gold, fontSize: 15, fontWeight: "900", letterSpacing: 0.8 },
+  
+  tabToggleRow: { flexDirection: "row", gap: 8, backgroundColor: "#191D2E", padding: 4, borderRadius: 10 },
+  tabBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  tabBtnActive: { backgroundColor: colors.gold },
+  tabBtnText: { color: "#9CA3AF", fontSize: 11, fontWeight: "800" },
+  tabBtnTextActive: { color: "#000", fontWeight: "900" },
+
   closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#1E2230", alignItems: "center", justifyContent: "center" },
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
@@ -483,4 +520,7 @@ const styles = StyleSheet.create({
 
   guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.06)", paddingTop: 8 },
   guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "800" },
+
+  imageCardWrapper: { width: "100%", height: 420, backgroundColor: "#000", borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  dailyCardImage: { width: "100%", height: "100%" },
 });
