@@ -8,14 +8,14 @@ export default function IntroScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    // Temporizador ajustado para 13.5 segundos para cobrir a nova introdução de 13s sem cortes
+    // Temporizador ajustado para 13.5 segundos (cobre os 13s da nova intro sem cortes)
     const timer = setTimeout(async () => {
       try {
         const savedCode = await AsyncStorage.getItem("@goldcast_saved_code");
         if (savedCode && savedCode.length > 3) {
-          router.replace("/(tabs)"); // Se já tiver chave/sessão ativa, vai direto para a Home
+          router.replace("/(tabs)"); // Se já tiver sessão, vai direto para a Home
         } else {
-          router.replace("/login"); // Se não tiver, encaminha para a tela de login
+          router.replace("/login"); // Se não tiver, vai para a tela de login
         }
       } catch {
         router.replace("/login");
@@ -28,7 +28,7 @@ export default function IntroScreen() {
   return (
     <View style={styles.container}>
       <Video
-        source={require("../assets/intro-video.mp4")} // Certifique-se de que o caminho do vídeo está correto
+        source={require("../assets/Intro.mp4")} 
         style={styles.video}
         resizeMode={ResizeMode.COVER}
         shouldPlay
