@@ -1,155 +1,66 @@
-import { useCallback, useMemo, useState } from "react";
-import { useFocusEffect, useRouter } from "expo-router";
-import { CatalogGrid, GridItem } from "../../src/components/CatalogGrid";
-import { useSession } from "../../src/store/session";
-import { NoVod } from "../../src/components/NoVod";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Alert, Modal, View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, TextInput, ScrollView, Pressable } from "react-native";
+import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
+import { useSession } from "../../src/store/session";
 
-export default function MoviesTab() {
+export default function MoviesScreen() {
   const router = useRouter();
-  const source = useSession((s) => s.source);
   const catalog = useSession((s) => s.catalog);
-  const loading = useSession((s) => s.loading.vod);
-  const error = useSession((s) => s.errors.vod);
-  const loadVod = useSession((s) => s.loadVod);
-  const favIds = useSession((s) => s.ud.favorites.vod);
-  const recents = useSession((s) => s.ud.recents.vod);
-  const progress = useSession((s) => s.ud.progress);
-  const toggleFav = useSession((s) => s.toggleFav);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const [adultPin, setAdultPin] = useState("0000");
-  const [adultLocked, setAdultLocked] = useState(true);
-  const [showPinModal, setShowPinModal] = useState(false);
-  const [enteredPin, setEnteredPin] = useState("");
-  const [pendingItemToOpen, setPendingItemToOpen] = useState<any>(null);
-
-  useFocusEffect(useCallback(() => {
-    if (source?.kind === "xtream") loadVod();
-    let isMounted = true;
-    AsyncStorage.getItem("@goldcast_adult_pin").then((val) => { if (val && isMounted) setAdultPin(val); });
-    AsyncStorage.getItem("@goldcast_adult_locked").then((val) => { if (val !== null && isMounted) setAdultLocked(val === "true"); });
-    return () => { isMounted = false; };
-  }, [source?.kind, loadVod]));
-
-  const isAdultContent = (name: string, categoryName: string = "") => {
-    const text = (name + " " + categoryName).toLowerCase();
-    return /adult|xxx|\+18|18\+|private|sensual|erot|sex|playboy|venus|hot|seventeen|privates|filmes xxx/i.test(text);
-  };
-
-  // Exibe todos os filmes da API livremente, ocultando o conteúdo adulto apenas se o bloqueio PIN estiver ativo
-  const filteredVod = useMemo(() => {
-    if (!catalog.vod) return [];
-
-    return catalog.vod.filter((v) => {
-      const name = v.name || "";
-      const cat = v.category_name || "";
-
-      if (adultLocked && isAdultContent(name, cat)) return false;
-      return true;
-    });
-  }, [catalog.vod, adultLocked]);
-
-  const progressById = useMemo(() => {
-    const m: Record<string, number> = {};
-    Object.values(progress).forEach((p) => { if (p.item.kind === "vod" && p.duration > 0) m[p.item.id] = p.position / p.duration; });
-    return m;
-  }, [progress]);
-
-  const continueIds = useMemo(() => Object.values(progress).filter((p) => p.item.kind === "vod" && p.duration > 0 && p.position / p.duration < 0.97).sort((a, b) => b.updatedAt - a.updatedAt).map((p) => p.item.id), [progress]);
-
-  const items: GridItem[] = useMemo(() => filteredVod.map((v) => ({
-    id: String(v.stream_id), name: v.name, poster: v.stream_icon, categoryId: v.category_id,
-    year: v.year || undefined, genre: v.genre || undefined, rating: v.rating != null ? String(v.rating) : undefined, progress: progressById[String(v.stream_id)],
-  })), [filteredVod, progressById]);
-
-  const handleOpenMovie = (item: GridItem) => {
-    const openAction = () => {
-      router.push({ pathname: "/movie/[id]", params: { id: item.id } });
-    };
-
-    // Solicita o PIN de segurança se for conteúdo adulto e o bloqueio estiver ativo
-    if (adultLocked && isAdultContent(item.name)) {
-      setPendingItemToOpen(() => openAction);
-      setEnteredPin("");
-      setShowPinModal(true);
-    } else {
-      openAction();
-    }
-  };
-
-  const verifyPinAndOpen = () => {
-    if (enteredPin === adultPin) {
-      setShowPinModal(false);
-      setEnteredPin("");
-      if (pendingItemToOpen) {
-        pendingItemToOpen();
-        setPendingItemToOpen(null);
-      }
-    } else {
-      Alert.alert("Senha Incorreta", "A senha padrão é 0000.");
-      setEnteredPin("");
-    }
-  };
-
-  if (source?.kind !== "xtream") return <NoVod title="Filmes" />;
+  const movies = catalog.vod || [];
+  const filteredMovies = movies.filter((m) => m.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
-    <>
-      <CatalogGrid
-        title="Filmes"
-        testIDPrefix="movies"
-        searchPlaceholder="Buscar filmes..."
-        items={items}
-        cats={catalog.vodCats}
-        loading={loading && !catalog.vodLoaded}
-        error={!catalog.vodLoaded ? error : null}
-        onRetry={() => loadVod(true)}
-        favIds={favIds}
-        recentIds={recents.map((r) => String(r.stream_id))}
-        continueIds={continueIds}
-        onOpen={handleOpenMovie}
-        onFav={(i) => toggleFav("vod", i.id)}
-        emptyText="Nenhum filme disponível."
-      />
+    <View style={styles.root}>
+      <View style={styles.header}>
+        <Pressable focusable={true} onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+          <Ionicons name="arrow-back" size={24} color="#FFF" />
+        </Pressable>
+        <Text style={styles.headerTitle}>FILMES</Text>
+      </View>
 
-      <Modal visible={showPinModal} transparent animationType="fade" onRequestClose={() => setShowPinModal(false)}>
-        <View style={styles.modalBg}>
-          <View style={styles.pinCard}>
-            <Ionicons name="lock-closed" size={32} color="#EF4444" />
-            <Text style={styles.pinTitle}>Conteúdo Protegido (+18)</Text>
-            <Text style={styles.pinSub}>Digite a senha PIN (padrão: 0000)</Text>
-            <TextInput
-              secureTextEntry
-              keyboardType="numeric"
-              maxLength={4}
-              placeholder="••••"
-              placeholderTextColor="#777"
-              value={enteredPin}
-              onChangeText={setEnteredPin}
-              style={styles.pinInput}
-            />
-            <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 10 }}>
-              <Pressable onPress={() => setShowPinModal(false)} style={[styles.pinBtn, { backgroundColor: "#262936" }]}>
-                <Text style={{ color: "#FFF", fontWeight: "800" }}>CANCELAR</Text>
-              </Pressable>
-              <Pressable onPress={verifyPinAndOpen} style={[styles.pinBtn, { backgroundColor: "#EF4444" }]}>
-                <Text style={{ color: "#FFF", fontWeight: "900" }}>LIBERAR</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </>
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={18} color="#E9C46A" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Buscar filmes..."
+          placeholderTextColor="#6B7280"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          blurOnSubmit={false}
+          // Impede que o foco fuja de forma agressiva ao digitar
+        />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.gridContainer} showsVerticalScrollIndicator={false}>
+        {filteredMovies.map((item, idx) => (
+          <Pressable
+            key={`mov-${item.stream_id}-${idx}`}
+            focusable={true}
+            onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
+            style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
+          >
+            <Text style={styles.mediaTitle} numberOfLines={2}>{item.name}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", alignItems: "center", justifyContent: "center", padding: 20 },
-  pinCard: { width: "100%", maxWidth: 360, backgroundColor: "#181818", borderRadius: 20, padding: 22, alignItems: "center", gap: 12, borderWidth: 1.5, borderColor: "#EF4444" },
-  pinTitle: { color: "#FFF", fontSize: 18, fontWeight: "800" },
-  pinSub: { color: "#9CA3AF", fontSize: 12, textAlign: "center" },
-  pinInput: { width: "100%", height: 48, backgroundColor: "#262626", borderRadius: 10, paddingHorizontal: 14, color: "#FFF", fontSize: 22, textAlign: "center", letterSpacing: 8 },
-  pinBtn: { flex: 1, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  root: { flex: 1, backgroundColor: "#1B3B4B", paddingHorizontal: 36, paddingVertical: 20 },
+  header: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 14 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+  headerTitle: { color: "#FFF", fontSize: 18, fontWeight: "900", letterSpacing: 1.2 },
+
+  searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#152E3B", borderRadius: 12, paddingHorizontal: 14, height: 44, marginBottom: 18, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)", gap: 10 },
+  searchInput: { flex: 1, color: "#FFF", fontSize: 13, fontWeight: "700" },
+
+  gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 16, paddingBottom: 20 },
+  mediaCard: { width: 130, height: 190, backgroundColor: "#152E3B", borderRadius: 10, padding: 8, justifyContent: "flex-end", borderWidth: 2, borderColor: "transparent" },
+  cardFocused: { borderColor: "#E9C46A", borderWidth: 3, transform: [{ scale: 1.05 }] },
+  mediaTitle: { color: "#FFF", fontSize: 10, fontWeight: "800", textAlign: "center" },
 });
