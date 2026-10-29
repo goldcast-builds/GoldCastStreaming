@@ -104,7 +104,6 @@ export default function HomeTab() {
     };
   }, [scrollAnimMovies, scrollAnimSeries]);
 
-  // Carregamento robusto e direto dos cards do Supabase com fallback garantido
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
@@ -131,7 +130,6 @@ export default function HomeTab() {
           console.log("Erro ao buscar do Supabase:", e);
         }
 
-        // Se por algum motivo a API falhar, injetamos as suas imagens diretamente para garantir exibição imediata na TV
         if (fetchedImages.length === 0) {
           fetchedImages = [
             "https://lijsnoovwvxebzbaal.supabase.co/storage/v1/object/public/jogos-diarios/1000611243.jpg",
@@ -190,7 +188,7 @@ export default function HomeTab() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: "#11141F" }]}>
+    <View style={[styles.root, { backgroundColor: "#1B3B4B" }]}>
       <View style={styles.tvHeader}>
         <View style={styles.headerLeft}>
           <Pressable focusable={true} onPress={() => router.push("/(tabs)/settings")} style={styles.headerIconBtn} hitSlop={10}>
@@ -200,7 +198,7 @@ export default function HomeTab() {
         </View>
 
         <View style={styles.headerCenterCode}>
-          <Ionicons name="key" size={13} color={colors.gold} />
+          <Ionicons name="key" size={13} color="#E9C46A" />
           <Text style={styles.codeText}>{activationCode}</Text>
         </View>
 
@@ -277,7 +275,7 @@ export default function HomeTab() {
             </Pressable>
 
             <View style={styles.statusBadgeWrap}>
-              <Text style={[styles.premiumLabel, isTestAccount && { color: "#FBBF24" }]}>
+              <Text style={[styles.premiumLabel, isTestAccount && { color: "#E76F51" }]}>
                 {isTestAccount ? "Teste" : "Premium"}
               </Text>
             </View>
@@ -288,7 +286,7 @@ export default function HomeTab() {
           <Pressable
             focusable={true}
             onPress={() => router.push("/(tabs)/movies")}
-            style={({ focused }) => [styles.cardTriple, { backgroundColor: "#C2185B" }, focused && styles.cardFocused]}
+            style={({ focused }) => [styles.cardTriple, { backgroundColor: "#E76F51" }, focused && styles.cardFocused]}
           >
             <View style={styles.cardTripleInner}>
               <Ionicons name="play-circle-outline" size={32} color="#FFF" />
@@ -299,7 +297,7 @@ export default function HomeTab() {
           <Pressable
             focusable={true}
             onPress={() => router.push("/(tabs)/series")}
-            style={({ focused }) => [styles.cardTriple, { backgroundColor: "#F97316" }, focused && styles.cardFocused]}
+            style={({ focused }) => [styles.cardTriple, { backgroundColor: "#F4A261" }, focused && styles.cardFocused]}
           >
             <View style={styles.cardTripleInner}>
               <Ionicons name="film-outline" size={32} color="#FFF" />
@@ -310,11 +308,11 @@ export default function HomeTab() {
           <Pressable
             focusable={true}
             onPress={() => router.push("/(tabs)/live")}
-            style={({ focused }) => [styles.cardTriple, { backgroundColor: "#2563EB" }, focused && styles.cardFocused]}
+            style={({ focused }) => [styles.cardTriple, { backgroundColor: "#2A9D8F" }, focused && styles.cardFocused]}
           >
             <View style={styles.cardTripleInner}>
               <Ionicons name="tv-outline" size={32} color="#FFF" />
-              <Text style={styles.cardTitleTriple}>Canais</Text>
+              <Text style={styles.cardTitleTriple}>CANAIS</Text>
             </View>
           </Pressable>
         </View>
@@ -326,7 +324,7 @@ export default function HomeTab() {
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                 <View style={styles.modalIconBox}>
-                  <Ionicons name="football" size={18} color={colors.gold} />
+                  <Ionicons name="football" size={18} color="#E9C46A" />
                 </View>
                 <Text style={styles.modalTitle}>🔥 JOGOS DE HOJE — GUIA NA TV</Text>
               </View>
@@ -355,7 +353,7 @@ export default function HomeTab() {
 
             {loadingJogos ? (
               <View style={styles.centerBox}>
-                <ActivityIndicator size="large" color={colors.gold} />
+                <ActivityIndicator size="large" color="#E9C46A" />
                 <Text style={styles.loadingText}>Carregando programação oficial do dia...</Text>
               </View>
             ) : modalTab === "lista" ? (
@@ -382,7 +380,7 @@ export default function HomeTab() {
                     </View>
 
                     <View style={styles.guiaChannelsRow}>
-                      <Ionicons name="tv-outline" size={13} color={colors.gold} />
+                      <Ionicons name="tv-outline" size={13} color="#E9C46A" />
                       <Text style={styles.guiaChannelsText} numberOfLines={1}>Canais: {g.channels}</Text>
                     </View>
                   </View>
@@ -392,7 +390,7 @@ export default function HomeTab() {
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
                 {dailyCardsImages.length === 0 ? (
                   <View style={styles.centerBox}>
-                    <Ionicons name="images-outline" size={40} color={colors.gold} />
+                    <Ionicons name="images-outline" size={40} color="#E9C46A" />
                     <Text style={styles.loadingText}>Nenhum card oficial cadastrado para hoje.</Text>
                   </View>
                 ) : (
@@ -431,18 +429,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(212,175,55,0.15)",
+    backgroundColor: "rgba(233,196,106,0.15)",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(212,175,55,0.4)",
+    borderColor: "rgba(233,196,106,0.4)",
   },
-  codeText: { color: colors.gold, fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
+  codeText: { color: "#E9C46A", fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
 
   headerRight: { flexDirection: "row", alignItems: "center", gap: 18 },
   headerIconBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerDate: { color: "#9CA3AF", fontSize: 14, fontWeight: "700" },
+  headerDate: { color: "#E9C46A", fontSize: 14, fontWeight: "700" },
   headerTime: { color: "#FFF", fontSize: 18, fontWeight: "900" },
 
   mainLayoutContainer: { flexDirection: "row", gap: 20, height: "76%" },
@@ -453,7 +451,7 @@ const styles = StyleSheet.create({
   sectionCategoryTitle: { color: "#FFF", fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
   tickerWrapper: { height: 115, overflow: "hidden", position: "relative" },
   tickerTrack: { flexDirection: "row", gap: 10, position: "absolute", left: 0 },
-  tickerCard: { width: 85, height: 115, borderRadius: 10, overflow: "hidden", backgroundColor: "#1A1D29", position: "relative" },
+  tickerCard: { width: 85, height: 115, borderRadius: 10, overflow: "hidden", backgroundColor: "#152E3B", position: "relative" },
   tickerGradient: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.85)", padding: 4 },
   tickerTitle: { color: "#FFF", fontSize: 9, fontWeight: "800", textAlign: "center" },
 
@@ -466,7 +464,7 @@ const styles = StyleSheet.create({
     maxHeight: "30%",
   },
   cardFocused: {
-    borderColor: "#FFD700",
+    borderColor: "#E9C46A",
     borderWidth: 3,
     transform: [{ scale: 1.02 }],
   },
@@ -486,52 +484,52 @@ const styles = StyleSheet.create({
   },
   bottomCardText: { color: "#FFF", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
   statusBadgeWrap: { flex: 0.8, alignItems: "flex-end", justifyContent: "center", paddingRight: 4 },
-  premiumLabel: { color: "#10B981", fontSize: 14, fontWeight: "900", letterSpacing: 0.5 },
+  premiumLabel: { color: "#2A9D8F", fontSize: 14, fontWeight: "900", letterSpacing: 0.5 },
 
   fullSize: { width: "100%", height: "100%" },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", padding: 20 },
-  modalCard: { width: "100%", maxWidth: 850, height: "88%", backgroundColor: "#131622", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(212,175,55,0.3)", padding: 22, gap: 16 },
+  modalCard: { width: "100%", maxWidth: 850, height: "88%", backgroundColor: "#152E3B", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(233,196,106,0.3)", padding: 22, gap: 16 },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)", paddingBottom: 12 },
-  modalIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(212,175,55,0.15)", alignItems: "center", justifyContent: "center" },
-  modalTitle: { color: colors.gold, fontSize: 15, fontWeight: "900", letterSpacing: 0.8 },
+  modalIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(233,196,106,0.15)", alignItems: "center", justifyContent: "center" },
+  modalTitle: { color: "#E9C46A", fontSize: 15, fontWeight: "900", letterSpacing: 0.8 },
   
-  tabToggleRow: { flexDirection: "row", gap: 8, backgroundColor: "#191D2E", padding: 4, borderRadius: 10 },
+  tabToggleRow: { flexDirection: "row", gap: 8, backgroundColor: "#1B3B4B", padding: 4, borderRadius: 10 },
   tabBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  tabBtnActive: { backgroundColor: colors.gold },
+  tabBtnActive: { backgroundColor: "#E9C46A" },
   tabBtnText: { color: "#9CA3AF", fontSize: 11, fontWeight: "800" },
   tabBtnTextActive: { color: "#000", fontWeight: "900" },
 
-  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#1E2230", alignItems: "center", justifyContent: "center" },
+  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#1B3B4B", alignItems: "center", justifyContent: "center" },
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "600", textAlign: "center" },
+  loadingText: { color: "#E9C46A", fontSize: 12, fontWeight: "600", textAlign: "center" },
   listContainer: { gap: 16, paddingVertical: 4 },
   
   guiaCard: { 
-    backgroundColor: "#191D2E", 
+    backgroundColor: "#1B3B4B", 
     borderRadius: 14, 
     padding: 16, 
     borderWidth: 1, 
-    borderColor: "rgba(212,175,55,0.18)", 
+    borderColor: "rgba(233,196,106,0.18)", 
     gap: 10 
   },
   guiaCardTopRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  guiaTimeBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.gold, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  guiaTimeBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#E9C46A", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   guiaTimeText: { color: "#000", fontSize: 10, fontWeight: "900" },
   statusBadge: { backgroundColor: "rgba(255,255,255,0.1)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  statusLive: { backgroundColor: "#EF4444" },
+  statusLive: { backgroundColor: "#E76F51" },
   statusText: { color: "#9CA3AF", fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
-  guiaLeagueText: { color: colors.textDim, fontSize: 11, fontWeight: "700", flex: 1, textAlign: "right" },
+  guiaLeagueText: { color: "#E9C46A", fontSize: 11, fontWeight: "700", flex: 1, textAlign: "right" },
   
   guiaMatchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 },
   teamText: { color: "#FFF", fontSize: 15, fontWeight: "900", flex: 1, letterSpacing: 0.3 },
-  scoreBox: { backgroundColor: "#11141F", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  scoreText: { color: colors.gold, fontSize: 14, fontWeight: "900", letterSpacing: 1 },
+  scoreBox: { backgroundColor: "#1B3B4B", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  scoreText: { color: "#E9C46A", fontSize: 14, fontWeight: "900", letterSpacing: 1 },
 
   guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.06)", paddingTop: 8 },
-  guiaChannelsText: { color: colors.gold, fontSize: 11.5, fontWeight: "800" },
+  guiaChannelsText: { color: "#E9C46A", fontSize: 11.5, fontWeight: "800" },
 
-  imageCardWrapper: { width: "100%", height: 440, backgroundColor: "#000000", borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: "rgba(212,175,55,0.2)", marginBottom: 10 },
+  imageCardWrapper: { width: "100%", height: 440, backgroundColor: "#000000", borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: "rgba(233,196,106,0.2)", marginBottom: 10 },
   dailyCardImage: { width: "100%", height: "100%" },
 
   imageCardWrapperVertical: { 
@@ -541,7 +539,7 @@ const styles = StyleSheet.create({
     borderRadius: 14, 
     overflow: "hidden", 
     borderWidth: 1.5, 
-    borderColor: "rgba(212,175,55,0.3)", 
+    borderColor: "rgba(233,196,106,0.3)", 
     marginBottom: 16,
     alignItems: "center",
     justifyContent: "center"
