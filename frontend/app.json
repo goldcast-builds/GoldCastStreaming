@@ -27,8 +27,13 @@
         "backgroundColor": "#000000"
       },
       "package": "com.emergent.goldcastplayer.jcke8k",
-      "permissions": ["INTERNET", "ACCESS_NETWORK_STATE"],
-      "usesCleartextTraffic": true
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ],
+      "usesCleartextTraffic": true,
+      "softwareKeyboardLayoutMode": "pan",
+      "largeHeap": true
     },
     "web": {
       "bundler": "metro",
