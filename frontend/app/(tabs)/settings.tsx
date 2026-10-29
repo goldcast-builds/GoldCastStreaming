@@ -25,6 +25,10 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleFeatureAlert = (title: string) => {
+    Alert.alert(title, "Esta funcionalidade estará disponível em breve.");
+  };
+
   return (
     <View style={styles.root}>
       <View style={styles.header}>
@@ -35,42 +39,42 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.gridContainer} showsVerticalScrollIndicator={false}>
-        <Pressable focusable={true} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable focusable={true} onPress={() => handleFeatureAlert("Conta")} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
           <Ionicons name="person-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Conta</Text>
         </Pressable>
 
-        <Pressable focusable={true} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable focusable={true} onPress={() => handleFeatureAlert("Atualizar App")} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
           <Ionicons name="cloud-download-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Atualizar App</Text>
         </Pressable>
 
-        <Pressable focusable={true} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable focusable={true} onPress={() => handleFeatureAlert("Listas M3U")} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
           <Ionicons name="list-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Listas M3U</Text>
         </Pressable>
 
-        <Pressable focusable={true} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable focusable={true} onPress={() => handleFeatureAlert("Atualizar Conteúdo")} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
           <Ionicons name="sync-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Atualizar conteúdo</Text>
         </Pressable>
 
-        <Pressable focusable={true} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable focusable={true} onPress={() => handleFeatureAlert("Reprodução")} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
           <Ionicons name="play-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Reprodução</Text>
         </Pressable>
 
-        <Pressable focusable={true} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable focusable={true} onPress={() => handleFeatureAlert("Histórico e Favoritos")} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
           <Ionicons name="time-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Histórico e favoritos</Text>
         </Pressable>
 
-        <Pressable focusable={true} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable focusable={true} onPress={() => handleFeatureAlert("Limpar Cache")} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
           <Ionicons name="brush-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Limpar cache</Text>
         </Pressable>
 
-        <Pressable focusable={true} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable focusable={true} onPress={() => handleFeatureAlert("Sobre")} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
           <Ionicons name="information-circle-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Sobre</Text>
         </Pressable>
