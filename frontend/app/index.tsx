@@ -1,11 +1,17 @@
 import React, { useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { Video, ResizeMode } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function IntroScreen() {
   const router = useRouter();
+
+  // Configura o leitor com o ficheiro Intro.mp4 na pasta assets
+  const player = useVideoPlayer(require("../assets/Intro.mp4"), (playerInstance) => {
+    playerInstance.loop = false;
+    playerInstance.play();
+  });
 
   useEffect(() => {
     // Temporizador ajustado para 13.5 segundos (cobre os 13s da nova intro sem cortes)
@@ -27,12 +33,12 @@ export default function IntroScreen() {
 
   return (
     <View style={styles.container}>
-      <Video
-        source={require("../assets/Intro.mp4")} 
+      <VideoView
+        player={player}
         style={styles.video}
-        resizeMode={ResizeMode.COVER}
-        shouldPlay
-        isLooping={false}
+        allowsFullscreen={false}
+        allowsPictureInPicture={false}
+        nativeControls={false}
       />
     </View>
   );
