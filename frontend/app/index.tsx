@@ -1,6 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native";
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -8,16 +7,29 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export default function LoginScreen() {
   const router = useRouter();
   const [tab, setTab] = useState<"xtream" | "codigo">("codigo");
-  const [email, setEmail] = useState("anderson009470@gmail.com");
-  const [code, setCode] = useState("GOLDCAST-ASN-0310");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+
+  // Ao abrir a tela, verifica se já existe um código salvo anteriormente no dispositivo
+  useEffect(() => {
+    AsyncStorage.getItem("@goldcast_saved_code").then((saved) => {
+      if (saved) {
+        setCode(saved);
+      }
+    });
+  }, []);
 
   const handleLogin = async () => {
     if (!code) {
       Alert.alert("Aviso", "Por favor, insira a chave de ativação.");
       return;
     }
-    await AsyncStorage.setItem("@goldcast_saved_code", code);
-    router.replace("/(tabs)");
+    try {
+      await AsyncStorage.setItem("@goldcast_saved_code", code);
+      router.replace("/(tabs)");
+    } catch {
+      Alert.alert("Erro", "Não foi possível guardar os dados de acesso.");
+    }
   };
 
   return (
@@ -58,6 +70,7 @@ export default function LoginScreen() {
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
+                placeholder="exemplo@email.com"
                 placeholderTextColor="#6B7280"
               />
             </View>
@@ -71,6 +84,7 @@ export default function LoginScreen() {
                 style={styles.input}
                 value={code}
                 onChangeText={setCode}
+                placeholder="Insira sua chave"
                 placeholderTextColor="#6B7280"
               />
             </View>
