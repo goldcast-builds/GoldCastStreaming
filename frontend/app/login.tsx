@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Logo } from "../src/components/Logo";
-import { colors } from "../src/utils/theme";
 import { useSession } from "../src/store/session";
 import { createM3UUrl, listLists, setActiveListId } from "../src/utils/api";
 
@@ -32,7 +31,7 @@ export default function LoginScreen() {
   const [step, setStep] = useState<"form" | "iptv">("form");
   const [connectMode, setConnectMode] = useState<"xtream" | "m3u">("xtream");
 
-  // Dados da licença
+  // Dados da licença (Iniciam vazios para que cada cliente insira os seus dados)
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
 
@@ -264,14 +263,16 @@ export default function LoginScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 },
+          { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 20 },
         ]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.logoWrap}>
-          <Logo size={120} />
+          <Logo size={70} />
         </View>
         <Text style={styles.brand}>GoldCast Media Player</Text>
+        <Text style={styles.subtitle}>Escolha o formato e introduza as fontes de reprodução.</Text>
 
         {step === "form" && (
           <View style={styles.tabSelector}>
@@ -297,10 +298,6 @@ export default function LoginScreen() {
         {/* 1. ATIVAÇÃO DO SOFTWARE */}
         {step === "form" && activeTab === "license" && (
           <View style={styles.formWrap}>
-            <Text style={styles.subtitle}>
-              Introduza o seu e-mail e chave de software para desbloquear o reprodutor.
-            </Text>
-
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>O SEU E-MAIL</Text>
               <TVInputField
@@ -315,7 +312,7 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>CHAVE DE ATIVAÇÃO</Text>
+              <Text style={styles.fieldLabel}>CHAVE DE ATIVAÇÃO / CÓDIGO</Text>
               <TVInputField
                 inputRef={codeRef}
                 icon="🔑"
@@ -324,7 +321,6 @@ export default function LoginScreen() {
                 onChangeText={(t: string) => setCode(t.toUpperCase())}
                 autoCapitalize="characters"
               />
-              <Text style={styles.hintText}>A chave de software será associada ao seu e-mail.</Text>
             </View>
 
             <TVActionButton
@@ -346,13 +342,6 @@ export default function LoginScreen() {
         {/* 2. ÁREA DE DEMONSTRAÇÃO (24H) */}
         {step === "form" && activeTab === "trial" && (
           <View style={styles.formWrap}>
-            <View style={styles.trialNoticeBox}>
-              <Text style={styles.trialNoticeTitle}>MODO DE DEMONSTRAÇÃO (TESTE)</Text>
-              <Text style={styles.trialNoticeText}>
-                Esta secção permite testar o reprodutor com o seu fornecedor de multimédia por até 24 horas antes de ativar a licença.
-              </Text>
-            </View>
-
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>SERVIDOR / URL DO PROVEDOR</Text>
               <TVInputField
@@ -366,34 +355,36 @@ export default function LoginScreen() {
               />
             </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>UTILIZADOR</Text>
-              <TVInputField
-                inputRef={userRef}
-                icon="👤"
-                placeholder="Nome de utilizador"
-                value={user}
-                onChangeText={setUser}
-                autoCapitalize="none"
-              />
-            </View>
+            <View style={styles.rowFields}>
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={styles.fieldLabel}>UTILIZADOR</Text>
+                <TVInputField
+                  inputRef={userRef}
+                  icon="👤"
+                  placeholder="Utilizador"
+                  value={user}
+                  onChangeText={setUser}
+                  autoCapitalize="none"
+                />
+              </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
-              <TVInputField
-                inputRef={passRef}
-                icon="🔒"
-                placeholder="Palavra-passe de acesso"
-                value={pass}
-                onChangeText={setPass}
-                secureTextEntry={!showPass}
-                autoCapitalize="none"
-                rightElement={
-                  <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
-                    <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
-                  </Pressable>
-                }
-              />
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
+                <TVInputField
+                  inputRef={passRef}
+                  icon="🔒"
+                  placeholder="Palavra-passe"
+                  value={pass}
+                  onChangeText={setPass}
+                  secureTextEntry={!showPass}
+                  autoCapitalize="none"
+                  rightElement={
+                    <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
+                      <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
+                    </Pressable>
+                  }
+                />
+              </View>
             </View>
 
             <TVActionButton
@@ -415,11 +406,6 @@ export default function LoginScreen() {
         {/* 3. LIGAÇÃO DE CONTEÚDOS (XTREAM OU M3U) */}
         {step === "iptv" && (
           <View style={styles.formWrap}>
-            <Text style={styles.subtitle}>
-              Reprodutor ativado com sucesso! Escolha o formato e introduza as fontes de reprodução.
-            </Text>
-
-            {/* SELETOR DE MODO: XTREAM OU M3U */}
             <View style={styles.tabSelector}>
               <TVTabButton
                 label="🔑 Servidor Xtream"
@@ -439,7 +425,6 @@ export default function LoginScreen() {
               />
             </View>
 
-            {/* MODO XTREAM */}
             {connectMode === "xtream" && (
               <>
                 <View style={styles.fieldGroup}>
@@ -455,44 +440,36 @@ export default function LoginScreen() {
                   />
                 </View>
 
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>UTILIZADOR</Text>
-                  <TVInputField
-                    inputRef={userRef}
-                    icon="👤"
-                    placeholder="Utilizador fornecido pelo seu provedor"
-                    value={user}
-                    onChangeText={setUser}
-                    autoCapitalize="none"
-                  />
-                </View>
+                <View style={styles.rowFields}>
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>UTILIZADOR</Text>
+                    <TVInputField
+                      inputRef={userRef}
+                      icon="👤"
+                      placeholder="Utilizador"
+                      value={user}
+                      onChangeText={setUser}
+                      autoCapitalize="none"
+                    />
+                  </View>
 
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
-                  <TVInputField
-                    inputRef={passRef}
-                    icon="🔒"
-                    placeholder="Palavra-passe de acesso"
-                    value={pass}
-                    onChangeText={setPass}
-                    secureTextEntry={!showPass}
-                    autoCapitalize="none"
-                    rightElement={
-                      <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
-                        <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
-                      </Pressable>
-                    }
-                  />
-                </View>
-
-                <View style={styles.rememberRow}>
-                  <Text style={styles.rememberTitle}>Guardar credenciais</Text>
-                  <Switch
-                    value={remember}
-                    onValueChange={setRemember}
-                    trackColor={{ true: colors.gold, false: "#222" }}
-                    thumbColor="#FFF"
-                  />
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
+                    <TVInputField
+                      inputRef={passRef}
+                      icon="🔒"
+                      placeholder="Palavra-passe"
+                      value={pass}
+                      onChangeText={setPass}
+                      secureTextEntry={!showPass}
+                      autoCapitalize="none"
+                      rightElement={
+                        <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
+                          <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
+                        </Pressable>
+                      }
+                    />
+                  </View>
                 </View>
 
                 <TVActionButton
@@ -503,7 +480,6 @@ export default function LoginScreen() {
               </>
             )}
 
-            {/* MODO M3U */}
             {connectMode === "m3u" && (
               <>
                 <View style={styles.fieldGroup}>
@@ -545,27 +521,19 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* FEEDBACKS VISUAIS */}
         {loading && statusMsg && (
           <View style={styles.statusBox}>
-            <ActivityIndicator color={colors.gold} size="small" />
+            <ActivityIndicator color="#E9C46A" size="small" />
             <Text style={styles.statusText}>{statusMsg}</Text>
           </View>
         )}
 
         {error && (
           <View style={styles.errorBox}>
-            <Text style={{ color: "#F44336", fontSize: 14, marginRight: 6 }}>⚠️</Text>
+            <Text style={{ color: "#E76F51", fontSize: 13, marginRight: 6 }}>⚠️</Text>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
-
-        {/* AVISO DE ISENÇÃO LEGAL */}
-        <View style={styles.disclaimerBox}>
-          <Text style={styles.disclaimerText}>
-            Aviso: O GoldCast é um reprodutor de multimédia neutro e não inclui qualquer canal ou conteúdo audiovisual. O utilizador é o único responsável pelo conteúdo inserido.
-          </Text>
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -596,7 +564,7 @@ function TVInputField({
       <TextInput
         ref={inputRef}
         placeholder={placeholder}
-        placeholderTextColor={isFocused ? "#A0A5B5" : "#666"}
+        placeholderTextColor={isFocused ? "#D1D5DB" : "#6B7280"}
         value={value}
         onChangeText={onChangeText}
         secureTextEntry={secureTextEntry}
@@ -629,7 +597,8 @@ function TVTabButton({ label, active, onPress }: { label: string; active: boolea
       <Text
         style={[
           styles.tabButtonText,
-          (active || isFocused) && { color: "#000", fontWeight: "900" },
+          active && { color: "#000", fontWeight: "900" },
+          isFocused && { color: "#FFF", fontWeight: "900" },
         ]}
       >
         {label}
@@ -678,39 +647,39 @@ function TVLinkButton({ label, onPress }: { label: string; onPress: () => void }
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#07080A" },
-  content: { paddingHorizontal: 20, maxWidth: 520, width: "100%", alignSelf: "center" },
-  logoWrap: { alignItems: "center" },
-  brand: { color: colors.gold, fontSize: 24, fontWeight: "700", textAlign: "center", letterSpacing: 0.5, marginTop: 6, marginBottom: 4 },
-  subtitle: { color: "#8E929C", fontSize: 13, textAlign: "center", marginBottom: 16, lineHeight: 18 },
-  tabSelector: { flexDirection: "row", backgroundColor: "#16181E", borderRadius: 12, padding: 4, marginTop: 6, marginBottom: 12, borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.08)" },
-  tabButton: { flex: 1, paddingVertical: 11, alignItems: "center", borderRadius: 8, borderWidth: 2, borderColor: "transparent" },
-  tabButtonActive: { backgroundColor: colors.gold },
-  tabButtonFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", transform: [{ scale: 1.04 }], elevation: 8 },
-  tabButtonText: { color: "#8E929C", fontSize: 12, fontWeight: "700" },
-  formWrap: { gap: 14, marginTop: 8 },
-  trialNoticeBox: { backgroundColor: "rgba(229, 169, 59, 0.08)", borderWidth: 1, borderColor: "rgba(229, 169, 59, 0.25)", borderRadius: 10, padding: 10, gap: 4 },
-  trialNoticeTitle: { color: colors.gold, fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
-  trialNoticeText: { color: "#C5C9D3", fontSize: 11.5, lineHeight: 16 },
+  root: { flex: 1, backgroundColor: "#1B3B4B" },
+  content: { paddingHorizontal: 30, maxWidth: 620, width: "100%", alignSelf: "center", justifyContent: "center" },
+  logoWrap: { alignItems: "center", marginBottom: 2 },
+  brand: { color: "#E9C46A", fontSize: 20, fontWeight: "900", textAlign: "center", letterSpacing: 0.8, marginBottom: 2 },
+  subtitle: { color: "#9CA3AF", fontSize: 11, textAlign: "center", marginBottom: 10, fontWeight: "600" },
+  
+  tabSelector: { flexDirection: "row", backgroundColor: "#152E3B", borderRadius: 10, padding: 3, marginBottom: 10, borderWidth: 1, borderColor: "rgba(233,196,106,0.15)" },
+  tabButton: { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 8, borderWidth: 2, borderColor: "transparent" },
+  tabButtonActive: { backgroundColor: "#E9C46A" },
+  tabButtonFocused: { borderColor: "#FFF", backgroundColor: "#1B3B4B", transform: [{ scale: 1.02 }] },
+  tabButtonText: { color: "#9CA3AF", fontSize: 11, fontWeight: "800" },
+
+  formWrap: { gap: 10 },
   fieldGroup: { width: "100%" },
-  fieldLabel: { color: "#8E929C", fontSize: 11, marginBottom: 6, fontWeight: "700", letterSpacing: 0.5 },
-  inputBox: { flexDirection: "row", alignItems: "center", backgroundColor: "#16181E", borderRadius: 12, borderWidth: 2, borderColor: "rgba(255, 255, 255, 0.1)", paddingHorizontal: 14, height: 52 },
-  inputBoxFocused: { borderColor: "#FFD700", borderWidth: 3, backgroundColor: "#202532", elevation: 12, transform: [{ scale: 1.02 }] },
-  inputEmoji: { fontSize: 16, marginRight: 10 },
-  textInput: { flex: 1, color: "#FFF", fontSize: 15 },
-  hintText: { color: "#777", fontSize: 11, marginTop: 4 },
-  btnGold: { backgroundColor: colors.gold, height: 52, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 6, borderWidth: 2, borderColor: "transparent" },
-  btnGoldFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3, elevation: 14, transform: [{ scale: 1.03 }] },
-  btnGoldText: { color: "#000", fontSize: 14, fontWeight: "800", letterSpacing: 0.5 },
-  linkBtn: { alignSelf: "center", paddingVertical: 8, paddingHorizontal: 14, marginTop: 4, borderRadius: 8, borderWidth: 1.5, borderColor: "transparent" },
-  linkBtnFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", transform: [{ scale: 1.04 }], elevation: 6 },
-  linkBtnText: { color: colors.gold, fontSize: 12.5, fontWeight: "700" },
-  rememberRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#16181E", borderRadius: 12, padding: 14 },
-  rememberTitle: { color: "#FFF", fontSize: 13, fontWeight: "600" },
-  statusBox: { marginTop: 14, flexDirection: "row", alignItems: "center", gap: 10, padding: 14, backgroundColor: "#16181E", borderRadius: 12 },
-  statusText: { color: "#FFF", fontSize: 13, fontWeight: "600" },
-  errorBox: { marginTop: 14, flexDirection: "row", alignItems: "center", padding: 14, backgroundColor: "rgba(244,67,54,0.12)", borderRadius: 12, borderWidth: 1, borderColor: "rgba(244,67,54,0.3)" },
-  errorText: { color: "#F44336", flex: 1, fontSize: 12 },
-  disclaimerBox: { marginTop: 24, padding: 12, borderRadius: 8, backgroundColor: "rgba(255, 255, 255, 0.03)", borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.07)" },
-  disclaimerText: { color: "#777C8A", fontSize: 10.5, textAlign: "center", lineHeight: 15 },
+  rowFields: { flexDirection: "row", gap: 12 },
+  fieldLabel: { color: "#E9C46A", fontSize: 9, marginBottom: 4, fontWeight: "800", letterSpacing: 0.5 },
+  
+  inputBox: { flexDirection: "row", alignItems: "center", backgroundColor: "#152E3B", borderRadius: 10, borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.08)", paddingHorizontal: 12, height: 44 },
+  inputBoxFocused: { borderColor: "#E9C46A", borderWidth: 2.5, backgroundColor: "#1B3B4B", transform: [{ scale: 1.01 }] },
+  inputEmoji: { fontSize: 14, marginRight: 8 },
+  textInput: { flex: 1, color: "#FFF", fontSize: 13, fontWeight: "700" },
+
+  btnGold: { backgroundColor: "#E9C46A", height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", marginTop: 4, borderWidth: 2, borderColor: "transparent" },
+  btnGoldFocused: { borderColor: "#FFF", borderWidth: 2.5, transform: [{ scale: 1.01 }] },
+  btnGoldText: { color: "#000", fontSize: 12, fontWeight: "900", letterSpacing: 0.8 },
+
+  linkBtn: { alignSelf: "center", paddingVertical: 6, paddingHorizontal: 10, marginTop: 2, borderRadius: 6 },
+  linkBtnFocused: { backgroundColor: "#E9C46A" },
+  linkBtnText: { color: "#E9C46A", fontSize: 11, fontWeight: "800" },
+
+  statusBox: { marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 10, backgroundColor: "#152E3B", borderRadius: 10 },
+  statusText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
+  
+  errorBox: { marginTop: 8, flexDirection: "row", alignItems: "center", padding: 10, backgroundColor: "rgba(231,111,81,0.12)", borderRadius: 10, borderWidth: 1, borderColor: "rgba(231,111,81,0.3)" },
+  errorText: { color: "#E76F51", flex: 1, fontSize: 11, fontWeight: "700" },
 });
