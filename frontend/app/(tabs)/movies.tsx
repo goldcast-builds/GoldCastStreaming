@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, FlatList } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
+import { Image } from "expo-image";
 import { useSession } from "../../src/store/session";
 
 export default function MoviesScreen() {
@@ -11,7 +12,6 @@ export default function MoviesScreen() {
 
   const movies = catalog.vod || [];
 
-  // Otimização com useMemo para filtrar apenas quando necessário, evitando lentidão
   const filteredMovies = useMemo(() => {
     if (!searchQuery.trim()) return movies;
     const query = searchQuery.toLowerCase();
@@ -34,7 +34,7 @@ export default function MoviesScreen() {
           placeholder="Buscar filmes..."
           placeholderTextColor="#6B7280"
           value={searchQuery}
-          onChangeText={searchQuery => setSearchQuery(searchQuery)}
+          onChangeText={setSearchQuery}
           blurOnSubmit={false}
         />
       </View>
@@ -42,22 +42,32 @@ export default function MoviesScreen() {
       <FlatList
         data={filteredMovies}
         keyExtractor={(item, idx) => `mov-${item?.stream_id || idx}-${idx}`}
-        numColumns={5} // Organiza em grelha de forma eficiente
+        numColumns={5}
         contentContainerStyle={styles.gridContainer}
         columnWrapperStyle={styles.columnWrapper}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={15} // Renderiza apenas os primeiros para abrir instantaneamente
+        initialNumToRender={15}
         maxToRenderPerBatch={15}
         windowSize={5}
-        renderItem={({ item, index }) => (
-          <Pressable
-            focusable={true}
-            onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
-            style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
-          >
-            <Text style={styles.mediaTitle} numberOfLines={2}>{item.name}</Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const posterUri = item?.stream_icon || item?.cover || "";
+          return (
+            <Pressable
+              focusable={true}
+              onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
+              style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
+            >
+              {posterUri ? (
+                <Image source={{ uri: posterUri }} style={styles.poster} contentFit="cover" />
+              ) : (
+                <View style={styles.noPoster}>
+                  <Ionicons name="film-outline" size={28} color="#E9C46A" />
+                </View>
+              )}
+              <Text style={styles.mediaTitle} numberOfLines={1}>{item.name}</Text>
+            </Pressable>
+          );
+        }}
       />
     </View>
   );
@@ -74,7 +84,9 @@ const styles = StyleSheet.create({
 
   gridContainer: { paddingBottom: 20 },
   columnWrapper: { gap: 16, marginBottom: 16 },
-  mediaCard: { width: 130, height: 190, backgroundColor: "#152E3B", borderRadius: 10, padding: 8, justifyContent: "flex-end", borderWidth: 2, borderColor: "transparent" },
+  mediaCard: { width: 130, height: 190, backgroundColor: "#152E3B", borderRadius: 10, overflow: "hidden", borderWidth: 2, borderColor: "transparent", justifyContent: "space-between" },
   cardFocused: { borderColor: "#E9C46A", borderWidth: 3, transform: [{ scale: 1.05 }] },
-  mediaTitle: { color: "#FFF", fontSize: 10, fontWeight: "800", textAlign: "center" },
+  poster: { width: "100%", height: 152 },
+  noPoster: { width: "100%", height: 152, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)" },
+  mediaTitle: { color: "#FFF", fontSize: 10, fontWeight: "800", textAlign: "center", paddingHorizontal: 4, paddingBottom: 6 },
 });
