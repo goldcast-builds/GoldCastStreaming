@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TextInput, ScrollView, Pressable } from "react-native";
+import React, { useState, useMemo } from "react";
+import { View, Text, StyleSheet, TextInput, Pressable, FlatList } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useSession } from "../../src/store/session";
@@ -10,7 +10,13 @@ export default function MoviesScreen() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const movies = catalog.vod || [];
-  const filteredMovies = movies.filter((m) => m.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  // Otimização com useMemo para filtrar apenas quando necessário, evitando lentidão
+  const filteredMovies = useMemo(() => {
+    if (!searchQuery.trim()) return movies;
+    const query = searchQuery.toLowerCase();
+    return movies.filter((m) => m?.name && m.name.toLowerCase().includes(query));
+  }, [movies, searchQuery]);
 
   return (
     <View style={styles.root}>
@@ -28,24 +34,31 @@ export default function MoviesScreen() {
           placeholder="Buscar filmes..."
           placeholderTextColor="#6B7280"
           value={searchQuery}
-          onChangeText={setSearchQuery}
+          onChangeText={searchQuery => setSearchQuery(searchQuery)}
           blurOnSubmit={false}
-          // Impede que o foco fuja de forma agressiva ao digitar
         />
       </View>
 
-      <ScrollView contentContainerStyle={styles.gridContainer} showsVerticalScrollIndicator={false}>
-        {filteredMovies.map((item, idx) => (
+      <FlatList
+        data={filteredMovies}
+        keyExtractor={(item, idx) => `mov-${item?.stream_id || idx}-${idx}`}
+        numColumns={5} // Organiza em grelha de forma eficiente
+        contentContainerStyle={styles.gridContainer}
+        columnWrapperStyle={styles.columnWrapper}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={15} // Renderiza apenas os primeiros para abrir instantaneamente
+        maxToRenderPerBatch={15}
+        windowSize={5}
+        renderItem={({ item, index }) => (
           <Pressable
-            key={`mov-${item.stream_id}-${idx}`}
             focusable={true}
             onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
             style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
           >
             <Text style={styles.mediaTitle} numberOfLines={2}>{item.name}</Text>
           </Pressable>
-        ))}
-      </ScrollView>
+        )}
+      />
     </View>
   );
 }
@@ -59,7 +72,8 @@ const styles = StyleSheet.create({
   searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#152E3B", borderRadius: 12, paddingHorizontal: 14, height: 44, marginBottom: 18, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)", gap: 10 },
   searchInput: { flex: 1, color: "#FFF", fontSize: 13, fontWeight: "700" },
 
-  gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 16, paddingBottom: 20 },
+  gridContainer: { paddingBottom: 20 },
+  columnWrapper: { gap: 16, marginBottom: 16 },
   mediaCard: { width: 130, height: 190, backgroundColor: "#152E3B", borderRadius: 10, padding: 8, justifyContent: "flex-end", borderWidth: 2, borderColor: "transparent" },
   cardFocused: { borderColor: "#E9C46A", borderWidth: 3, transform: [{ scale: 1.05 }] },
   mediaTitle: { color: "#FFF", fontSize: 10, fontWeight: "800", textAlign: "center" },
