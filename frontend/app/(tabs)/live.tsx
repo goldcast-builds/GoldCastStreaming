@@ -9,13 +9,13 @@ export default function LiveScreen() {
   const catalog = useSession((s) => s.catalog);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const channels = catalog.live || [];
+  // Garante compatibilidade caso o catálogo venha em diferentes formatos da API Xtream
+  const channels = catalog.live || catalog.channels || [];
 
-  // Otimização com useMemo para filtrar canais sem causar travamentos
   const filteredChannels = useMemo(() => {
     if (!searchQuery.trim()) return channels;
     const query = searchQuery.toLowerCase();
-    return channels.filter((c) => c?.name && c.name.toLowerCase().includes(query));
+    return channels.filter((c) => (c?.name || c?.title || "").toLowerCase().includes(query));
   }, [channels, searchQuery]);
 
   return (
@@ -34,30 +34,34 @@ export default function LiveScreen() {
           placeholder="Buscar canais..."
           placeholderTextColor="#6B7280"
           value={searchQuery}
-          onChangeText={searchQuery => setSearchQuery(searchQuery)}
+          onChangeText={setSearchQuery}
           blurOnSubmit={false}
         />
       </View>
 
       <FlatList
         data={filteredChannels}
-        keyExtractor={(item, idx) => `live-${item?.stream_id || idx}-${idx}`}
-        numColumns={4} // Organização em grelha otimizada para canais (cartões horizontais)
+        keyExtractor={(item, idx) => `live-${item?.stream_id || item?.id || idx}-${idx}`}
+        numColumns={4}
         contentContainerStyle={styles.gridContainer}
         columnWrapperStyle={styles.columnWrapper}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={16} // Renderização inicial controlada para máxima leveza
+        initialNumToRender={16}
         maxToRenderPerBatch={16}
         windowSize={5}
-        renderItem={({ item, index }) => (
-          <Pressable
-            focusable={true}
-            onPress={() => router.push({ pathname: "/live/[id]", params: { id: String(item.stream_id) } })}
-            style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
-          >
-            <Text style={styles.mediaTitle} numberOfLines={2}>{item.name}</Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const channelId = String(item?.stream_id || item?.id || "");
+          const channelName = item?.name || item?.title || "Canal sem nome";
+          return (
+            <Pressable
+              focusable={true}
+              onPress={() => router.push({ pathname: "/live/[id]", params: { id: channelId } })}
+              style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
+            >
+              <Text style={styles.mediaTitle} numberOfLines={2}>{channelName}</Text>
+            </Pressable>
+          );
+        }}
       />
     </View>
   );
