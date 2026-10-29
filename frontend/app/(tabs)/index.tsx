@@ -153,7 +153,7 @@ export default function HomeTab() {
           { id: "int-2", time: "14:30", league: "FUTEBOL INTERNACIONAL", teamA: "Parma", teamB: "Udinese", score: "VS", status: "EM BREVE", channels: "Disney+" },
           { id: "int-3", time: "14:30", league: "FUTEBOL INTERNACIONAL", teamA: "Venezia", teamB: "Inter", score: "VS", status: "EM BREVE", channels: "Disney+" },
           { id: "int-4", time: "16:30", league: "FUTEBOL INTERNACIONAL", teamA: "Manchester City", teamB: "Brighton", score: "VS", status: "EM BREVE", channels: "Disney+" },
-          { id: "int-5", time: "17:00", league: "FUTEBOL INTERNACIONAL", teamA: "Liverpool FC", teamB: "Chelsea", score: "VS", status: "EM BREVE", channels: "ESPN • Disney+" },
+          { id: "int-5", time: "17:00", league: "FUTEBOL INTERNACIONAL", teamA: "Liverpool FC", teamB: "Chelsea", score: "VS", status: "ESPN • Disney+" },
         ];
 
         if (isMounted) setGuiaJogos(matches);
@@ -397,8 +397,14 @@ export default function HomeTab() {
                   </View>
                 ) : (
                   dailyCardsImages.map((imgUrl, index) => (
-                    <View key={`img-${index}`} style={styles.imageCardWrapper}>
-                      <Image source={{ uri: imgUrl }} style={styles.dailyCardImage} contentFit="contain" />
+                    <View key={`img-${index}`} style={styles.imageCardWrapperVertical}>
+                      <Image 
+                        source={{ uri: imgUrl }} 
+                        style={styles.dailyCardImageVertical} 
+                        contentFit="contain"
+                        cachePolicy="none"
+                        transition={200}
+                      />
                     </View>
                   ))
                 )}
@@ -527,4 +533,21 @@ const styles = StyleSheet.create({
 
   imageCardWrapper: { width: "100%", height: 440, backgroundColor: "#000000", borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: "rgba(212,175,55,0.2)", marginBottom: 10 },
   dailyCardImage: { width: "100%", height: "100%" },
+
+  imageCardWrapperVertical: { 
+    width: "100%", 
+    height: 720, 
+    backgroundColor: "#000000", 
+    borderRadius: 14, 
+    overflow: "hidden", 
+    borderWidth: 1.5, 
+    borderColor: "rgba(212,175,55,0.3)", 
+    marginBottom: 16,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  dailyCardImageVertical: { 
+    width: "100%", 
+    height: "100%" 
+  },
 });
