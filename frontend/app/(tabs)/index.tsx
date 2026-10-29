@@ -104,7 +104,7 @@ export default function HomeTab() {
     };
   }, [scrollAnimMovies, scrollAnimSeries]);
 
-  // Carregamento rigoroso direto da tabela daily_matches do seu Supabase
+  // Carregamento rigoroso direto da tabela daily_matches do seu Supabase com acesso público (RLS desativado)
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
@@ -113,11 +113,11 @@ export default function HomeTab() {
       try {
         let fetchedImages: string[] = [];
         
-        // Requisição para buscar exatamente os links salvos na sua tabela daily_matches
+        // Chamada direta para a tabela daily_matches no seu projeto Supabase
         const resImages = await fetch("https://lijsnoovwvxebzbaal.supabase.co/rest/v1/daily_matches?select=image_url", {
           headers: {
-            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpanNub292d3Z4ZWJ6YmFhbCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzY2OTY5NTI1LCJleHAiOjIwODI1NDU1MjV9.exemplo_chave_public_anon", // Certifique-se de usar a sua chave anon real se necessário
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpanNub292d3Z4ZWJ6YmFhbCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzY2OTY5NTI1LCJleHAiOjIwODI1NDU1MjV9.exemplo_chave",
+            "Authorization": "Bearer "
           }
         }).catch(() => null);
 
@@ -128,7 +128,6 @@ export default function HomeTab() {
           }
         }
 
-        // Se por ventura a tabela estiver vazia ou offline, exibe array limpo sem dados fictícios errados
         if (isMounted) setDailyCardsImages(fetchedImages);
 
         let matches: GuiaMatch[] = [
@@ -146,7 +145,7 @@ export default function HomeTab() {
 
         if (isMounted) setGuiaJogos(matches);
       } catch {
-        // Fallback seguro
+        // Fallback
       } finally {
         if (isMounted) setLoadingJogos(false);
       }
