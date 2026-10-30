@@ -183,10 +183,6 @@ export default function HomeTab() {
     outputRange: [-400, 0],
   });
 
-  const handleScreenRecord = () => {
-    Alert.alert("Gravação de Tela", "Ferramenta de captura e gravação de ecrã iniciada com sucesso.", [{ text: "OK" }]);
-  };
-
   return (
     <View style={[styles.root, { backgroundColor: "#1B3B4B" }]}>
       <View style={styles.tvHeader}>
@@ -269,9 +265,10 @@ export default function HomeTab() {
               <Text style={styles.bottomCardText}>ATUALIZAÇÕES</Text>
             </Pressable>
 
-            <Pressable focusable={true} onPress={handleScreenRecord} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
-              <Ionicons name="videocam-outline" size={20} color="#FFF" />
-              <Text style={styles.bottomCardText}>RECORDINGS</Text>
+            {/* BOTÃO ALTERADO PARA CONTINUE ASSISTINDO */}
+            <Pressable focusable={true} onPress={() => router.push("/continue")} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
+              <Ionicons name="play-circle-outline" size={20} color="#E9C46A" />
+              <Text style={[styles.bottomCardText, { color: "#E9C46A" }]}>CONTINUAR</Text>
             </Pressable>
 
             <View style={styles.statusBadgeWrap}>
@@ -528,9 +525,6 @@ const styles = StyleSheet.create({
 
   guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.06)", paddingTop: 8 },
   guiaChannelsText: { color: "#E9C46A", fontSize: 11.5, fontWeight: "800" },
-
-  imageCardWrapper: { width: "100%", height: 440, backgroundColor: "#000000", borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: "rgba(233,196,106,0.2)", marginBottom: 10 },
-  dailyCardImage: { width: "100%", height: "100%" },
 
   imageCardWrapperVertical: { 
     width: "100%", 
