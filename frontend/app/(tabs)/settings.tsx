@@ -25,57 +25,113 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleAction = (title: string) => {
+    // Ação direta para cada opção de configuração sem travar o foco da Smart TV
+    console.log(`Configuração selecionada: ${title}`);
+  };
+
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Pressable focusable={true} onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+        <Pressable 
+          focusable={true} 
+          accessible={true}
+          onPress={() => router.back()} 
+          style={({ focused }) => [styles.backBtn, focused && styles.cardFocused]} 
+          hitSlop={10}
+        >
           <Ionicons name="arrow-back" size={24} color="#FFF" />
         </Pressable>
         <Text style={styles.headerTitle}>CONFIGURAÇÕES</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.gridContainer} showsVerticalScrollIndicator={false}>
-        <Pressable focusable={true} onPress={() => {}} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable 
+          focusable={true} 
+          accessible={true}
+          onPress={() => handleAction("Conta")} 
+          style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
+        >
           <Ionicons name="person-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Conta</Text>
         </Pressable>
 
-        <Pressable focusable={true} onPress={() => {}} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable 
+          focusable={true} 
+          accessible={true}
+          onPress={() => handleAction("Atualizar App")} 
+          style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
+        >
           <Ionicons name="cloud-download-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Atualizar App</Text>
         </Pressable>
 
-        <Pressable focusable={true} onPress={() => {}} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable 
+          focusable={true} 
+          accessible={true}
+          onPress={() => handleAction("Listas M3U")} 
+          style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
+        >
           <Ionicons name="list-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Listas M3U</Text>
         </Pressable>
 
-        <Pressable focusable={true} onPress={() => {}} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable 
+          focusable={true} 
+          accessible={true}
+          onPress={() => handleAction("Atualizar conteúdo")} 
+          style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
+        >
           <Ionicons name="sync-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Atualizar conteúdo</Text>
         </Pressable>
 
-        <Pressable focusable={true} onPress={() => {}} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable 
+          focusable={true} 
+          accessible={true}
+          onPress={() => handleAction("Reprodução")} 
+          style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
+        >
           <Ionicons name="play-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Reprodução</Text>
         </Pressable>
 
-        <Pressable focusable={true} onPress={() => {}} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable 
+          focusable={true} 
+          accessible={true}
+          onPress={() => handleAction("Histórico e favoritos")} 
+          style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
+        >
           <Ionicons name="time-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Histórico e favoritos</Text>
         </Pressable>
 
-        <Pressable focusable={true} onPress={() => {}} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable 
+          focusable={true} 
+          accessible={true}
+          onPress={() => handleAction("Limpar cache")} 
+          style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
+        >
           <Ionicons name="brush-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Limpar cache</Text>
         </Pressable>
 
-        <Pressable focusable={true} onPress={() => {}} style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}>
+        <Pressable 
+          focusable={true} 
+          accessible={true}
+          onPress={() => handleAction("Sobre")} 
+          style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
+        >
           <Ionicons name="information-circle-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Sobre</Text>
         </Pressable>
 
-        <Pressable focusable={true} onPress={handleLogout} style={({ focused }) => [styles.settingCard, styles.logoutCard, focused && styles.cardFocused]}>
+        <Pressable 
+          focusable={true} 
+          accessible={true}
+          onPress={handleLogout} 
+          style={({ focused }) => [styles.settingCard, styles.logoutCard, focused && styles.cardFocused]}
+        >
           <Ionicons name="log-out-outline" size={28} color="#E76F51" />
           <Text style={[styles.cardText, { color: "#E76F51" }]}>Sair</Text>
         </Pressable>
@@ -87,8 +143,9 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#1B3B4B", paddingHorizontal: 36, paddingVertical: 24 },
   header: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 20 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" },
   headerTitle: { color: "#FFF", fontSize: 20, fontWeight: "900", letterSpacing: 1.5 },
+
   gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 18, justifyContent: "space-between", paddingBottom: 20 },
   settingCard: {
     width: "31%",
