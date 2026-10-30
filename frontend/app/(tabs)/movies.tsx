@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -14,9 +14,11 @@ export default function MoviesScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
-  // Dispara o carregamento dos filmes e categorias do IPTV ao abrir a tela
+  // Só executa o load se o catálogo estiver vazio, evitando chamadas repetidas e lentas
   useEffect(() => {
-    loadVod();
+    if (!catalog.vodLoaded || (catalog.vod || []).length === 0) {
+      loadVod().catch(() => {});
+    }
   }, []);
 
   const movies = catalog?.vod || [];
@@ -35,7 +37,7 @@ export default function MoviesScreen() {
     }
 
     return result;
-  }, [movies, categories, selectedCategory, searchQuery]);
+  }, [movies, selectedCategory, searchQuery]);
 
   return (
     <View style={styles.root}>
@@ -59,38 +61,47 @@ export default function MoviesScreen() {
       </View>
 
       <View style={styles.contentBody}>
-        <View style={styles.gridWrapper}>
-          <FlatList
-            data={filteredMovies}
-            keyExtractor={(item, idx) => `mov-${item?.stream_id || idx}-${idx}`}
-            numColumns={4}
-            contentContainerStyle={styles.gridContainer}
-            columnWrapperStyle={styles.columnWrapper}
-            showsVerticalScrollIndicator={false}
-            initialNumToRender={12}
-            maxToRenderPerBatch={12}
-            windowSize={5}
-            renderItem={({ item }) => {
-              const posterUri = item?.stream_icon || item?.cover || "";
-              return (
-                <Pressable
-                  focusable={true}
-                  onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
-                  style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
-                >
-                  {posterUri ? (
-                    <Image source={{ uri: posterUri }} style={styles.poster} contentFit="cover" />
-                  ) : (
-                    <View style={styles.noPoster}>
-                      <Ionicons name="film-outline" size={28} color="#E9C46A" />
-                    </View>
-                  )}
-                  <Text style={styles.mediaTitle} numberOfLines={1}>{item.name}</Text>
-                </Pressable>
-              );
-            }}
-          />
-        </View>
+        {loading && movies.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#E9C46A" />
+            <Text style={styles.loadingText}>A carregar catálogo de filmes...</Text>
+          </View>
+        ) : (
+          <View style={styles.gridWrapper}>
+            <FlatList
+              data={filteredMovies}
+              keyExtractor={(item, idx) => `mov-${item?.stream_id || idx}-${idx}`}
+              numColumns={4}
+              contentContainerStyle={styles.gridContainer}
+              columnWrapperStyle={styles.columnWrapper}
+              showsVerticalScrollIndicator={false}
+              // Otimizações cruciais para Smart TV e performance
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={5}
+              removeClippedSubviews={true}
+              renderItem={({ item }) => {
+                const posterUri = item?.stream_icon || item?.cover || "";
+                return (
+                  <Pressable
+                    focusable={true}
+                    onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
+                    style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
+                  >
+                    {posterUri ? (
+                      <Image source={{ uri: posterUri }} style={styles.poster} contentFit="cover" cachePolicy="memory-disk" />
+                    ) : (
+                      <View style={styles.noPoster}>
+                        <Ionicons name="film-outline" size={28} color="#E9C46A" />
+                      </View>
+                    )}
+                    <Text style={styles.mediaTitle} numberOfLines={1}>{item.name}</Text>
+                  </Pressable>
+                );
+              }}
+            />
+          </View>
+        )}
 
         <View style={styles.sidebarCategories}>
           <Text style={styles.sidebarTitle}>CATEGORIAS</Text>
@@ -142,6 +153,8 @@ const styles = StyleSheet.create({
   searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#152E3B", borderRadius: 12, paddingHorizontal: 14, height: 40, marginBottom: 12, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)", gap: 10 },
   searchInput: { flex: 1, color: "#FFF", fontSize: 13, fontWeight: "700" },
   contentBody: { flex: 1, flexDirection: "row", gap: 16 },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
+  loadingText: { color: "#E9C46A", fontSize: 13, fontWeight: "700" },
   gridWrapper: { flex: 1 },
   gridContainer: { paddingBottom: 20 },
   columnWrapper: { gap: 14, marginBottom: 14 },
