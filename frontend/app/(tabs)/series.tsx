@@ -70,12 +70,12 @@ export default function SeriesScreen() {
             <FlatList
               data={filteredSeries}
               keyExtractor={(item, idx) => `ser-${item?.series_id || idx}-${idx}`}
-              numColumns={4}
+              numColumns={5} // Atualizado para 5 colunas preenchendo o espaço
               contentContainerStyle={styles.gridContainer}
               columnWrapperStyle={styles.columnWrapper}
               showsVerticalScrollIndicator={false}
-              initialNumToRender={12}
-              maxToRenderPerBatch={12}
+              initialNumToRender={15}
+              maxToRenderPerBatch={15}
               windowSize={5}
               removeClippedSubviews={true}
               renderItem={({ item }) => {
@@ -155,12 +155,12 @@ const styles = StyleSheet.create({
   loadingText: { color: "#E9C46A", fontSize: 13, fontWeight: "700" },
   gridWrapper: { flex: 1 },
   gridContainer: { paddingBottom: 20 },
-  columnWrapper: { gap: 14, marginBottom: 14 },
-  mediaCard: { width: 125, height: 175, backgroundColor: "#152E3B", borderRadius: 10, overflow: "hidden", borderWidth: 2, borderColor: "transparent", justifyContent: "space-between" },
+  columnWrapper: { gap: 10, marginBottom: 12 },
+  mediaCard: { width: 108, height: 155, backgroundColor: "#152E3B", borderRadius: 10, overflow: "hidden", borderWidth: 2, borderColor: "transparent", justifyContent: "space-between" },
   cardFocused: { borderColor: "#E9C46A", borderWidth: 3, transform: [{ scale: 1.05 }] },
-  poster: { width: "100%", height: 138 },
-  noPoster: { width: "100%", height: 138, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)" },
-  mediaTitle: { color: "#FFF", fontSize: 10, fontWeight: "800", textAlign: "center", paddingHorizontal: 4, paddingBottom: 6 },
+  poster: { width: "100%", height: 122 },
+  noPoster: { width: "100%", height: 122, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)" },
+  mediaTitle: { color: "#FFF", fontSize: 9.5, fontWeight: "800", textAlign: "center", paddingHorizontal: 4, paddingBottom: 5 },
   sidebarCategories: { width: 220, backgroundColor: "#152E3B", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)" },
   sidebarTitle: { color: "#E9C46A", fontSize: 12, fontWeight: "900", marginBottom: 8, textAlign: "center", letterSpacing: 1 },
   sidebarScroll: { gap: 6 },
