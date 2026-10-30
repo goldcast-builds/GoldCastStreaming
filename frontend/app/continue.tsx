@@ -7,16 +7,12 @@ import { useSession } from "../src/store/session";
 
 export default function ContinueWatchingScreen() {
   const router = useRouter();
-  
-  // Memoriza os itens de progresso para evitar loops infinitos de renderização
-  const progressItems = useSession((s) => {
-    const prog = s.ud?.progress || {};
-    return Object.values(prog);
-  });
+  const ud = useSession((s) => s.ud);
 
-  const sortedItems = useMemo(() => {
-    return [...progressItems].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  }, [progressItems]);
+  const progressItems = useMemo(() => {
+    const prog = ud?.progress || {};
+    return Object.values(prog).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  }, [ud]);
 
   return (
     <View style={styles.root}>
@@ -27,14 +23,14 @@ export default function ContinueWatchingScreen() {
         <Text style={styles.headerTitle}>CONTINUAR A ASSISTIR</Text>
       </View>
 
-      {sortedItems.length === 0 ? (
+      {progressItems.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="film-outline" size={48} color="#E9C46A" />
           <Text style={styles.emptyText}>Nenhum histórico de reprodução encontrado.</Text>
         </View>
       ) : (
         <FlatList
-          data={sortedItems}
+          data={progressItems}
           keyExtractor={(item, idx) => `prog-${item?.item?.id || idx}`}
           numColumns={4}
           contentContainerStyle={styles.gridContainer}
