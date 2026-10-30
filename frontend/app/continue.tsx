@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, FlatList } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
@@ -7,7 +7,16 @@ import { useSession } from "../src/store/session";
 
 export default function ContinueWatchingScreen() {
   const router = useRouter();
-  const progressItems = useSession((s) => Object.values(s.ud.progress || {}));
+  
+  // Memoriza os itens de progresso para evitar loops infinitos de renderização
+  const progressItems = useSession((s) => {
+    const prog = s.ud?.progress || {};
+    return Object.values(prog);
+  });
+
+  const sortedItems = useMemo(() => {
+    return [...progressItems].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  }, [progressItems]);
 
   return (
     <View style={styles.root}>
@@ -18,14 +27,14 @@ export default function ContinueWatchingScreen() {
         <Text style={styles.headerTitle}>CONTINUAR A ASSISTIR</Text>
       </View>
 
-      {progressItems.length === 0 ? (
+      {sortedItems.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="film-outline" size={48} color="#E9C46A" />
           <Text style={styles.emptyText}>Nenhum histórico de reprodução encontrado.</Text>
         </View>
       ) : (
         <FlatList
-          data={progressItems}
+          data={sortedItems}
           keyExtractor={(item, idx) => `prog-${item?.item?.id || idx}`}
           numColumns={4}
           contentContainerStyle={styles.gridContainer}
