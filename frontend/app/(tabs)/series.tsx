@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
@@ -8,11 +8,17 @@ import { useSession } from "../../src/store/session";
 export default function SeriesScreen() {
   const router = useRouter();
   const catalog = useSession((s) => s.catalog);
+  const loadSeries = useSession((s) => s.loadSeries);
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
+  useEffect(() => {
+    loadSeries();
+  }, []);
+
   const series = catalog?.series || [];
-  const categories = catalog?.series_categories || catalog?.categories?.series || [];
+  const categories = catalog?.seriesCats || [];
 
   const filteredSeries = useMemo(() => {
     let result = series;
