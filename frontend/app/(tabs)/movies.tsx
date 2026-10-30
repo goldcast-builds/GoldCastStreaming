@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, FlatList } from "react-native";
+import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -9,14 +9,25 @@ export default function MoviesScreen() {
   const router = useRouter();
   const catalog = useSession((s) => s.catalog);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   const movies = catalog.vod || [];
+  const categories = catalog.vod_categories || [];
 
   const filteredMovies = useMemo(() => {
-    if (!searchQuery.trim()) return movies;
-    const query = searchQuery.toLowerCase();
-    return movies.filter((m) => m?.name && m.name.toLowerCase().includes(query));
-  }, [movies, searchQuery]);
+    let result = movies;
+
+    if (selectedCategory !== "all") {
+      result = result.filter((m) => String(m.category_id) === String(selectedCategory));
+    }
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((m) => m?.name && m.name.toLowerCase().includes(query));
+    }
+
+    return result;
+  }, [movies, categories, selectedCategory, searchQuery]);
 
   return (
     <View style={styles.root}>
@@ -39,54 +50,108 @@ export default function MoviesScreen() {
         />
       </View>
 
-      <FlatList
-        data={filteredMovies}
-        keyExtractor={(item, idx) => `mov-${item?.stream_id || idx}-${idx}`}
-        numColumns={5}
-        contentContainerStyle={styles.gridContainer}
-        columnWrapperStyle={styles.columnWrapper}
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={15}
-        maxToRenderPerBatch={15}
-        windowSize={5}
-        renderItem={({ item }) => {
-          const posterUri = item?.stream_icon || item?.cover || "";
-          return (
+      <View style={styles.contentBody}>
+        {/* Grelha Principal de Filmes */}
+        <View style={styles.gridWrapper}>
+          <FlatList
+            data={filteredMovies}
+            keyExtractor={(item, idx) => `mov-${item?.stream_id || idx}-${idx}`}
+            numColumns={4}
+            contentContainerStyle={styles.gridContainer}
+            columnWrapperStyle={styles.columnWrapper}
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={12}
+            maxToRenderPerBatch={12}
+            windowSize={5}
+            renderItem={({ item }) => {
+              const posterUri = item?.stream_icon || item?.cover || "";
+              return (
+                <Pressable
+                  focusable={true}
+                  onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
+                  style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
+                >
+                  {posterUri ? (
+                    <Image source={{ uri: posterUri }} style={styles.poster} contentFit="cover" />
+                  ) : (
+                    <View style={styles.noPoster}>
+                      <Ionicons name="film-outline" size={28} color="#E9C46A" />
+                    </View>
+                  )}
+                  <Text style={styles.mediaTitle} numberOfLines={1}>{item.name}</Text>
+                </Pressable>
+              );
+            }}
+          />
+        </View>
+
+        {/* Menu Lateral Direito de Categorias (Espaço Assinalado) */}
+        <View style={styles.sidebarCategories}>
+          <Text style={styles.sidebarTitle}>CATEGORIAS</Text>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sidebarScroll}>
             <Pressable
               focusable={true}
-              onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
-              style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
+              onPress={() => setSelectedCategory("all")}
+              style={({ focused }) => [
+                styles.catItem,
+                selectedCategory === "all" && styles.catItemActive,
+                focused && styles.cardFocused,
+              ]}
             >
-              {posterUri ? (
-                <Image source={{ uri: posterUri }} style={styles.poster} contentFit="cover" />
-              ) : (
-                <View style={styles.noPoster}>
-                  <Ionicons name="film-outline" size={28} color="#E9C46A" />
-                </View>
-              )}
-              <Text style={styles.mediaTitle} numberOfLines={1}>{item.name}</Text>
+              <Text style={[styles.catText, selectedCategory === "all" && styles.catTextActive]}>Todas</Text>
             </Pressable>
-          );
-        }}
-      />
+
+            {categories.map((cat, idx) => {
+              const catId = String(cat.category_id || cat.id || idx);
+              const isSelected = selectedCategory === catId;
+              return (
+                <Pressable
+                  key={`cat-mov-${catId}-${idx}`}
+                  focusable={true}
+                  onPress={() => setSelectedCategory(catId)}
+                  style={({ focused }) => [
+                    styles.catItem,
+                    isSelected && styles.catItemActive,
+                    focused && styles.cardFocused,
+                  ]}
+                >
+                  <Text style={[styles.catText, isSelected && styles.catTextActive]} numberOfLines={2}>
+                    {cat.category_name || cat.name || "Categoria"}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#1B3B4B", paddingHorizontal: 36, paddingVertical: 20 },
-  header: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 14 },
+  header: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 10 },
   backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
   headerTitle: { color: "#FFF", fontSize: 18, fontWeight: "900", letterSpacing: 1.2 },
 
-  searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#152E3B", borderRadius: 12, paddingHorizontal: 14, height: 44, marginBottom: 18, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)", gap: 10 },
+  searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#152E3B", borderRadius: 12, paddingHorizontal: 14, height: 40, marginBottom: 12, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)", gap: 10 },
   searchInput: { flex: 1, color: "#FFF", fontSize: 13, fontWeight: "700" },
 
+  contentBody: { flex: 1, flexDirection: "row", gap: 16 },
+  gridWrapper: { flex: 1 },
   gridContainer: { paddingBottom: 20 },
-  columnWrapper: { gap: 16, marginBottom: 16 },
-  mediaCard: { width: 130, height: 190, backgroundColor: "#152E3B", borderRadius: 10, overflow: "hidden", borderWidth: 2, borderColor: "transparent", justifyContent: "space-between" },
+  columnWrapper: { gap: 14, marginBottom: 14 },
+  mediaCard: { width: 125, height: 175, backgroundColor: "#152E3B", borderRadius: 10, overflow: "hidden", borderWidth: 2, borderColor: "transparent", justifyContent: "space-between" },
   cardFocused: { borderColor: "#E9C46A", borderWidth: 3, transform: [{ scale: 1.05 }] },
-  poster: { width: "100%", height: 152 },
-  noPoster: { width: "100%", height: 152, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)" },
+  poster: { width: "100%", height: 138 },
+  noPoster: { width: "100%", height: 138, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)" },
   mediaTitle: { color: "#FFF", fontSize: 10, fontWeight: "800", textAlign: "center", paddingHorizontal: 4, paddingBottom: 6 },
+
+  sidebarCategories: { width: 220, backgroundColor: "#152E3B", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)" },
+  sidebarTitle: { color: "#E9C46A", fontSize: 12, fontWeight: "900", marginBottom: 8, textAlign: "center", letterSpacing: 1 },
+  sidebarScroll: { gap: 6 },
+  catItem: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.03)" },
+  catItemActive: { backgroundColor: "#E9C46A" },
+  catText: { color: "#9CA3AF", fontSize: 11, fontWeight: "700" },
+  catTextActive: { color: "#000", fontWeight: "900" },
 });
