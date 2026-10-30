@@ -11,14 +11,15 @@ export default function MoviesScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
-  const movies = catalog.vod || [];
-  const categories = catalog.vod_categories || [];
+  const movies = catalog?.vod || [];
+  // Procura categorias em múltiplas variações possíveis da API Xtream
+  const categories = catalog?.vod_categories || catalog?.categories?.vod || [];
 
   const filteredMovies = useMemo(() => {
     let result = movies;
 
     if (selectedCategory !== "all") {
-      result = result.filter((m) => String(m.category_id) === String(selectedCategory));
+      result = result.filter((m) => String(m?.category_id) === String(selectedCategory));
     }
 
     if (searchQuery.trim()) {
@@ -51,7 +52,6 @@ export default function MoviesScreen() {
       </View>
 
       <View style={styles.contentBody}>
-        {/* Grelha Principal de Filmes */}
         <View style={styles.gridWrapper}>
           <FlatList
             data={filteredMovies}
@@ -85,7 +85,6 @@ export default function MoviesScreen() {
           />
         </View>
 
-        {/* Menu Lateral Direito de Categorias (Espaço Assinalado) */}
         <View style={styles.sidebarCategories}>
           <Text style={styles.sidebarTitle}>CATEGORIAS</Text>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sidebarScroll}>
@@ -102,7 +101,7 @@ export default function MoviesScreen() {
             </Pressable>
 
             {categories.map((cat, idx) => {
-              const catId = String(cat.category_id || cat.id || idx);
+              const catId = String(cat?.category_id || cat?.id || idx);
               const isSelected = selectedCategory === catId;
               return (
                 <Pressable
@@ -116,7 +115,7 @@ export default function MoviesScreen() {
                   ]}
                 >
                   <Text style={[styles.catText, isSelected && styles.catTextActive]} numberOfLines={2}>
-                    {cat.category_name || cat.name || "Categoria"}
+                    {cat?.category_name || cat?.name || "Categoria"}
                   </Text>
                 </Pressable>
               );
@@ -133,10 +132,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 10 },
   backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
   headerTitle: { color: "#FFF", fontSize: 18, fontWeight: "900", letterSpacing: 1.2 },
-
   searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#152E3B", borderRadius: 12, paddingHorizontal: 14, height: 40, marginBottom: 12, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)", gap: 10 },
   searchInput: { flex: 1, color: "#FFF", fontSize: 13, fontWeight: "700" },
-
   contentBody: { flex: 1, flexDirection: "row", gap: 16 },
   gridWrapper: { flex: 1 },
   gridContainer: { paddingBottom: 20 },
@@ -146,7 +143,6 @@ const styles = StyleSheet.create({
   poster: { width: "100%", height: 138 },
   noPoster: { width: "100%", height: 138, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)" },
   mediaTitle: { color: "#FFF", fontSize: 10, fontWeight: "800", textAlign: "center", paddingHorizontal: 4, paddingBottom: 6 },
-
   sidebarCategories: { width: 220, backgroundColor: "#152E3B", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)" },
   sidebarTitle: { color: "#E9C46A", fontSize: 12, fontWeight: "900", marginBottom: 8, textAlign: "center", letterSpacing: 1 },
   sidebarScroll: { gap: 6 },
