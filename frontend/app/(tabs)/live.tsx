@@ -70,12 +70,12 @@ export default function LiveScreen() {
             <FlatList
               data={filteredChannels}
               keyExtractor={(item, idx) => `live-${item?.stream_id || item?.id || idx}-${idx}`}
-              numColumns={3}
+              numColumns={4} // Atualizado para 4 colunas preenchendo o espaço dos canais
               contentContainerStyle={styles.gridContainer}
               columnWrapperStyle={styles.columnWrapper}
               showsVerticalScrollIndicator={false}
-              initialNumToRender={15}
-              maxToRenderPerBatch={15}
+              initialNumToRender={16}
+              maxToRenderPerBatch={16}
               windowSize={5}
               removeClippedSubviews={true}
               renderItem={({ item }) => {
@@ -157,12 +157,12 @@ const styles = StyleSheet.create({
   loadingText: { color: "#E9C46A", fontSize: 13, fontWeight: "700" },
   gridWrapper: { flex: 1 },
   gridContainer: { paddingBottom: 20 },
-  columnWrapper: { gap: 14, marginBottom: 14 },
-  mediaCard: { width: 160, height: 100, backgroundColor: "#152E3B", borderRadius: 10, padding: 8, justifyContent: "space-between", borderWidth: 2, borderColor: "transparent", alignItems: "center" },
+  columnWrapper: { gap: 10, marginBottom: 12 },
+  mediaCard: { width: 125, height: 95, backgroundColor: "#152E3B", borderRadius: 10, padding: 8, justifyContent: "space-between", borderWidth: 2, borderColor: "transparent", alignItems: "center" },
   cardFocused: { borderColor: "#E9C46A", borderWidth: 3, transform: [{ scale: 1.05 }] },
-  logo: { width: "100%", height: 50 },
-  noLogo: { width: "100%", height: 50, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 6 },
-  mediaTitle: { color: "#FFF", fontSize: 11, fontWeight: "800", textAlign: "center" },
+  logo: { width: "100%", height: 46 },
+  noLogo: { width: "100%", height: 46, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 6 },
+  mediaTitle: { color: "#FFF", fontSize: 10, fontWeight: "800", textAlign: "center" },
   sidebarCategories: { width: 220, backgroundColor: "#152E3B", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)" },
   sidebarTitle: { color: "#E9C46A", fontSize: 12, fontWeight: "900", marginBottom: 8, textAlign: "center", letterSpacing: 1 },
   sidebarScroll: { gap: 6 },
