@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
@@ -8,11 +8,17 @@ import { useSession } from "../../src/store/session";
 export default function LiveScreen() {
   const router = useRouter();
   const catalog = useSession((s) => s.catalog);
+  const loadLive = useSession((s) => s.loadLive);
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
-  const channels = catalog?.live || catalog?.channels || [];
-  const categories = catalog?.live_categories || catalog?.categories?.live || [];
+  useEffect(() => {
+    loadLive();
+  }, []);
+
+  const channels = catalog?.live || [];
+  const categories = catalog?.liveCats || [];
 
   const filteredChannels = useMemo(() => {
     let result = channels;
