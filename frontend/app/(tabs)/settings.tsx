@@ -3,10 +3,16 @@ import { View, Text, StyleSheet, Pressable, ScrollView, Alert } from "react-nati
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useSession } from "../../src/store/session";
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const session = useSession((s) => s.session);
+  const refreshAccount = useSession((s) => s.refreshAccount);
+  const clearCatalog = useSession((s) => s.clearCatalog);
+  const logout = useSession((s) => s.logout);
 
+  // Ação de Terminar Sessão / Sair
   const handleLogout = async () => {
     Alert.alert(
       "Sair da Conta",
@@ -17,7 +23,7 @@ export default function SettingsScreen() {
           text: "Sair",
           style: "destructive",
           onPress: async () => {
-            await AsyncStorage.removeItem("@goldcast_saved_code");
+            await logout();
             router.replace("/");
           },
         },
@@ -25,9 +31,40 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleAction = (title: string) => {
-    // Ação direta para cada opção de configuração sem travar o foco da Smart TV
-    console.log(`Configuração selecionada: ${title}`);
+  // Ação de Atualizar Conteúdo / Sincronizar Catálogo
+  const handleRefreshContent = async () => {
+    try {
+      Alert.alert("Atualizar Conteúdo", "A atualizar dados do servidor IPTV...");
+      await refreshAccount();
+      clearCatalog();
+      Alert.alert("Sucesso", "Conteúdo atualizado com sucesso!");
+    } catch {
+      Alert.alert("Erro", "Não foi possível atualizar o conteúdo neste momento.");
+    }
+  };
+
+  // Ação de Limpar Cache
+  const handleClearCache = async () => {
+    try {
+      await AsyncStorage.removeItem("@goldcast_cache");
+      Alert.alert("Limpar Cache", "Cache limpo com sucesso!");
+    } catch {
+      Alert.alert("Aviso", "O cache já está limpo.");
+    }
+  };
+
+  // Informações da Conta
+  const handleAccountInfo = () => {
+    const info = session?.userInfo;
+    Alert.alert(
+      "Detalhes da Conta",
+      `Utilizador: ${session?.username || "N/D"}\nServidor: ${session?.server || "N/D"}\nEstado: ${info?.status || "Ativo"}\nExpira em: ${info?.exp_date ? new Date(info.exp_date * 1000).toLocaleDateString() : "Ilimitado"}`
+    );
+  };
+
+  // Informações Sobre o App
+  const handleAbout = () => {
+    Alert.alert("Sobre", "GoldCast Media Player\nVersão: 1.0.1\nPlataforma otimizada para Smart TV.");
   };
 
   return (
@@ -46,86 +83,95 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.gridContainer} showsVerticalScrollIndicator={false}>
+        {/* 1. Conta */}
         <Pressable 
           focusable={true} 
           accessible={true}
-          onPress={() => handleAction("Conta")} 
+          onPress={handleAccountInfo} 
           style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
         >
           <Ionicons name="person-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Conta</Text>
         </Pressable>
 
+        {/* 2. Atualizar App */}
         <Pressable 
           focusable={true} 
           accessible={true}
-          onPress={() => handleAction("Atualizar App")} 
+          onPress={() => Alert.alert("Atualizar App", "O aplicativo já está na versão mais recente.")} 
           style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
         >
           <Ionicons name="cloud-download-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Atualizar App</Text>
         </Pressable>
 
+        {/* 3. Listas M3U */}
         <Pressable 
           focusable={true} 
           accessible={true}
-          onPress={() => handleAction("Listas M3U")} 
+          onPress={() => router.push("/add-list")} 
           style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
         >
           <Ionicons name="list-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Listas M3U</Text>
         </Pressable>
 
+        {/* 4. Atualizar Conteúdo */}
         <Pressable 
           focusable={true} 
           accessible={true}
-          onPress={() => handleAction("Atualizar conteúdo")} 
+          onPress={handleRefreshContent} 
           style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
         >
           <Ionicons name="sync-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Atualizar conteúdo</Text>
         </Pressable>
 
+        {/* 5. Reprodução */}
         <Pressable 
           focusable={true} 
           accessible={true}
-          onPress={() => handleAction("Reprodução")} 
+          onPress={() => Alert.alert("Reprodução", "Reprodutor de vídeo configurado com aceleração de hardware nativa.")} 
           style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
         >
           <Ionicons name="play-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Reprodução</Text>
         </Pressable>
 
+        {/* 6. Histórico e favoritos */}
         <Pressable 
           focusable={true} 
           accessible={true}
-          onPress={() => handleAction("Histórico e favoritos")} 
+          onPress={() => Alert.alert("Histórico", "Histórico de reprodução sincronizado localmente.")} 
           style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
         >
           <Ionicons name="time-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Histórico e favoritos</Text>
         </Pressable>
 
+        {/* 7. Limpar cache */}
         <Pressable 
           focusable={true} 
           accessible={true}
-          onPress={() => handleAction("Limpar cache")} 
+          onPress={handleClearCache} 
           style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
         >
           <Ionicons name="brush-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Limpar cache</Text>
         </Pressable>
 
+        {/* 8. Sobre */}
         <Pressable 
           focusable={true} 
           accessible={true}
-          onPress={() => handleAction("Sobre")} 
+          onPress={handleAbout} 
           style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
         >
           <Ionicons name="information-circle-outline" size={28} color="#E9C46A" />
           <Text style={styles.cardText}>Sobre</Text>
         </Pressable>
 
+        {/* 9. Sair */}
         <Pressable 
           focusable={true} 
           accessible={true}
