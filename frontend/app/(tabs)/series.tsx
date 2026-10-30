@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -9,16 +9,19 @@ export default function SeriesScreen() {
   const router = useRouter();
   const catalog = useSession((s) => s.catalog);
   const loadSeries = useSession((s) => s.loadSeries);
+  const loading = useSession((s) => s.loading.series);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   useEffect(() => {
-    loadSeries();
+    if (!catalog.seriesLoaded || (catalog.series || []).length === 0) {
+      loadSeries().catch(() => {});
+    }
   }, []);
 
   const series = catalog?.series || [];
-  const categories = catalog?.seriesCats || [];
+  const categories = catalog?.seriesCats || catalog?.categories?.series || [];
 
   const filteredSeries = useMemo(() => {
     let result = series;
@@ -33,7 +36,7 @@ export default function SeriesScreen() {
     }
 
     return result;
-  }, [series, categories, selectedCategory, searchQuery]);
+  }, [series, selectedCategory, searchQuery]);
 
   return (
     <View style={styles.root}>
@@ -57,38 +60,46 @@ export default function SeriesScreen() {
       </View>
 
       <View style={styles.contentBody}>
-        <View style={styles.gridWrapper}>
-          <FlatList
-            data={filteredSeries}
-            keyExtractor={(item, idx) => `ser-${item?.series_id || idx}-${idx}`}
-            numColumns={4}
-            contentContainerStyle={styles.gridContainer}
-            columnWrapperStyle={styles.columnWrapper}
-            showsVerticalScrollIndicator={false}
-            initialNumToRender={12}
-            maxToRenderPerBatch={12}
-            windowSize={5}
-            renderItem={({ item }) => {
-              const posterUri = item?.cover || item?.stream_icon || "";
-              return (
-                <Pressable
-                  focusable={true}
-                  onPress={() => router.push({ pathname: "/series/[id]", params: { id: String(item.series_id) } })}
-                  style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
-                >
-                  {posterUri ? (
-                    <Image source={{ uri: posterUri }} style={styles.poster} contentFit="cover" />
-                  ) : (
-                    <View style={styles.noPoster}>
-                      <Ionicons name="tv-outline" size={28} color="#E9C46A" />
-                    </View>
-                  )}
-                  <Text style={styles.mediaTitle} numberOfLines={1}>{item.name}</Text>
-                </Pressable>
-              );
-            }}
-          />
-        </View>
+        {loading && series.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#E9C46A" />
+            <Text style={styles.loadingText}>A carregar catálogo de séries...</Text>
+          </View>
+        ) : (
+          <View style={styles.gridWrapper}>
+            <FlatList
+              data={filteredSeries}
+              keyExtractor={(item, idx) => `ser-${item?.series_id || idx}-${idx}`}
+              numColumns={4}
+              contentContainerStyle={styles.gridContainer}
+              columnWrapperStyle={styles.columnWrapper}
+              showsVerticalScrollIndicator={false}
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={5}
+              removeClippedSubviews={true}
+              renderItem={({ item }) => {
+                const posterUri = item?.cover || item?.stream_icon || "";
+                return (
+                  <Pressable
+                    focusable={true}
+                    onPress={() => router.push({ pathname: "/series/[id]", params: { id: String(item.series_id) } })}
+                    style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
+                  >
+                    {posterUri ? (
+                      <Image source={{ uri: posterUri }} style={styles.poster} contentFit="cover" cachePolicy="memory-disk" />
+                    ) : (
+                      <View style={styles.noPoster}>
+                        <Ionicons name="tv-outline" size={28} color="#E9C46A" />
+                      </View>
+                    )}
+                    <Text style={styles.mediaTitle} numberOfLines={1}>{item.name}</Text>
+                  </Pressable>
+                );
+              }}
+            />
+          </View>
+        )}
 
         <View style={styles.sidebarCategories}>
           <Text style={styles.sidebarTitle}>CATEGORIAS</Text>
@@ -140,6 +151,8 @@ const styles = StyleSheet.create({
   searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#152E3B", borderRadius: 12, paddingHorizontal: 14, height: 40, marginBottom: 12, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)", gap: 10 },
   searchInput: { flex: 1, color: "#FFF", fontSize: 13, fontWeight: "700" },
   contentBody: { flex: 1, flexDirection: "row", gap: 16 },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
+  loadingText: { color: "#E9C46A", fontSize: 13, fontWeight: "700" },
   gridWrapper: { flex: 1 },
   gridContainer: { paddingBottom: 20 },
   columnWrapper: { gap: 14, marginBottom: 14 },
