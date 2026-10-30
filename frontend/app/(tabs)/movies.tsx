@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
@@ -8,12 +8,19 @@ import { useSession } from "../../src/store/session";
 export default function MoviesScreen() {
   const router = useRouter();
   const catalog = useSession((s) => s.catalog);
+  const loadVod = useSession((s) => s.loadVod);
+  const loading = useSession((s) => s.loading.vod);
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
+  // Dispara o carregamento dos filmes e categorias do IPTV ao abrir a tela
+  useEffect(() => {
+    loadVod();
+  }, []);
+
   const movies = catalog?.vod || [];
-  // Procura categorias em múltiplas variações possíveis da API Xtream
-  const categories = catalog?.vod_categories || catalog?.categories?.vod || [];
+  const categories = catalog?.vodCats || [];
 
   const filteredMovies = useMemo(() => {
     let result = movies;
