@@ -66,7 +66,7 @@ export default function MovieDetails() {
           {poster ? <Image source={{ uri: poster }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={12} /> : null}
           <LinearGradient colors={["rgba(0,0,0,0.3)", colors.bg]} style={StyleSheet.absoluteFill} />
           
-          {/* PAINEL DE AVALIAÇÕES E FICHA TÉCNICA */}
+          {/* PAINEL DE AVALIAÇÕES (IMDb, Rotten, Metacritic) E FICHA TÉCNICA */}
           <MovieMetadataPanel title={title} />
 
           {/* TRAILER DO YOUTUBE */}
