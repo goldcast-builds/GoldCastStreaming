@@ -7,8 +7,10 @@ import { useSession } from "../../src/store/session";
 
 export default function LiveScreen() {
   const router = useRouter();
+  const session = useSession((s) => s.session);
   const catalog = useSession((s) => s.catalog);
   const loadLive = useSession((s) => s.loadLive);
+  const setQueue = useSession((s) => s.setQueue);
   const loading = useSession((s) => s.loading.live);
   
   const [searchQuery, setSearchQuery] = useState("");
@@ -82,10 +84,27 @@ export default function LiveScreen() {
                 const channelId = String(item?.stream_id || item?.id || "");
                 const channelName = item?.name || item?.title || "Canal sem nome";
                 const logoUri = item?.stream_icon || "";
+                
                 return (
                   <Pressable
                     focusable={true}
-                    onPress={() => router.push({ pathname: "/live/[id]", params: { id: channelId } })}
+                    onPress={() => {
+                      if (!session) return;
+                      // URL Xtream do canal ao vivo para o player unificado
+                      const liveStreamUrl = `${session.server.replace(/\/+$/, "")}/live/${session.username}/${session.password}/${channelId}.ts`;
+
+                      setQueue([{
+                        kind: "live",
+                        id: channelId,
+                        title: channelName,
+                        subtitle: "Canal ao Vivo",
+                        logo: logoUri,
+                        urls: [liveStreamUrl],
+                        raw: item,
+                      }], 0);
+
+                      router.push("/player");
+                    }}
                     style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
                   >
                     {logoUri ? (
