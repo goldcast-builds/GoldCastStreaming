@@ -11,6 +11,7 @@ export default function SettingsScreen() {
   const refreshAccount = useSession((s) => s.refreshAccount);
   const clearCatalog = useSession((s) => s.clearCatalog);
   const logout = useSession((s) => s.logout);
+  const clearHistory = useSession((s) => s.clearHistory); // Importado da store para limpar o progresso/histórico
 
   // Ação de Terminar Sessão / Sair
   const handleLogout = async () => {
@@ -43,14 +44,32 @@ export default function SettingsScreen() {
     }
   };
 
-  // Ação de Limpar Cache
+  // Ação de Limpar Cache e Reiniciar o "Continuar a Assistir" do zero
   const handleClearCache = async () => {
-    try {
-      await AsyncStorage.removeItem("@goldcast_cache");
-      Alert.alert("Limpar Cache", "Cache limpo com sucesso!");
-    } catch {
-      Alert.alert("Aviso", "O cache já está limpo.");
-    }
+    Alert.alert(
+      "Limpar Cache e Histórico",
+      "Deseja limpar todo o cache e o histórico de 'Continuar a Assistir'? O aplicativo voltará ao estado inicial.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Limpar Tudo",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Limpa o histórico de reprodução e o "Continuar a Assistir"
+              clearHistory();
+              
+              // Remove o cache guardado no armazenamento local
+              await AsyncStorage.removeItem("@goldcast_cache");
+              
+              Alert.alert("Sucesso", "Cache limpo e progresso reiniciado do zero!");
+            } catch {
+              Alert.alert("Erro", "Não foi possível concluir a limpeza do cache.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Informações da Conta
