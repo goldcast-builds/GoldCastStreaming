@@ -70,7 +70,7 @@ export default function LiveScreen() {
             <FlatList
               data={filteredChannels}
               keyExtractor={(item, idx) => `live-${item?.stream_id || item?.id || idx}-${idx}`}
-              numColumns={4} // Atualizado para 4 colunas preenchendo o espaço dos canais
+              numColumns={4}
               contentContainerStyle={styles.gridContainer}
               columnWrapperStyle={styles.columnWrapper}
               showsVerticalScrollIndicator={false}
@@ -157,8 +157,8 @@ const styles = StyleSheet.create({
   loadingText: { color: "#E9C46A", fontSize: 13, fontWeight: "700" },
   gridWrapper: { flex: 1 },
   gridContainer: { paddingBottom: 20 },
-  columnWrapper: { gap: 10, marginBottom: 12 },
-  mediaCard: { width: 125, height: 95, backgroundColor: "#152E3B", borderRadius: 10, padding: 8, justifyContent: "space-between", borderWidth: 2, borderColor: "transparent", alignItems: "center" },
+  columnWrapper: { justifyContent: "space-between", marginBottom: 12 },
+  mediaCard: { width: "23.5%", height: 95, backgroundColor: "#152E3B", borderRadius: 10, padding: 8, justifyContent: "space-between", borderWidth: 2, borderColor: "transparent", alignItems: "center" },
   cardFocused: { borderColor: "#E9C46A", borderWidth: 3, transform: [{ scale: 1.05 }] },
   logo: { width: "100%", height: 46 },
   noLogo: { width: "100%", height: 46, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 6 },
