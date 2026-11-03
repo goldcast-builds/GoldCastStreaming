@@ -11,6 +11,7 @@ import {
   Animated,
   Easing,
   Alert,
+  Image as RNImage,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -265,7 +266,6 @@ export default function HomeTab() {
               <Text style={styles.bottomCardText}>ATUALIZAÇÕES</Text>
             </Pressable>
 
-            {/* BOTÃO ALTERADO PARA CONTINUE ASSISTINDO */}
             <Pressable focusable={true} onPress={() => router.push("/continue")} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
               <Ionicons name="play-circle-outline" size={20} color="#E9C46A" />
               <Text style={[styles.bottomCardText, { color: "#E9C46A" }]}>CONTINUAR</Text>
@@ -393,12 +393,10 @@ export default function HomeTab() {
                 ) : (
                   dailyCardsImages.map((imgUrl, index) => (
                     <View key={`img-${index}`} style={styles.imageCardWrapperVertical}>
-                      <Image 
+                      <RNImage 
                         source={{ uri: imgUrl }} 
                         style={styles.dailyCardImageVertical} 
-                        contentFit="contain"
-                        cachePolicy="none"
-                        transition={200}
+                        resizeMode="contain"
                       />
                     </View>
                   ))
