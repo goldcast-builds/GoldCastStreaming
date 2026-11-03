@@ -70,7 +70,7 @@ export default function MoviesScreen() {
             <FlatList
               data={filteredMovies}
               keyExtractor={(item, idx) => `mov-${item?.stream_id || idx}-${idx}`}
-              numColumns={5} // Atualizado para 5 colunas preenchendo o espaço
+              numColumns={5}
               contentContainerStyle={styles.gridContainer}
               columnWrapperStyle={styles.columnWrapper}
               showsVerticalScrollIndicator={false}
@@ -155,8 +155,8 @@ const styles = StyleSheet.create({
   loadingText: { color: "#E9C46A", fontSize: 13, fontWeight: "700" },
   gridWrapper: { flex: 1 },
   gridContainer: { paddingBottom: 20 },
-  columnWrapper: { gap: 10, marginBottom: 12 },
-  mediaCard: { width: 108, height: 155, backgroundColor: "#152E3B", borderRadius: 10, overflow: "hidden", borderWidth: 2, borderColor: "transparent", justifyContent: "space-between" },
+  columnWrapper: { justifyContent: "space-between", marginBottom: 12 },
+  mediaCard: { width: "18.8%", height: 155, backgroundColor: "#152E3B", borderRadius: 10, overflow: "hidden", borderWidth: 2, borderColor: "transparent", justifyContent: "space-between" },
   cardFocused: { borderColor: "#E9C46A", borderWidth: 3, transform: [{ scale: 1.05 }] },
   poster: { width: "100%", height: 122 },
   noPoster: { width: "100%", height: 122, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)" },
