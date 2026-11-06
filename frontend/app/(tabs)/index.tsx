@@ -39,16 +39,23 @@ export default function HomeTab() {
   const catalog = useSession((s) => s.catalog);
   const loadVod = useSession((s) => s.loadVod);
   const loadSeries = useSession((s) => s.loadSeries);
+  const loadLive = useSession((s) => s.loadLive);
 
   const [activationCode, setActivationCode] = useState("LICENÇA ATIVA");
   const [currentDate, setCurrentDate] = useState("");
   const [currentTime, setCurrentTime] = useState("");
 
   const [showJogosModal, setShowJogosModal] = useState(false);
+  const [showEpgModal, setShowEpgModal] = useState(false);
   const [modalTab, setModalTab] = useState<"lista" | "imagens">("lista");
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [dailyCardsImages, setDailyCardsImages] = useState<string[]>([]);
   const [loadingJogos, setLoadingJogos] = useState(false);
+
+  // Estados para o EPG de Canais
+  const [epgCategories, setEpgCategories] = useState<any[]>([]);
+  const [selectedEpgCat, setSelectedEpgCat] = useState<string>("all");
+  const [epgChannels, setEpgChannels] = useState<any[]>([]);
 
   const scrollAnimMovies = useRef(new Animated.Value(0)).current;
   const scrollAnimSeries = useRef(new Animated.Value(0)).current;
@@ -73,9 +80,10 @@ export default function HomeTab() {
       if (session) {
         if (loadVod) loadVod(true).catch(() => {});
         if (loadSeries) loadSeries(true).catch(() => {});
+        if (loadLive) loadLive().catch(() => {});
       }
       return () => { isMounted = false; };
-    }, [session, loadVod, loadSeries])
+    }, [session, loadVod, loadSeries, loadLive])
   );
 
   useEffect(() => {
@@ -104,6 +112,21 @@ export default function HomeTab() {
       animSeries.stop();
     };
   }, [scrollAnimMovies, scrollAnimSeries]);
+
+  // Carrega categorias e canais para o EPG
+  useEffect(() => {
+    if (catalog?.liveCats) {
+      setEpgCategories(catalog.liveCats);
+    }
+    if (catalog?.live) {
+      setEpgChannels(catalog.live);
+    }
+  }, [catalog]);
+
+  const filteredEpgChannels = useMemo(() => {
+    if (selectedEpgCat === "all") return epgChannels.slice(0, 30);
+    return epgChannels.filter((c) => String(c?.category_id) === String(selectedEpgCat)).slice(0, 30);
+  }, [epgChannels, selectedEpgCat]);
 
   useEffect(() => {
     if (!showJogosModal) return;
@@ -200,6 +223,16 @@ export default function HomeTab() {
         </View>
 
         <View style={styles.headerRight}>
+          {/* BOTÃO EPG ADICIONADO NO CABEÇALHO */}
+          <Pressable 
+            focusable={true} 
+            onPress={() => setShowEpgModal(true)} 
+            style={({ focused }) => [styles.epgHeaderBtn, focused && styles.cardFocused]}
+          >
+            <Ionicons name="list" size={16} color="#E9C46A" />
+            <Text style={styles.epgBtnText}>EPG</Text>
+          </Pressable>
+
           <Pressable focusable={true} style={styles.headerIconBtn}>
             <Ionicons name="cart-outline" size={22} color="#FFF" />
           </Pressable>
@@ -315,6 +348,7 @@ export default function HomeTab() {
         </View>
       </View>
 
+      {/* MODAL DE JOGOS DE HOJE */}
       <Modal visible={showJogosModal} animationType="fade" transparent={true} onRequestClose={() => setShowJogosModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -406,6 +440,100 @@ export default function HomeTab() {
           </View>
         </View>
       </Modal>
+
+      {/* MODAL DO GUIA EPG DE CANAIS (ESTILO XCIPTV) */}
+      <Modal visible={showEpgModal} animationType="fade" transparent={true} onRequestClose={() => setShowEpgModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.epgModalCard}>
+            {/* Cabeçalho EPG */}
+            <View style={styles.epgHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Ionicons name="tv" size={20} color="#E9C46A" />
+                <Text style={styles.modalTitle}>GUIA DE PROGRAMAÇÃO — EPG</Text>
+              </View>
+              <Pressable onPress={() => setShowEpgModal(false)} style={styles.closeBtn} focusable={true}>
+                <Ionicons name="close" size={18} color="#FFF" />
+              </Pressable>
+            </View>
+
+            {/* Sub-barra de Categorias EPG */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.epgCategoriesBar}>
+              <Pressable
+                focusable={true}
+                onPress={() => setSelectedEpgCat("all")}
+                style={[styles.epgCatTab, selectedEpgCat === "all" && styles.epgCatTabActive]}
+              >
+                <Text style={[styles.epgCatText, selectedEpgCat === "all" && styles.epgCatTextActive]}>TODAS</Text>
+              </Pressable>
+              {epgCategories.map((cat, idx) => {
+                const catId = String(cat?.category_id || cat?.id || idx);
+                const isSelected = selectedEpgCat === catId;
+                return (
+                  <Pressable
+                    key={`epg-cat-${catId}-${idx}`}
+                    focusable={true}
+                    onPress={() => setSelectedEpgCat(catId)}
+                    style={[styles.epgCatTab, isSelected && styles.epgCatTabActive]}
+                  >
+                    <Text style={[styles.epgCatText, isSelected && styles.epgCatTextActive]} numberOfLines={1}>
+                      {cat?.category_name || cat?.name || "Categoria"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {/* Grelha de Canais e Programação EPG */}
+            <View style={styles.epgContentArea}>
+              <View style={styles.epgTableHead}>
+                <Text style={styles.epgHeadChannelCol}>CANAL</Text>
+                <Text style={styles.epgHeadTimeCol}>PROGRAMAÇÃO ATUAL / SEGUINTE</Text>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.epgListScroll}>
+                {filteredEpgChannels.length === 0 ? (
+                  <View style={styles.centerBox}>
+                    <Ionicons name="tv-outline" size={36} color="#E9C46A" />
+                    <Text style={styles.loadingText}>Nenhum canal carregado ou sem canais nesta categoria.</Text>
+                  </View>
+                ) : (
+                  filteredEpgChannels.map((item, idx) => {
+                    const channelName = item?.name || item?.title || "Canal";
+                    const logoUri = item?.stream_icon || "";
+                    const channelId = String(item?.stream_id || item?.id || "");
+
+                    return (
+                      <Pressable
+                        key={`epg-chan-${channelId}-${idx}`}
+                        focusable={true}
+                        onPress={() => {
+                          setShowEpgModal(false);
+                          router.push({ pathname: "/live/[id]", params: { id: channelId } });
+                        }}
+                        style={({ focused }) => [styles.epgRowItem, focused && styles.epgRowFocused]}
+                      >
+                        <View style={styles.epgChannelInfoCol}>
+                          {logoUri ? (
+                            <RNImage source={{ uri: logoUri }} style={styles.epgLogo} resizeMode="contain" />
+                          ) : (
+                            <Ionicons name="tv-outline" size={20} color="#E9C46A" />
+                          )}
+                          <Text style={styles.epgChannelName} numberOfLines={1}>{channelName}</Text>
+                        </View>
+
+                        <View style={styles.epgProgramInfoCol}>
+                          <Text style={styles.epgProgramTitle} numberOfLines={1}>Transmitindo ao vivo na grade oficial</Text>
+                          <Text style={styles.epgProgramSub} numberOfLines={1}>Consulte a grelha de horários do canal</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -433,8 +561,21 @@ const styles = StyleSheet.create({
   },
   codeText: { color: "#E9C46A", fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
 
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 18 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 14 },
   headerIconBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  epgHeaderBtn: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    gap: 6, 
+    backgroundColor: "rgba(233,196,106,0.15)", 
+    paddingHorizontal: 12, 
+    height: 38, 
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "rgba(233,196,106,0.4)"
+  },
+  epgBtnText: { color: "#E9C46A", fontSize: 12, fontWeight: "900", letterSpacing: 0.8 },
+
   headerDate: { color: "#E9C46A", fontSize: 14, fontWeight: "700" },
   headerTime: { color: "#FFF", fontSize: 18, fontWeight: "900" },
 
@@ -540,4 +681,26 @@ const styles = StyleSheet.create({
     width: "100%", 
     height: "100%" 
   },
+
+  // Estilos do Modal EPG
+  epgModalCard: { width: "94%", maxWidth: 1000, height: "88%", backgroundColor: "#152E3B", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(233,196,106,0.3)", padding: 20, gap: 14 },
+  epgHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)", paddingBottom: 10 },
+  epgCategoriesBar: { gap: 8, paddingVertical: 4, maxHeight: 42 },
+  epgCatTab: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 8, height: 36, justifyContent: "center" },
+  epgCatTabActive: { backgroundColor: "#E9C46A" },
+  epgCatText: { color: "#9CA3AF", fontSize: 11, fontWeight: "800" },
+  epgCatTextActive: { color: "#000", fontWeight: "900" },
+  epgContentArea: { flex: 1, backgroundColor: "#10222B", borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "rgba(233,196,106,0.15)" },
+  epgTableHead: { flexDirection: "row", backgroundColor: "#1B3B4B", paddingVertical: 10, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: "rgba(233,196,106,0.2)" },
+  epgHeadChannelCol: { width: "35%", color: "#E9C46A", fontSize: 11, fontWeight: "900" },
+  epgHeadTimeCol: { flex: 1, color: "#E9C46A", fontSize: 11, fontWeight: "900" },
+  epgListScroll: { padding: 6, gap: 6 },
+  epgRowItem: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(27,59,75,0.6)", borderRadius: 8, padding: 10, borderWidth: 1.5, borderColor: "transparent" },
+  epgRowFocused: { borderColor: "#E9C46A", backgroundColor: "#1B3B4B", transform: [{ scale: 1.01 }] },
+  epgChannelInfoCol: { width: "35%", flexDirection: "row", alignItems: "center", gap: 10, paddingRight: 10 },
+  epgLogo: { width: 36, height: 36, borderRadius: 6 },
+  epgChannelName: { color: "#FFF", fontSize: 12, fontWeight: "800", flex: 1 },
+  epgProgramInfoCol: { flex: 1, gap: 3 },
+  epgProgramTitle: { color: "#E9C46A", fontSize: 12, fontWeight: "800" },
+  epgProgramSub: { color: "#9CA3AF", fontSize: 10, fontWeight: "600" },
 });
