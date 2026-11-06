@@ -20,6 +20,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../../src/utils/theme";
 import { useSession } from "../../src/store/session";
+import { xtream, EpgEntry } from "../../src/services/xtream";
 
 interface GuiaMatch {
   id: string;
@@ -441,11 +442,10 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* MODAL DO GUIA EPG DE CANAIS (ESTILO XCIPTV) */}
+      {/* MODAL DO GUIA EPG DE CANAIS REAL (ESTILO XCIPTV) */}
       <Modal visible={showEpgModal} animationType="fade" transparent={true} onRequestClose={() => setShowEpgModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.epgModalCard}>
-            {/* Cabeçalho EPG */}
             <View style={styles.epgHeader}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                 <Ionicons name="tv" size={20} color="#E9C46A" />
@@ -483,51 +483,31 @@ export default function HomeTab() {
               })}
             </ScrollView>
 
-            {/* Grelha de Canais e Programação EPG */}
+            {/* Grelha de Canais e Programação EPG Real */}
             <View style={styles.epgContentArea}>
               <View style={styles.epgTableHead}>
                 <Text style={styles.epgHeadChannelCol}>CANAL</Text>
-                <Text style={styles.epgHeadTimeCol}>PROGRAMAÇÃO ATUAL / SEGUINTE</Text>
+                <Text style={styles.epgHeadTimeCol}>PROGRAMAÇÃO AO VIVO (EPG)</Text>
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.epgListScroll}>
                 {filteredEpgChannels.length === 0 ? (
                   <View style={styles.centerBox}>
                     <Ionicons name="tv-outline" size={36} color="#E9C46A" />
-                    <Text style={styles.loadingText}>Nenhum canal carregado ou sem canais nesta categoria.</Text>
+                    <Text style={styles.loadingText}>Nenhum canal carregado nesta categoria.</Text>
                   </View>
                 ) : (
-                  filteredEpgChannels.map((item, idx) => {
-                    const channelName = item?.name || item?.title || "Canal";
-                    const logoUri = item?.stream_icon || "";
-                    const channelId = String(item?.stream_id || item?.id || "");
-
-                    return (
-                      <Pressable
-                        key={`epg-chan-${channelId}-${idx}`}
-                        focusable={true}
-                        onPress={() => {
-                          setShowEpgModal(false);
-                          router.push({ pathname: "/live/[id]", params: { id: channelId } });
-                        }}
-                        style={({ focused }) => [styles.epgRowItem, focused && styles.epgRowFocused]}
-                      >
-                        <View style={styles.epgChannelInfoCol}>
-                          {logoUri ? (
-                            <RNImage source={{ uri: logoUri }} style={styles.epgLogo} resizeMode="contain" />
-                          ) : (
-                            <Ionicons name="tv-outline" size={20} color="#E9C46A" />
-                          )}
-                          <Text style={styles.epgChannelName} numberOfLines={1}>{channelName}</Text>
-                        </View>
-
-                        <View style={styles.epgProgramInfoCol}>
-                          <Text style={styles.epgProgramTitle} numberOfLines={1}>Transmitindo ao vivo na grade oficial</Text>
-                          <Text style={styles.epgProgramSub} numberOfLines={1}>Consulte a grelha de horários do canal</Text>
-                        </View>
-                      </Pressable>
-                    );
-                  })
+                  filteredEpgChannels.map((item, idx) => (
+                    <EpgRowItem
+                      key={`epg-chan-${item?.stream_id || idx}`}
+                      session={session}
+                      item={item}
+                      onSelect={() => {
+                        setShowEpgModal(false);
+                        router.push({ pathname: "/live/[id]", params: { id: String(item?.stream_id || item?.id) } });
+                      }}
+                    />
+                  ))
                 )}
               </ScrollView>
             </View>
@@ -535,6 +515,71 @@ export default function HomeTab() {
         </View>
       </Modal>
     </View>
+  );
+}
+
+// Componente auxiliar para carregar o EPG real de cada canal individualmente
+function EpgRowItem({ session, item, onSelect }: { session: any; item: any; onSelect: () => void }) {
+  const [epgList, setEpgList] = useState<EpgEntry[]>([]);
+  const [loadingEpg, setLoadingEpg] = useState(true);
+
+  const channelId = item?.stream_id || item?.id;
+  const channelName = item?.name || item?.title || "Canal";
+  const logoUri = item?.stream_icon || "";
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!session || !channelId) {
+      setLoadingEpg(false);
+      return;
+    }
+
+    xtream.shortEpg(session, channelId, 2)
+      .then((entries) => {
+        if (isMounted) setEpgList(entries);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setLoadingEpg(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [session, channelId]);
+
+  const currentProgram = epgList[0];
+
+  return (
+    <Pressable
+      focusable={true}
+      onPress={onSelect}
+      style={({ focused }) => [styles.epgRowItem, focused && styles.epgRowFocused]}
+    >
+      <View style={styles.epgChannelInfoCol}>
+        {logoUri ? (
+          <RNImage source={{ uri: logoUri }} style={styles.epgLogo} resizeMode="contain" />
+        ) : (
+          <Ionicons name="tv-outline" size={20} color="#E9C46A" />
+        )}
+        <Text style={styles.epgChannelName} numberOfLines={1}>{channelName}</Text>
+      </View>
+
+      <View style={styles.epgProgramInfoCol}>
+        {loadingEpg ? (
+          <Text style={styles.epgProgramSub}>A carregar EPG...</Text>
+        ) : currentProgram ? (
+          <>
+            <Text style={styles.epgProgramTitle} numberOfLines={1}>
+              {xtream.fmtTimeSP(currentProgram.start_timestamp)} — {currentProgram.title}
+            </Text>
+            {!!currentProgram.description && (
+              <Text style={styles.epgProgramSub} numberOfLines={1}>{currentProgram.description}</Text>
+            )}
+          </>
+        ) : (
+          <Text style={styles.epgProgramSub}>Sem programação EPG disponível no momento.</Text>
+        )}
+      </View>
+    </Pressable>
   );
 }
 
