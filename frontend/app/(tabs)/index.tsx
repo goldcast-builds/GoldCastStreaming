@@ -11,6 +11,7 @@ import {
   Animated,
   Easing,
   Alert,
+  TextInput,
   Image as RNImage,
 } from "react-native";
 import { Image } from "expo-image";
@@ -41,6 +42,7 @@ export default function HomeTab() {
   const loadVod = useSession((s) => s.loadVod);
   const loadSeries = useSession((s) => s.loadSeries);
   const loadLive = useSession((s) => s.loadLive);
+  const setQueue = useSession((s) => s.setQueue);
 
   const [activationCode, setActivationCode] = useState("LICENÇA ATIVA");
   const [currentDate, setCurrentDate] = useState("");
@@ -48,6 +50,9 @@ export default function HomeTab() {
 
   const [showJogosModal, setShowJogosModal] = useState(false);
   const [showEpgModal, setShowEpgModal] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
   const [modalTab, setModalTab] = useState<"lista" | "imagens">("lista");
   const [guiaJogos, setGuiaJogos] = useState<GuiaMatch[]>([]);
   const [dailyCardsImages, setDailyCardsImages] = useState<string[]>([]);
@@ -128,6 +133,18 @@ export default function HomeTab() {
     if (selectedEpgCat === "all") return epgChannels.slice(0, 30);
     return epgChannels.filter((c) => String(c?.category_id) === String(selectedEpgCat)).slice(0, 30);
   }, [epgChannels, selectedEpgCat]);
+
+  // Pesquisa Global em Filmes, Séries e Canais
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) return { movies: [], series: [], channels: [] };
+    const q = searchQuery.toLowerCase();
+
+    const movies = (catalog?.vod || []).filter((m: any) => (m?.name || "").toLowerCase().includes(q)).slice(0, 10);
+    const series = (catalog?.series || []).filter((s: any) => (s?.name || "").toLowerCase().includes(q)).slice(0, 10);
+    const channels = (catalog?.live || []).filter((c: any) => (c?.name || c?.title || "").toLowerCase().includes(q)).slice(0, 10);
+
+    return { movies, series, channels };
+  }, [searchQuery, catalog]);
 
   useEffect(() => {
     if (!showJogosModal) return;
@@ -224,7 +241,6 @@ export default function HomeTab() {
         </View>
 
         <View style={styles.headerRight}>
-          {/* BOTÃO EPG ADICIONADO NO CABEÇALHO */}
           <Pressable 
             focusable={true} 
             onPress={() => setShowEpgModal(true)} 
@@ -237,9 +253,16 @@ export default function HomeTab() {
           <Pressable focusable={true} style={styles.headerIconBtn}>
             <Ionicons name="cart-outline" size={22} color="#FFF" />
           </Pressable>
-          <Pressable focusable={true} style={styles.headerIconBtn} onPress={() => router.push("/(tabs)/live")}>
+
+          {/* BOTÃO DE PESQUISA GLOBAL ATUALIZADO */}
+          <Pressable 
+            focusable={true} 
+            style={styles.headerIconBtn} 
+            onPress={() => setShowSearchModal(true)}
+          >
             <Ionicons name="search-outline" size={22} color="#FFF" />
           </Pressable>
+
           <Text style={styles.headerDate}>{currentDate}</Text>
           <Text style={styles.headerTime}>{currentTime}</Text>
         </View>
@@ -514,6 +537,139 @@ export default function HomeTab() {
           </View>
         </View>
       </Modal>
+
+      {/* MODAL DE PESQUISA GLOBAL (FILMES, SÉRIES E CANAIS) */}
+      <Modal visible={showSearchModal} animationType="fade" transparent={true} onRequestClose={() => setShowSearchModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.searchModalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Ionicons name="search" size={20} color="#E9C46A" />
+                <Text style={styles.modalTitle}>PESQUISA GLOBAL</Text>
+              </View>
+              <Pressable onPress={() => setShowSearchModal(false)} style={styles.closeBtn} focusable={true}>
+                <Ionicons name="close" size={18} color="#FFF" />
+              </Pressable>
+            </View>
+
+            <View style={styles.searchModalInputRow}>
+              <Ionicons name="search" size={18} color="#E9C46A" />
+              <TextInput
+                style={styles.searchModalTextInput}
+                placeholder="Pesquisar filmes, séries e canais..."
+                placeholderTextColor="#6B7280"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus={true}
+                blurOnSubmit={false}
+              />
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.searchResultsContainer}>
+              {searchQuery.trim().length < 2 ? (
+                <View style={styles.centerBox}>
+                  <Ionicons name="search-outline" size={40} color="#6B7280" />
+                  <Text style={styles.loadingText}>Digite pelo menos 2 caracteres para pesquisar.</Text>
+                </View>
+              ) : (
+                <>
+                  {/* FILMES */}
+                  {searchResults.movies.length > 0 && (
+                    <View style={styles.searchGroup}>
+                      <Text style={styles.searchGroupTitle}>🎬 Filmes</Text>
+                      <View style={styles.searchGridRow}>
+                        {searchResults.movies.map((m: any) => (
+                          <Pressable
+                            key={`s-mov-${m.stream_id}`}
+                            focusable={true}
+                            onPress={() => {
+                              setShowSearchModal(false);
+                              router.push({ pathname: "/movie/[id]", params: { id: String(m.stream_id) } });
+                            }}
+                            style={({ focused }) => [styles.searchItemCard, focused && styles.cardFocused]}
+                          >
+                            <RNImage source={{ uri: m.stream_icon || m.cover }} style={styles.searchPoster} resizeMode="cover" />
+                            <Text style={styles.searchItemTitle} numberOfLines={1}>{m.name}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* SÉRIES */}
+                  {searchResults.series.length > 0 && (
+                    <View style={styles.searchGroup}>
+                      <Text style={styles.searchGroupTitle}>🍿 Séries</Text>
+                      <View style={styles.searchGridRow}>
+                        {searchResults.series.map((s: any) => (
+                          <Pressable
+                            key={`s-ser-${s.series_id}`}
+                            focusable={true}
+                            onPress={() => {
+                              setShowSearchModal(false);
+                              router.push({ pathname: "/series/[id]", params: { id: String(s.series_id) } });
+                            }}
+                            style={({ focused }) => [styles.searchItemCard, focused && styles.cardFocused]}
+                          >
+                            <RNImage source={{ uri: s.cover || s.stream_icon }} style={styles.searchPoster} resizeMode="cover" />
+                            <Text style={styles.searchItemTitle} numberOfLines={1}>{s.name}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* CANAIS */}
+                  {searchResults.channels.length > 0 && (
+                    <View style={styles.searchGroup}>
+                      <Text style={styles.searchGroupTitle}>📺 Canais</Text>
+                      <View style={styles.searchGridRow}>
+                        {searchResults.channels.map((c: any) => {
+                          const chanId = String(c?.stream_id || c?.id || "");
+                          const chanName = c?.name || c?.title || "Canal";
+                          const logo = c?.stream_icon || "";
+                          return (
+                            <Pressable
+                              key={`s-chan-${chanId}`}
+                              focusable={true}
+                              onPress={() => {
+                                if (!session) return;
+                                const liveUrl = `${session.server.replace(/\/+$/, "")}/live/${session.username}/${session.password}/${chanId}.ts`;
+                                setQueue([{
+                                  kind: "live",
+                                  id: chanId,
+                                  title: chanName,
+                                  subtitle: "Canal ao Vivo",
+                                  logo,
+                                  urls: [liveUrl],
+                                  raw: c,
+                                }], 0);
+                                setShowSearchModal(false);
+                                router.push("/player");
+                              }}
+                              style={({ focused }) => [styles.searchChannelCard, focused && styles.cardFocused]}
+                            >
+                              <RNImage source={{ uri: logo }} style={styles.searchChannelLogo} resizeMode="contain" />
+                              <Text style={styles.searchItemTitle} numberOfLines={1}>{chanName}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+
+                  {searchResults.movies.length === 0 && searchResults.series.length === 0 && searchResults.channels.length === 0 && (
+                    <View style={styles.centerBox}>
+                      <Ionicons name="alert-circle-outline" size={36} color="#E9C46A" />
+                      <Text style={styles.loadingText}>Nenhum resultado encontrado para "{searchQuery}".</Text>
+                    </View>
+                  )}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -748,4 +904,18 @@ const styles = StyleSheet.create({
   epgProgramInfoCol: { flex: 1, gap: 3 },
   epgProgramTitle: { color: "#E9C46A", fontSize: 12, fontWeight: "800" },
   epgProgramSub: { color: "#9CA3AF", fontSize: 10, fontWeight: "600" },
+
+  // Estilos da Pesquisa Global
+  searchModalCard: { width: "94%", maxWidth: 900, height: "85%", backgroundColor: "#152E3B", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(233,196,106,0.3)", padding: 22, gap: 16 },
+  searchModalInputRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#10222B", borderRadius: 12, paddingHorizontal: 14, height: 46, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)", gap: 10 },
+  searchModalTextInput: { flex: 1, color: "#FFF", fontSize: 14, fontWeight: "700" },
+  searchResultsContainer: { gap: 16, paddingBottom: 20 },
+  searchGroup: { gap: 8 },
+  searchGroupTitle: { color: "#E9C46A", fontSize: 13, fontWeight: "900", letterSpacing: 0.8 },
+  searchGridRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  searchItemCard: { width: 100, height: 145, backgroundColor: "#10222B", borderRadius: 8, overflow: "hidden", borderWidth: 2, borderColor: "transparent", justifyContent: "space-between" },
+  searchChannelCard: { width: 130, height: 85, backgroundColor: "#10222B", borderRadius: 8, padding: 6, borderWidth: 2, borderColor: "transparent", justifyContent: "space-between", alignItems: "center" },
+  searchPoster: { width: "100%", height: 112 },
+  searchChannelLogo: { width: "100%", height: 42 },
+  searchItemTitle: { color: "#FFF", fontSize: 9, fontWeight: "800", textAlign: "center", paddingBottom: 4, paddingHorizontal: 4 },
 });
