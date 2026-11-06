@@ -254,7 +254,6 @@ export default function HomeTab() {
             <Ionicons name="cart-outline" size={22} color="#FFF" />
           </Pressable>
 
-          {/* BOTÃO DE PESQUISA GLOBAL ATUALIZADO */}
           <Pressable 
             focusable={true} 
             style={styles.headerIconBtn} 
@@ -674,7 +673,7 @@ export default function HomeTab() {
   );
 }
 
-// Componente auxiliar para carregar o EPG real de cada canal individualmente
+// Componente auxiliar blindado para carregar o EPG real de cada canal individualmente
 function EpgRowItem({ session, item, onSelect }: { session: any; item: any; onSelect: () => void }) {
   const [epgList, setEpgList] = useState<EpgEntry[]>([]);
   const [loadingEpg, setLoadingEpg] = useState(true);
@@ -685,14 +684,16 @@ function EpgRowItem({ session, item, onSelect }: { session: any; item: any; onSe
 
   useEffect(() => {
     let isMounted = true;
-    if (!session || !channelId) {
+    if (!session || !channelId || !xtream?.shortEpg) {
       setLoadingEpg(false);
       return;
     }
 
     xtream.shortEpg(session, channelId, 2)
       .then((entries) => {
-        if (isMounted) setEpgList(entries);
+        if (isMounted && Array.isArray(entries)) {
+          setEpgList(entries);
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -702,7 +703,10 @@ function EpgRowItem({ session, item, onSelect }: { session: any; item: any; onSe
     return () => { isMounted = false; };
   }, [session, channelId]);
 
-  const currentProgram = epgList[0];
+  const currentProgram = epgList && epgList.length > 0 ? epgList[0] : null;
+  const formattedTime = currentProgram?.start_timestamp && typeof xtream?.fmtTimeSP === "function" 
+    ? xtream.fmtTimeSP(currentProgram.start_timestamp) 
+    : "";
 
   return (
     <Pressable
@@ -725,14 +729,14 @@ function EpgRowItem({ session, item, onSelect }: { session: any; item: any; onSe
         ) : currentProgram ? (
           <>
             <Text style={styles.epgProgramTitle} numberOfLines={1}>
-              {xtream.fmtTimeSP(currentProgram.start_timestamp)} — {currentProgram.title}
+              {formattedTime ? `${formattedTime} — ` : ""}{currentProgram.title || "Programa ao vivo"}
             </Text>
             {!!currentProgram.description && (
               <Text style={styles.epgProgramSub} numberOfLines={1}>{currentProgram.description}</Text>
             )}
           </>
         ) : (
-          <Text style={styles.epgProgramSub}>Sem programação EPG disponível no momento.</Text>
+          <Text style={styles.epgProgramSub}>Transmitindo ao vivo na grade oficial</Text>
         )}
       </View>
     </Pressable>
