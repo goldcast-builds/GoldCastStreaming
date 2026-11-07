@@ -146,7 +146,7 @@ export default function HomeTab() {
     return { movies, series, channels };
   }, [searchQuery, catalog]);
 
-  // Busca 100% dinâmica no Supabase para os Cards Oficiais com a chave real configurada
+  // Busca 100% dinâmica no Supabase para os Cards Oficiais com a chave real configurada e diagnóstico na tela
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
@@ -163,11 +163,11 @@ export default function HomeTab() {
             }
           });
 
-          if (resImages.ok) {
-            const json = await resImages.json();
-            if (Array.isArray(json)) {
-              fetchedImages = json.map((item: any) => item.image_url).filter(Boolean);
-            }
+          const json = await resImages.json();
+          if (resImages.ok && Array.isArray(json)) {
+            fetchedImages = json.map((item: any) => item.image_url).filter(Boolean);
+          } else {
+            console.log("Erro Supabase:", resImages.status, json);
           }
         } catch (e) {
           console.log("Erro ao buscar do Supabase:", e);
@@ -489,7 +489,7 @@ export default function HomeTab() {
                     onPress={() => setSelectedEpgCat(catId)}
                     style={[styles.epgCatTab, isSelected && styles.epgCatTabActive]}
                   >
-                    <Text style={[styles.epgCatText, isSelected && styles.epgCatTextActive]} numberOfLines={1}>
+                    <Text style={[styles.epgCatText, isSelected && styles.epgCatTabActive]} numberOfLines={1}>
                       {cat?.category_name || cat?.name || "Categoria"}
                     </Text>
                   </Pressable>
