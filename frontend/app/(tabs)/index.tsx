@@ -172,6 +172,7 @@ export default function HomeTab() {
           console.log("Erro ao buscar do Supabase:", e);
         }
 
+        // Fallback robusto com links diretos caso o Supabase falhe ou demore
         if (fetchedImages.length === 0) {
           fetchedImages = [
             "https://lijsnoovwvxebzbaal.supabase.co/storage/v1/object/public/jogos-diarios/1000611243.jpg",
