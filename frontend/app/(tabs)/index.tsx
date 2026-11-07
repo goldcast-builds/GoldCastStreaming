@@ -146,7 +146,7 @@ export default function HomeTab() {
     return { movies, series, channels };
   }, [searchQuery, catalog]);
 
-  // Busca corrigida e otimizada no Supabase para os Cards Oficiais (mapeando a coluna image_url)
+  // Busca 100% dinâmica no Supabase para os Cards Oficiais com a chave real configurada
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
@@ -158,7 +158,7 @@ export default function HomeTab() {
         try {
           const resImages = await fetch("https://lijsnoovwvxebzbaal.supabase.co/rest/v1/daily_matches?select=image_url", {
             headers: {
-              "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpanNub292d3Z4ZWJ6YmFhbCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzY2OTY5NTI1LCJleHAiOjIwODI1NDU1MjV9.exemplo_chave",
+              "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsanNub292dndleHplYnpiYWFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTcxNDUsImV4cCI6MjEwNzI5MzE0NX0.z22CI4c1Ru4z1jx95589huH9NKcy44cBthXVV1thO8g",
               "Accept": "application/json"
             }
           });
