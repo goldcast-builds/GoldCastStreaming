@@ -146,6 +146,7 @@ export default function HomeTab() {
     return { movies, series, channels };
   }, [searchQuery, catalog]);
 
+  // Busca 100% dinâmica no Supabase para os Cards Oficiais
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
@@ -170,16 +171,6 @@ export default function HomeTab() {
           }
         } catch (e) {
           console.log("Erro ao buscar do Supabase:", e);
-        }
-
-        // Fallback robusto com links diretos caso o Supabase falhe ou demore
-        if (fetchedImages.length === 0) {
-          fetchedImages = [
-            "https://lijsnoovwvxebzbaal.supabase.co/storage/v1/object/public/jogos-diarios/1000611243.jpg",
-            "https://lijsnoovwvxebzbaal.supabase.co/storage/v1/object/public/jogos-diarios/1000611244.jpg",
-            "https://lijsnoovwvxebzbaal.supabase.co/storage/v1/object/public/jogos-diarios/1000611245.jpg",
-            "https://lijsnoovwvxebzbaal.supabase.co/storage/v1/object/public/jogos-diarios/1000611246.jpg"
-          ];
         }
 
         if (isMounted) setDailyCardsImages(fetchedImages);
@@ -446,7 +437,7 @@ export default function HomeTab() {
                 {dailyCardsImages.length === 0 ? (
                   <View style={styles.centerBox}>
                     <Ionicons name="images-outline" size={40} color="#E9C46A" />
-                    <Text style={styles.loadingText}>Nenhum card oficial cadastrado para hoje.</Text>
+                    <Text style={styles.loadingText}>Nenhum card oficial cadastrado no Supabase para hoje.</Text>
                   </View>
                 ) : (
                   dailyCardsImages.map((imgUrl, index) => (
