@@ -146,7 +146,7 @@ export default function HomeTab() {
     return { movies, series, channels };
   }, [searchQuery, catalog]);
 
-  // Busca 100% dinâmica no Supabase para os Cards Oficiais
+  // Busca corrigida e otimizada no Supabase para os Cards Oficiais (mapeando a coluna image_url)
   useEffect(() => {
     if (!showJogosModal) return;
     let isMounted = true;
