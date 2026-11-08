@@ -1,4 +1,4 @@
-import AsyncStorage from "@ AsyncStorage/async-storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export interface LogItem {
   timestamp: string;
