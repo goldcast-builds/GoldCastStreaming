@@ -43,7 +43,7 @@ export default function LiveScreen() {
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Pressable focusable={true} onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+        <Pressable focusable={true} accessible={true} onPress={() => router.back()} style={({ focused }) => [styles.backBtn, focused && styles.cardFocused]} hitSlop={10}>
           <Ionicons name="arrow-back" size={24} color="#FFF" />
         </Pressable>
         <Text style={styles.headerTitle}>CANAIS</Text>
@@ -58,6 +58,8 @@ export default function LiveScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
           blurOnSubmit={false}
+          autoCorrect={false}
+          autoCapitalize="none"
         />
       </View>
 
@@ -88,9 +90,9 @@ export default function LiveScreen() {
                 return (
                   <Pressable
                     focusable={true}
+                    accessible={true}
                     onPress={() => {
                       if (!session) return;
-                      // URL Xtream do canal ao vivo para o player unificado
                       const liveStreamUrl = `${session.server.replace(/\/+$/, "")}/live/${session.username}/${session.password}/${channelId}.ts`;
 
                       setQueue([{
@@ -127,6 +129,7 @@ export default function LiveScreen() {
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sidebarScroll}>
             <Pressable
               focusable={true}
+              accessible={true}
               onPress={() => setSelectedCategory("all")}
               style={({ focused }) => [
                 styles.catItem,
@@ -144,6 +147,7 @@ export default function LiveScreen() {
                 <Pressable
                   key={`cat-live-${catId}-${idx}`}
                   focusable={true}
+                  accessible={true}
                   onPress={() => setSelectedCategory(catId)}
                   style={({ focused }) => [
                     styles.catItem,
@@ -167,7 +171,7 @@ export default function LiveScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#1B3B4B", paddingHorizontal: 36, paddingVertical: 20 },
   header: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 10 },
-  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" },
   headerTitle: { color: "#FFF", fontSize: 18, fontWeight: "900", letterSpacing: 1.2 },
   searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#152E3B", borderRadius: 12, paddingHorizontal: 14, height: 40, marginBottom: 12, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)", gap: 10 },
   searchInput: { flex: 1, color: "#FFF", fontSize: 13, fontWeight: "700" },
@@ -178,14 +182,14 @@ const styles = StyleSheet.create({
   gridContainer: { paddingBottom: 20 },
   columnWrapper: { justifyContent: "space-between", marginBottom: 12 },
   mediaCard: { width: "23.5%", height: 95, backgroundColor: "#152E3B", borderRadius: 10, padding: 8, justifyContent: "space-between", borderWidth: 2, borderColor: "transparent", alignItems: "center" },
-  cardFocused: { borderColor: "#E9C46A", borderWidth: 3, transform: [{ scale: 1.05 }] },
+  cardFocused: { borderColor: "#E9C46A", borderWidth: 3, transform: [{ scale: 1.05 }], backgroundColor: "rgba(233,196,106,0.15)" },
   logo: { width: "100%", height: 46 },
   noLogo: { width: "100%", height: 46, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 6 },
   mediaTitle: { color: "#FFF", fontSize: 10, fontWeight: "800", textAlign: "center" },
   sidebarCategories: { width: 220, backgroundColor: "#152E3B", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "rgba(233,196,106,0.2)" },
   sidebarTitle: { color: "#E9C46A", fontSize: 12, fontWeight: "900", marginBottom: 8, textAlign: "center", letterSpacing: 1 },
   sidebarScroll: { gap: 6 },
-  catItem: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.03)" },
+  catItem: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.03)", borderWidth: 2, borderColor: "transparent" },
   catItemActive: { backgroundColor: "#E9C46A" },
   catText: { color: "#9CA3AF", fontSize: 11, fontWeight: "700" },
   catTextActive: { color: "#000", fontWeight: "900" },
