@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -19,7 +18,7 @@ import { useSession } from "../src/store/session";
 import { createM3UUrl, listLists, setActiveListId } from "../src/utils/api";
 
 const VALIDATE_CODE_URL =
-  "https://lljsnoovvwexzebzbaal.supabase.co/functions/v1/validate-code";
+  "https://lljsnoovwvxebzbaal.supabase.co/functions/v1/validate-code";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -31,18 +30,15 @@ export default function LoginScreen() {
   const [step, setStep] = useState<"form" | "iptv">("form");
   const [connectMode, setConnectMode] = useState<"xtream" | "m3u">("xtream");
 
-  // Dados da licença (Iniciam vazios para que cada cliente insira os seus dados)
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
 
-  // Dados de conexão Xtream
   const [server, setServer] = useState("");
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(true);
 
-  // Dados de conexão M3U
   const [m3uName, setM3uName] = useState("");
   const [m3uUrl, setM3uUrl] = useState("");
 
@@ -539,6 +535,7 @@ export default function LoginScreen() {
   );
 }
 
+// COMPONENTE TVINPUTFIELD BLINDADO CONTRA DUPLICIDADE DE EVENTOS NA TV
 function TVInputField({
   inputRef,
   icon,
@@ -553,13 +550,7 @@ function TVInputField({
   const [isFocused, setIsFocused] = useState(false);
 
   return (
-    <Pressable
-      focusable={true}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      onPress={() => inputRef?.current?.focus()}
-      style={[styles.inputBox, isFocused && styles.inputBoxFocused]}
-    >
+    <View style={[styles.inputBox, isFocused && styles.inputBoxFocused]}>
       {icon && <Text style={styles.inputEmoji}>{icon}</Text>}
       <TextInput
         ref={inputRef}
@@ -570,12 +561,13 @@ function TVInputField({
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
+        autoCorrect={false}
         style={[styles.textInput, isFocused && { color: "#FFF", fontWeight: "700" }]}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
       />
       {rightElement}
-    </Pressable>
+    </View>
   );
 }
 
@@ -673,7 +665,7 @@ const styles = StyleSheet.create({
   btnGoldFocused: { borderColor: "#FFF", borderWidth: 2.5, transform: [{ scale: 1.01 }] },
   btnGoldText: { color: "#000", fontSize: 12, fontWeight: "900", letterSpacing: 0.8 },
 
-  linkBtn: { alignSelf: "center", paddingVertical: 6, paddingHorizontal: 10, marginTop: 2, borderRadius: 6 },
+  linkBtn: { alignSelf: "center", paddingHorizontal: 10, marginTop: 2, borderRadius: 6 },
   linkBtnFocused: { backgroundColor: "#E9C46A" },
   linkBtnText: { color: "#E9C46A", fontSize: 11, fontWeight: "800" },
 
