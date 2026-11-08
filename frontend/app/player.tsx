@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Logo } from "../src/components/Logo";
-import { GoldButton } from "../src/components/GoldButton";
 import { colors, radius, spacing } from "../src/utils/theme";
 import { reportError } from "../src/utils/logger";
 import { useSession, PlayItem } from "../src/store/session";
@@ -151,11 +150,9 @@ export default function PlayerScreen() {
     return rawUrl;
   }, [rawParams, activePlayItem, session, streamId, streamType]);
 
-  // Listener para retornar ao catálogo automaticamente quando o usuário fecha o player externo e volta ao app
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
-        // Se o usuário voltou para o app vindo do player externo, volta para a tela anterior
         if (router.canGoBack()) {
           router.back();
         }
@@ -266,7 +263,6 @@ export default function PlayerScreen() {
     }
   }, [streamUrl, abrirNoJustPlayer]);
 
-  // Reseta o gatilho de auto-launch se o índice da fila mudar (permite avançar/voltar episódios)
   useEffect(() => {
     hasAutoLaunched.current = false;
   }, [queueIndex]);
@@ -277,7 +273,9 @@ export default function PlayerScreen() {
 
       <View style={styles.header}>
         <Pressable
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
+          focusable={true}
+          accessible={true}
+          style={({ focused }) => [styles.backBtn, focused && styles.cardFocused]}
           onPress={() => router.back()}
         >
           <Ionicons name="arrow-back" size={24} color={colors.gold} />
@@ -322,14 +320,31 @@ export default function PlayerScreen() {
         )}
 
         <View style={styles.actions}>
-          <GoldButton
-            label={launching ? "A CONECTAR..." : "REPRODUZIR NOVAMENTE"}
+          <Pressable
+            focusable={true}
+            accessible={true}
+            disabled={launching}
+            style={({ focused }) => [
+              styles.primaryActionBtn,
+              focused && styles.cardFocused,
+              launching && { opacity: 0.7 },
+            ]}
             onPress={abrirNoJustPlayer}
-            loading={launching}
-          />
+          >
+            {launching ? (
+              <ActivityIndicator color="#000" size="small" />
+            ) : (
+              <Ionicons name="play" size={18} color="#000" />
+            )}
+            <Text style={styles.primaryActionText}>
+              {launching ? "A CONECTAR..." : "REPRODUZIR NOVAMENTE"}
+            </Text>
+          </Pressable>
 
           <Pressable
-            style={({ pressed }) => [styles.exitBtn, pressed && { opacity: 0.7 }]}
+            focusable={true}
+            accessible={true}
+            style={({ focused }) => [styles.exitBtn, focused && styles.cardFocused]}
             onPress={() => router.back()}
           >
             <Ionicons name="close-circle-outline" size={18} color="#8E929C" />
@@ -355,10 +370,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     alignSelf: "flex-start",
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: radius.sm,
     backgroundColor: "rgba(229, 169, 59, 0.08)",
+    borderWidth: 2,
+    borderColor: "transparent",
   },
   backBtnText: {
     color: colors.gold,
@@ -447,16 +464,42 @@ const styles = StyleSheet.create({
     width: "100%",
     gap: spacing.md,
   },
+  primaryActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.gold,
+    height: 48,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  primaryActionText: {
+    color: "#000",
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
   exitBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
     paddingVertical: 12,
+    borderRadius: radius.sm,
+    borderWidth: 2,
+    borderColor: "transparent",
   },
   exitBtnText: {
     color: "#8E929C",
     fontSize: 13,
     fontWeight: "600",
+  },
+  cardFocused: {
+    borderColor: "#E9C46A",
+    borderWidth: 3,
+    transform: [{ scale: 1.02 }],
+    backgroundColor: "rgba(229, 169, 59, 0.15)",
   },
 });
