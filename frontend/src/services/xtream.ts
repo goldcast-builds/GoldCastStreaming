@@ -1,8 +1,5 @@
 /**
- * Xtream Codes / XUI client.
- * On native devices requests go straight to the user's panel (no third-party in the middle).
- * On the web preview the browser blocks cross-origin/mixed-content requests, so we go through
- * the backend proxy (/api/xtream/proxy) which only forwards the call and never stores credentials.
+ * Xtream Codes / XUI client - Otimizado com Failover e Normalização UTF-8
  */
 import { Platform } from "react-native";
 
@@ -38,12 +35,10 @@ export const SERVER_LABELS: Record<string, string> = {
   [DEFAULT_SERVERS.backup]: "SERVIDOR 2 (DNS 2)",
 };
 
-/** Public label for a server — never exposes the URL for the built-in servers. */
 export function serverLabel(server: string): string {
   return SERVER_LABELS[server] || "Servidor personalizado";
 }
 
-/** Accepts dominio, dominio:porta, http(s)://dominio[:porta][/path]. Keeps scheme + port exactly as typed. */
 export function normalizeServer(input: string): string {
   let s = (input || "").trim();
   if (!s) throw new XtreamError("network", MSG.invalidUrl);
@@ -64,6 +59,17 @@ export function normalizeServer(input: string): string {
 
 export function hostOf(server: string): string {
   return server.replace(/^https?:\/\//, "");
+}
+
+/** Utilitário para normalizar carateres e evitar falhas de codificação (UTF-8 robusto) */
+export function sanitizeText(text: string): string {
+  if (!text || typeof text !== "string") return "";
+  try {
+    // Corrige problemas comuns de codificação ISO-8859-1 para UTF-8 legível na TV
+    return decodeURIComponent(escape(text));
+  } catch {
+    return text.replace(//g, "").trim();
+  }
 }
 
 export interface UserInfo {
@@ -184,12 +190,8 @@ async function callApiNow(server: string, username: string, password: string, ac
     },
   });
 
-  if (res.status === 403) {
-    throw new XtreamError("blocked", `Servidor recusou a conexão (HTTP 403): ${hostOf(server)}`);
-  }
-  if (res.status === 404) {
-    throw new XtreamError("blocked", `API não encontrada (HTTP 404): ${hostOf(server)}`);
-  }
+  if (res.status === 403) throw new XtreamError("blocked", `Servidor recusou a conexão (HTTP 403): ${hostOf(server)}`);
+  if (res.status === 404) throw new XtreamError("blocked", `API não encontrada (HTTP 404): ${hostOf(server)}`);
   if (res.status >= 500) throw new XtreamError("network", MSG.network);
   if (res.status >= 400) throw new XtreamError("auth", MSG.auth);
 
@@ -201,12 +203,17 @@ async function callApiNow(server: string, username: string, password: string, ac
   }
 }
 
+/** Lógica robusta de Failover automático de servidores (DNS Primário e Backup) */
 function candidatesFor(server: string): string[] {
   const list = [server];
   const p = normalizeServer(DEFAULT_SERVERS.primary);
   const b = normalizeServer(DEFAULT_SERVERS.backup);
   if (server === p && !list.includes(b)) list.push(b);
   else if (server === b && !list.includes(p)) list.push(p);
+  else {
+    if (!list.includes(p)) list.push(p);
+    if (!list.includes(b)) list.push(b);
+  }
   return list;
 }
 
@@ -222,9 +229,10 @@ export async function authenticate(
   const server = normalizeServer(serverInput);
   const candidates = candidatesFor(server);
   let lastErr: any = null;
+
   for (let i = 0; i < candidates.length; i++) {
     const s = candidates[i];
-    onStage?.("connecting", i > 0 ? `Servidor reserva: ${hostOf(s)}` : hostOf(s));
+    onStage?.("connecting", i > 0 ? `Tentando servidor de failover: ${hostOf(s)}` : hostOf(s));
     try {
       const data = await callApi(s, username, password);
       onStage?.("validating");
@@ -252,6 +260,7 @@ export async function authenticate(
       lastErr = e;
       const k = e?.kind as XtreamError["kind"] | undefined;
       if (k === "auth" || k === "expired" || k === "incompatible") throw e;
+      // Se for erro de rede/timeout, continua para o próximo servidor candidato (Failover)
     }
   }
   throw lastErr || new XtreamError("network", MSG.network);
@@ -294,7 +303,10 @@ const asList = (d: any) => (Array.isArray(d) ? d : []);
 
 export const xtream = {
   liveCategories: async (s: XtreamSession): Promise<Category[]> =>
-    asList(await callApi(s.server, s.username, s.password, "get_live_categories")),
+    asList(await callApi(s.server, s.username, s.password, "get_live_categories")).map((c: any) => ({
+      ...c,
+      category_name: sanitizeText(c.category_name),
+    })),
 
   liveStreams: async (
     session: XtreamSession,
@@ -307,20 +319,23 @@ export const xtream = {
     if (category) extra.category_id = category;
     const data = await callApi(session.server, session.username, session.password, "get_live_streams", extra);
     if (!Array.isArray(data)) return [];
-    let items = data as LiveStream[];
+    let items = (data as LiveStream[]).map((x) => ({
+      ...x,
+      stream_id: Number(x.stream_id),
+      name: sanitizeText(x.name),
+    }));
     if (search) {
       const sQuery = search.toLowerCase();
       items = items.filter((x) => String(x.name || "").toLowerCase().includes(sQuery));
     }
-    const slice = limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
-    return slice.map((x) => ({
-      ...x,
-      stream_id: Number(x.stream_id),
-    }));
+    return limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
   },
 
   vodCategories: async (s: XtreamSession): Promise<Category[]> =>
-    asList(await callApi(s.server, s.username, s.password, "get_vod_categories")),
+    asList(await callApi(s.server, s.username, s.password, "get_vod_categories")).map((c: any) => ({
+      ...c,
+      category_name: sanitizeText(c.category_name),
+    })),
 
   vodStreams: async (
     session: XtreamSession,
@@ -333,17 +348,17 @@ export const xtream = {
     if (category) extra.category_id = category;
     const data = await callApi(session.server, session.username, session.password, "get_vod_streams", extra);
     if (!Array.isArray(data)) return [];
-    let items = data as VodStream[];
+    let items = (data as VodStream[]).map((x) => ({
+      ...x,
+      stream_id: Number(x.stream_id),
+      name: sanitizeText(x.name),
+      container_extension: x.container_extension || "mp4",
+    }));
     if (search) {
       const sQuery = search.toLowerCase();
       items = items.filter((x) => String(x.name || "").toLowerCase().includes(sQuery));
     }
-    const slice = limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
-    return slice.map((x) => ({
-      ...x,
-      stream_id: Number(x.stream_id),
-      container_extension: x.container_extension || "mp4",
-    }));
+    return limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
   },
 
   vodInfo: async (s: XtreamSession, vodId: number | string): Promise<any> => {
@@ -353,18 +368,25 @@ export const xtream = {
       ...res,
       info: {
         ...(res.info || {}),
-        plot: res.info?.plot || "",
-        cast: res.info?.cast || "",
-        genre: res.info?.genre || "",
-        director: res.info?.director || "",
+        plot: sanitizeText(res.info?.plot || ""),
+        cast: sanitizeText(res.info?.cast || ""),
+        genre: sanitizeText(res.info?.genre || ""),
+        director: sanitizeText(res.info?.director || ""),
         rating: res.info?.rating || "",
         movie_image: res.info?.movie_image || "",
+      },
+      movie_data: {
+        ...(res.movie_data || {}),
+        name: sanitizeText(res.movie_data?.name || ""),
       },
     };
   },
 
   seriesCategories: async (s: XtreamSession): Promise<Category[]> =>
-    asList(await callApi(s.server, s.username, s.password, "get_series_categories")),
+    asList(await callApi(s.server, s.username, s.password, "get_series_categories")).map((c: any) => ({
+      ...c,
+      category_name: sanitizeText(c.category_name),
+    })),
 
   series: async (
     session: XtreamSession,
@@ -377,7 +399,12 @@ export const xtream = {
     if (category) extra.category_id = category;
     const data = await callApi(session.server, session.username, session.password, "get_series", extra);
     if (!Array.isArray(data)) return [];
-    let items = data as SeriesItem[];
+    let items = (data as SeriesItem[]).map((x) => ({
+      ...x,
+      name: sanitizeText(x.name),
+      plot: sanitizeText(x.plot || ""),
+      genre: sanitizeText(x.genre || ""),
+    }));
     if (search) {
       const sQuery = search.toLowerCase();
       items = items.filter((x) => String(x.name || "").toLowerCase().includes(sQuery));
@@ -396,8 +423,8 @@ export const xtream = {
       const d = await callApi(s.server, s.username, s.password, "get_short_epg", { stream_id: streamId, limit });
       return asList(d?.epg_listings).map((e: any) => ({
         ...e,
-        title: decodeB64(e.title),
-        description: decodeB64(e.description),
+        title: decodeB64(sanitizeText(e.title)),
+        description: decodeB64(sanitizeText(e.description)),
         start_timestamp: Number(e.start_timestamp),
         stop_timestamp: Number(e.stop_timestamp),
       }));
@@ -416,31 +443,5 @@ function decodeB64(v: any): string {
     try { return decodeURIComponent(escape(raw)); } catch { return raw; }
   } catch {
     return String(v);
-  }
-}
-
-export function fmtUnixSP(ts?: string | number | null, withTime = true, serverTz?: string): string | null {
-  if (ts == null || ts === "" || ts === "null") return null;
-  const n = Number(ts);
-  if (!n || Number.isNaN(n)) return null;
-  const d = new Date(n * 1000);
-  try {
-    return new Intl.DateTimeFormat("pt-BR", {
-      timeZone: serverTz || "America/Sao_Paulo",
-      day: "2-digit", month: "2-digit", year: "numeric",
-      ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
-    }).format(d);
-  } catch {
-    return d.toLocaleString("pt-BR");
-  }
-}
-
-export function fmtTimeSP(ts?: number, serverTz?: string): string {
-  if (!ts) return "";
-  try {
-    return new Intl.DateTimeFormat("pt-BR", { timeZone: serverTz || "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(new Date(ts * 1000));
-  } catch {
-    const d = new Date(ts * 1000);
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
 }
