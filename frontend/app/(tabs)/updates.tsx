@@ -4,15 +4,14 @@ import { WebView } from "react-native-webview";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 
-export default function UpdatesScreen() {
+export default function YouTubeScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const webViewRef = useRef<WebView>(null);
 
-  // Injeção opcional de CSS/JS para ocultar distrações se desejado
+  // Script injetado para otimizar a interface móvel do YouTube e focar no conteúdo
   const injectedJavaScript = `
     (function() {
-      // Exemplo de script para melhorar a experiência no WebView móvel do YouTube
       const style = document.createElement('style');
       style.innerHTML = \`
         #masthead-container, .ytp-ad-module { display: none !important; }
@@ -34,15 +33,15 @@ export default function UpdatesScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="#FFF" />
         </Pressable>
-        <Text style={styles.headerTitle}>ATUALIZAÇÕES & VÍDEOS</Text>
+        <Text style={styles.headerTitle}>YOUTUBE PLAYER</Text>
       </View>
 
-      {/* Contentor do WebView isolado do IPTV */}
+      {/* Contentor do WebView isolado */}
       <View style={styles.webContainer}>
         {loading && (
           <View style={styles.loaderOverlay}>
             <ActivityIndicator size="large" color="#E9C46A" />
-            <Text style={styles.loaderText}>A carregar NouTube...</Text>
+            <Text style={styles.loaderText}>A carregar YouTube...</Text>
           </View>
         )}
         <WebView
