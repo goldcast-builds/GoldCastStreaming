@@ -10,15 +10,15 @@ export default function YouTubeFullScreenScreen() {
   const webViewRef = useRef<WebView>(null);
   const canGoBackRef = useRef(false);
 
-  // Interceção do botão "voltar" físico do Android/TV para navegar no histórico do YouTube
+  // Interceção do botão "voltar" físico para navegar no histórico do YouTube
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
         if (canGoBackRef.current && webViewRef.current) {
           webViewRef.current.goBack();
-          return true; // Impede que o app feche e volta uma página no YouTube
+          return true;
         }
-        router.back(); // Se já estiver na página inicial do YouTube, sai para o menu
+        router.back();
         return true;
       };
 
@@ -27,29 +27,63 @@ export default function YouTubeFullScreenScreen() {
     }, [router])
   );
 
-  // Script injetado para bloquear anúncios e garantir largura total
+  // Bloqueio preventivo de requisições de rede direcionadas a servidores de anúncios do YouTube/Google
+  const handleShouldStartLoad = (request: { url: string }) => {
+    const { url } = request;
+    
+    // Lista de domínios de publicidade comuns do ecossistema Google/YouTube
+    const adDomains = [
+      "googlesyndication.com",
+      "doubleclick.net",
+      "googleadservices.com",
+      "adservice.google.com",
+      "pagead2.googlesyndication.com"
+    ];
+
+    // Se o pedido for para um domínio de anúncios, bloqueia imediatamente
+    if (adDomains.some((domain) => url.includes(domain))) {
+      return false; 
+    }
+
+    return true;
+  };
+
+  // Script injetado para forçar a limpeza visual e saltar anúncios instantaneamente caso passem
   const injectedJavaScript = `
     (function() {
       const style = document.createElement('style');
       style.innerHTML = \`
-        .ytp-ad-module, .ytp-ad-player-overlay, #masthead-ad, ytd-display-ad-renderer {
+        .ytp-ad-module, .ytp-ad-player-overlay, #masthead-ad, ytd-display-ad-renderer, .video-ads {
           display: none !important;
+          visibility: hidden !important;
         }
         body { width: 100% !important; overflow-x: hidden !important; }
       \`;
       document.head.appendChild(style);
 
-      setInterval(function() {
-        const skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern');
-        if (skipBtn) skipBtn.click();
-      }, 300);
+      // Mutação dinâmica para destruir qualquer overlay de anúncio assim que ele nascer no DOM
+      const observer = new MutationObserver(function(mutations) {
+        const skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-overlay-close-button');
+        if (skipBtn) {
+          skipBtn.click();
+        }
+        const adOverlay = document.querySelector('.ad-showing');
+        if (adOverlay) {
+          const video = document.querySelector('video');
+          if (video && !isNaN(video.duration)) {
+            video.currentTime = video.duration;
+          }
+        }
+      });
+
+      observer.observe(document.body, { childList: true, subtree: true });
     })();
     true;
   `;
 
   return (
     <View style={styles.container}>
-      {/* Barra superior fixa e com altura garantida para nunca ficar escondida */}
+      {/* Barra superior de controlo para voltar ao menu do GoldCast */}
       <View style={styles.topBar}>
         <Pressable 
           focusable={true} 
@@ -60,10 +94,10 @@ export default function YouTubeFullScreenScreen() {
           <Ionicons name="arrow-back" size={20} color="#FFF" />
           <Text style={styles.backText}>Voltar ao Menu</Text>
         </Pressable>
-        <Text style={styles.brandTitle}>GoldCast • YouTube</Text>
+        <Text style={styles.brandTitle}>GoldCast • YouTube Clean</Text>
       </View>
 
-      {/* WebView com margem superior (marginTop) para não ficar por baixo da barra */}
+      {/* WebView com filtragem de rede e injeção anti-ads avançada */}
       <View style={styles.webWrapper}>
         <WebView
           ref={webViewRef}
@@ -74,6 +108,7 @@ export default function YouTubeFullScreenScreen() {
           allowsInlineMediaPlayback={true}
           mediaPlaybackRequiresUserAction={false}
           injectedJavaScript={injectedJavaScript}
+          onShouldStartLoadWithRequest={handleShouldStartLoad}
           onNavigationStateChange={(navState) => {
             canGoBackRef.current = navState.canGoBack;
           }}
