@@ -10,8 +10,23 @@ const SESSION_KEY = "goldcast_session_v1";
 const SOURCE_KEY = "goldcast_source_v1";
 const DEVICE_KEY = "goldcast_device_mode";
 const PREFS_KEY = "goldcast_prefs_v1";
-export interface Prefs { autoReconnect: boolean; autoplay: boolean; liveFormat: "auto" | "m3u8" | "ts"; }
-const defaultPrefs = (): Prefs => ({ autoReconnect: true, autoplay: true, liveFormat: "auto" });
+
+export interface Prefs { 
+  autoReconnect: boolean; 
+  autoplay: boolean; 
+  liveFormat: "auto" | "m3u8" | "ts";
+  parentalPin: string;
+  parentalEnabled: boolean;
+}
+
+const defaultPrefs = (): Prefs => ({ 
+  autoReconnect: true, 
+  autoplay: true, 
+  liveFormat: "auto",
+  parentalPin: "",
+  parentalEnabled: false,
+});
+
 export type DeviceMode = "tv" | "mobile";
 
 async function secureSet(key: string, value: string | null) {
