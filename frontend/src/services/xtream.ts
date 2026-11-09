@@ -1,5 +1,5 @@
 /**
- * Xtream Codes / XUI client - Otimizado com Failover e Normalização UTF-8
+ * Xtream Codes / XUI client - Otimizado com Tratamento Defensivo para Rotas de Séries e VOD
  */
 import { Platform } from "react-native";
 
@@ -61,14 +61,13 @@ export function hostOf(server: string): string {
   return server.replace(/^https?:\/\//, "");
 }
 
-/** Utilitário para normalizar carateres e evitar falhas de codificação (UTF-8 robusto) */
+/** Normalização rigorosa de codificação UTF-8 para evitar caracteres corrompidos */
 export function sanitizeText(text: string): string {
   if (!text || typeof text !== "string") return "";
   try {
-    // Corrige problemas comuns de codificação ISO-8859-1 para UTF-8 legível na TV
     return decodeURIComponent(escape(text));
   } catch {
-    return text.replace(//g, "").trim();
+    return text.trim();
   }
 }
 
@@ -203,7 +202,6 @@ async function callApiNow(server: string, username: string, password: string, ac
   }
 }
 
-/** Lógica robusta de Failover automático de servidores (DNS Primário e Backup) */
 function candidatesFor(server: string): string[] {
   const list = [server];
   const p = normalizeServer(DEFAULT_SERVERS.primary);
@@ -232,7 +230,7 @@ export async function authenticate(
 
   for (let i = 0; i < candidates.length; i++) {
     const s = candidates[i];
-    onStage?.("connecting", i > 0 ? `Tentando servidor de failover: ${hostOf(s)}` : hostOf(s));
+    onStage?.("connecting", i > 0 ? `Tentando failover: ${hostOf(s)}` : hostOf(s));
     try {
       const data = await callApi(s, username, password);
       onStage?.("validating");
@@ -260,7 +258,6 @@ export async function authenticate(
       lastErr = e;
       const k = e?.kind as XtreamError["kind"] | undefined;
       if (k === "auth" || k === "expired" || k === "incompatible") throw e;
-      // Se for erro de rede/timeout, continua para o próximo servidor candidato (Failover)
     }
   }
   throw lastErr || new XtreamError("network", MSG.network);
@@ -362,31 +359,42 @@ export const xtream = {
   },
 
   vodInfo: async (s: XtreamSession, vodId: number | string): Promise<any> => {
-    const res = await callApi(s.server, s.username, s.password, "get_vod_info", { vod_id: vodId });
-    if (!res || typeof res !== "object") return {};
-    return {
-      ...res,
-      info: {
-        ...(res.info || {}),
-        plot: sanitizeText(res.info?.plot || ""),
-        cast: sanitizeText(res.info?.cast || ""),
-        genre: sanitizeText(res.info?.genre || ""),
-        director: sanitizeText(res.info?.director || ""),
-        rating: res.info?.rating || "",
-        movie_image: res.info?.movie_image || "",
-      },
-      movie_data: {
-        ...(res.movie_data || {}),
-        name: sanitizeText(res.movie_data?.name || ""),
-      },
-    };
+    try {
+      const res = await callApi(s.server, s.username, s.password, "get_vod_info", { vod_id: vodId });
+      if (!res || typeof res !== "object") return {};
+      return {
+        ...res,
+        info: {
+          ...(res.info || {}),
+          plot: sanitizeText(res.info?.plot || ""),
+          cast: sanitizeText(res.info?.cast || ""),
+          genre: sanitizeText(res.info?.genre || ""),
+          director: sanitizeText(res.info?.director || ""),
+          rating: res.info?.rating || "",
+          movie_image: res.info?.movie_image || "",
+        },
+        movie_data: {
+          ...(res.movie_data || {}),
+          name: sanitizeText(res.movie_data?.name || ""),
+        },
+      };
+    } catch {
+      return {};
+    }
   },
 
-  seriesCategories: async (s: XtreamSession): Promise<Category[]> =>
-    asList(await callApi(s.server, s.username, s.password, "get_series_categories")).map((c: any) => ({
-      ...c,
-      category_name: sanitizeText(c.category_name),
-    })),
+  // Tratamento defensivo para rotas de séries caso venham vazias no router do painel PHP
+  seriesCategories: async (s: XtreamSession): Promise<Category[]> => {
+    try {
+      const res = await callApi(s.server, s.username, s.password, "get_series_categories");
+      return asList(res).map((c: any) => ({
+        ...c,
+        category_name: sanitizeText(c.category_name),
+      }));
+    } catch {
+      return [];
+    }
+  },
 
   series: async (
     session: XtreamSession,
@@ -395,27 +403,35 @@ export const xtream = {
     limit?: number,
     offset = 0
   ): Promise<SeriesItem[]> => {
-    const extra: Record<string, any> = {};
-    if (category) extra.category_id = category;
-    const data = await callApi(session.server, session.username, session.password, "get_series", extra);
-    if (!Array.isArray(data)) return [];
-    let items = (data as SeriesItem[]).map((x) => ({
-      ...x,
-      name: sanitizeText(x.name),
-      plot: sanitizeText(x.plot || ""),
-      genre: sanitizeText(x.genre || ""),
-    }));
-    if (search) {
-      const sQuery = search.toLowerCase();
-      items = items.filter((x) => String(x.name || "").toLowerCase().includes(sQuery));
+    try {
+      const extra: Record<string, any> = {};
+      if (category) extra.category_id = category;
+      const data = await callApi(session.server, session.username, session.password, "get_series", extra);
+      if (!Array.isArray(data)) return [];
+      let items = (data as SeriesItem[]).map((x) => ({
+        ...x,
+        name: sanitizeText(x.name),
+        plot: sanitizeText(x.plot || ""),
+        genre: sanitizeText(x.genre || ""),
+      }));
+      if (search) {
+        const sQuery = search.toLowerCase();
+        items = items.filter((x) => String(x.name || "").toLowerCase().includes(sQuery));
+      }
+      return limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
+    } catch {
+      return [];
     }
-    return limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
   },
 
   seriesInfo: async (s: XtreamSession, seriesId: number | string): Promise<any> => {
-    const res = await callApi(s.server, s.username, s.password, "get_series_info", { series_id: seriesId });
-    if (!res || typeof res !== "object") return {};
-    return res;
+    try {
+      const res = await callApi(s.server, s.username, s.password, "get_series_info", { series_id: seriesId });
+      if (!res || typeof res !== "object") return {};
+      return res;
+    } catch {
+      return {};
+    }
   },
 
   shortEpg: async (s: XtreamSession, streamId: number | string, limit = 4): Promise<EpgEntry[]> => {
