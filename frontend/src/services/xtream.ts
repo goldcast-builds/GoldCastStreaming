@@ -1,5 +1,5 @@
 /**
- * Xtream Codes / XUI client - Otimizado com Tratamento Defensivo para Rotas de Séries e VOD
+ * Xtream Codes / XUI client - Otimizado com Tratamento Defensivo e Normalização UTF-8 Compatível
  */
 import { Platform } from "react-native";
 
@@ -61,13 +61,17 @@ export function hostOf(server: string): string {
   return server.replace(/^https?:\/\//, "");
 }
 
-/** Normalização rigorosa de codificação UTF-8 para evitar caracteres corrompidos */
+/** Normalização rigorosa de codificação UTF-8 compatível com React Native e Node.js */
 export function sanitizeText(text: string): string {
   if (!text || typeof text !== "string") return "";
   try {
-    return decodeURIComponent(escape(text));
+    return decodeURIComponent(decodeURI(text));
   } catch {
-    return text.trim();
+    try {
+      return decodeURIComponent(text);
+    } catch {
+      return text.trim();
+    }
   }
 }
 
@@ -383,7 +387,6 @@ export const xtream = {
     }
   },
 
-  // Tratamento defensivo para rotas de séries caso venham vazias no router do painel PHP
   seriesCategories: async (s: XtreamSession): Promise<Category[]> => {
     try {
       const res = await callApi(s.server, s.username, s.password, "get_series_categories");
@@ -456,7 +459,7 @@ function decodeB64(v: any): string {
   if (!v) return "";
   try {
     const raw = typeof atob === "function" ? atob(String(v)) : String(v);
-    try { return decodeURIComponent(escape(raw)); } catch { return raw; }
+    try { return decodeURIComponent(decodeURI(raw)); } catch { return raw; }
   } catch {
     return String(v);
   }
