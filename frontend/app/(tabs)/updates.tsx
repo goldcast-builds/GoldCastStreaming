@@ -9,14 +9,37 @@ export default function YouTubeScreen() {
   const [loading, setLoading] = useState(true);
   const webViewRef = useRef<WebView>(null);
 
-  // Script injetado para otimizar a interface móvel do YouTube e focar no conteúdo
+  // Script avançado injetado para bloquear anúncios, saltar overlays e ocultar distrações
   const injectedJavaScript = `
     (function() {
+      // 1. Injeção de CSS para ocultar anúncios e elementos patrocinados
       const style = document.createElement('style');
       style.innerHTML = \`
-        #masthead-container, .ytp-ad-module { display: none !important; }
+        .ytp-ad-module, 
+        .ytp-ad-overlay-image, 
+        .ytp-ad-player-overlay, 
+        #masthead-ad, 
+        ytd-rich-item-renderer.style-scope.ytd-rich-grid-row #dismissible.style-scope.ytd-rich-item-renderer:has(span.ytd-badge-supported-renderer),
+        ytd-display-ad-renderer, 
+        ytd-compact-promoted-video-renderer {
+          display: none !important;
+        }
       \`;
       document.head.appendChild(style);
+
+      // 2. Função automática para clicar no botão "Saltar Anúncio" (Skip Ad) assim que aparecer
+      setInterval(function() {
+        const skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, button.ytp-ad-skip-button');
+        if (skipBtn) {
+          skipBtn.click();
+        }
+        
+        // Fechar overlays de anúncios em vídeo se surgirem
+        const closeOverlay = document.querySelector('.ytp-ad-overlay-close-button');
+        if (closeOverlay) {
+          closeOverlay.click();
+        }
+      }, 500);
     })();
     true;
   `;
@@ -33,7 +56,7 @@ export default function YouTubeScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="#FFF" />
         </Pressable>
-        <Text style={styles.headerTitle}>YOUTUBE PLAYER</Text>
+        <Text style={styles.headerTitle}>YOUTUBE SEM ANÚNCIOS</Text>
       </View>
 
       {/* Contentor do WebView isolado */}
@@ -41,7 +64,7 @@ export default function YouTubeScreen() {
         {loading && (
           <View style={styles.loaderOverlay}>
             <ActivityIndicator size="large" color="#E9C46A" />
-            <Text style={styles.loaderText}>A carregar YouTube...</Text>
+            <Text style={styles.loaderText}>A carregar YouTube limpo...</Text>
           </View>
         )}
         <WebView
