@@ -309,9 +309,14 @@ export default function HomeTab() {
               <Text style={styles.bottomCardText}>JOGOS DE HOJE</Text>
             </Pressable>
 
-            <Pressable focusable={true} onPress={() => Alert.alert("Atualizações", "O aplicativo está na versão mais recente.")} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
-              <Ionicons name="newspaper-outline" size={20} color="#FFF" />
-              <Text style={styles.bottomCardText}>ATUALIZAÇÕES</Text>
+            {/* BOTÃO YOUTUBE LIGADO AO ECRÃ ISOLADO DO NOUTUBE */}
+            <Pressable 
+              focusable={true} 
+              onPress={() => router.push("/(tabs)/updates")} 
+              style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}
+            >
+              <Ionicons name="logo-youtube" size={20} color="#FF0000" />
+              <Text style={styles.bottomCardText}>YOUTUBE</Text>
             </Pressable>
 
             <Pressable focusable={true} onPress={() => router.push("/continue")} style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}>
