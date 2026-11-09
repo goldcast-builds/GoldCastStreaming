@@ -9,6 +9,8 @@ import { logger, LogItem } from "../../src/services/logger"; // Importação do 
 export default function SettingsScreen() {
   const router = useRouter();
   const session = useSession((s) => s.session);
+  const prefs = useSession((s) => s.prefs);
+  const setPrefs = useSession((s) => s.setPrefs);
   const refreshAccount = useSession((s) => s.refreshAccount);
   const clearCatalog = useSession((s) => s.clearCatalog);
   const logout = useSession((s) => s.logout);
@@ -106,6 +108,50 @@ export default function SettingsScreen() {
     Alert.alert("Sobre", "GoldCast Media Player\nVersão: 1.0.1\nPlataforma otimizada para Smart TV.");
   };
 
+  // Configuração do Controlo Parental
+  const handleParentalControl = () => {
+    const isEnabled = prefs?.parentalEnabled;
+    Alert.alert(
+      "Controlo Parental",
+      isEnabled 
+        ? `Estado: ATIVADO\nPIN atual: ${prefs?.parentalPin || "****"}` 
+        : "Estado: DESATIVADO\nProteja o acesso a conteúdos restritos com um PIN.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        ...(isEnabled ? [{
+          text: "Desativar",
+          style: "destructive" as const,
+          onPress: async () => {
+            await setPrefs({ parentalEnabled: false, parentalPin: "" });
+            logger.info("Controlo parental desativado.");
+            Alert.alert("Sucesso", "Controlo parental desativado.");
+          }
+        }] : []),
+        {
+          text: isEnabled ? "Alterar PIN" : "Ativar PIN",
+          onPress: () => {
+            // No ambiente nativo de TV ou web, usamos prompts ou mensagens explicativas
+            Alert.alert(
+              "Configurar PIN",
+              "Deseja definir um PIN de 4 dígitos para controlo parental?",
+              [
+                { text: "Cancelar", style: "cancel" },
+                {
+                  text: "Definir PIN padrão (1234)",
+                  onPress: async () => {
+                    await setPrefs({ parentalPin: "1234", parentalEnabled: true });
+                    logger.info("Controlo parental ativado com PIN padrão 1234.");
+                    Alert.alert("Sucesso", "PIN definido como 1234 com sucesso!");
+                  }
+                }
+              ]
+            );
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <View style={styles.root}>
       <View style={styles.header}>
@@ -188,7 +234,18 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Histórico e favoritos</Text>
         </Pressable>
 
-        {/* 7. Relatório de Diagnóstico (LOGS DO SISTEMA) */}
+        {/* 7. Controlo Parental */}
+        <Pressable 
+          focusable={true} 
+          accessible={true}
+          onPress={handleParentalControl} 
+          style={({ focused }) => [styles.settingCard, focused && styles.cardFocused]}
+        >
+          <Ionicons name="shield-checkmark-outline" size={28} color="#E9C46A" />
+          <Text style={styles.cardText}>Controlo Parental</Text>
+        </Pressable>
+
+        {/* 8. Relatório de Diagnóstico (LOGS DO SISTEMA) */}
         <Pressable 
           focusable={true} 
           accessible={true}
@@ -199,7 +256,7 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Diagnóstico (Logs)</Text>
         </Pressable>
 
-        {/* 8. Limpar cache */}
+        {/* 9. Limpar cache */}
         <Pressable 
           focusable={true} 
           accessible={true}
@@ -210,7 +267,7 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Limpar cache</Text>
         </Pressable>
 
-        {/* 9. Sobre */}
+        {/* 10. Sobre */}
         <Pressable 
           focusable={true} 
           accessible={true}
@@ -221,7 +278,7 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Sobre</Text>
         </Pressable>
 
-        {/* 10. Sair */}
+        {/* 11. Sair */}
         <Pressable 
           focusable={true} 
           accessible={true}
