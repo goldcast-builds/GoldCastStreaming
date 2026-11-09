@@ -1,14 +1,33 @@
 import React, { useRef } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, BackHandler } from "react-native";
 import { WebView } from "react-native-webview";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
+import { useFocusEffect } from "@react-navigation/native";
 
 export default function YouTubeFullScreenScreen() {
   const router = useRouter();
   const webViewRef = useRef<WebView>(null);
+  const canGoBackRef = useRef(false);
 
-  // Script injetado para bloquear anúncios e adaptar perfeitamente a largura do site móvel
+  // Interceção do botão "voltar" físico do Android/TV para navegar no histórico do YouTube
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        if (canGoBackRef.current && webViewRef.current) {
+          webViewRef.current.goBack();
+          return true; // Impede que o app feche e volta uma página no YouTube
+        }
+        router.back(); // Se já estiver na página inicial do YouTube, sai para o menu
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+      return () => subscription.remove();
+    }, [router])
+  );
+
+  // Script injetado para bloquear anúncios e garantir largura total
   const injectedJavaScript = `
     (function() {
       const style = document.createElement('style');
@@ -16,15 +35,10 @@ export default function YouTubeFullScreenScreen() {
         .ytp-ad-module, .ytp-ad-player-overlay, #masthead-ad, ytd-display-ad-renderer {
           display: none !important;
         }
-        /* Força o site a ocupar toda a largura sem margens excessivas */
-        body {
-          width: 100% !important;
-          overflow-x: hidden !important;
-        }
+        body { width: 100% !important; overflow-x: hidden !important; }
       \`;
       document.head.appendChild(style);
 
-      // Salta anúncios automaticamente em vídeo
       setInterval(function() {
         const skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern');
         if (skipBtn) skipBtn.click();
@@ -35,8 +49,8 @@ export default function YouTubeFullScreenScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Barra superior flutuante e discreta para permitir voltar ao menu com o comando ou toque */}
-      <View style={styles.floatingTopBar}>
+      {/* Barra superior fixa e com altura garantida para nunca ficar escondida */}
+      <View style={styles.topBar}>
         <Pressable 
           focusable={true} 
           onPress={() => router.back()} 
@@ -49,8 +63,8 @@ export default function YouTubeFullScreenScreen() {
         <Text style={styles.brandTitle}>GoldCast • YouTube</Text>
       </View>
 
-      {/* WebView de largura e altura total (sem margens pretas) */}
-      <View style={styles.fullWidthContainer}>
+      {/* WebView com margem superior (marginTop) para não ficar por baixo da barra */}
+      <View style={styles.webWrapper}>
         <WebView
           ref={webViewRef}
           source={{ uri: "https://m.youtube.com" }}
@@ -60,9 +74,10 @@ export default function YouTubeFullScreenScreen() {
           allowsInlineMediaPlayback={true}
           mediaPlaybackRequiresUserAction={false}
           injectedJavaScript={injectedJavaScript}
-          // Compatibilidade total com Touch Screen e D-pad de TV
+          onNavigationStateChange={(navState) => {
+            canGoBackRef.current = navState.canGoBack;
+          }}
           scalesPageToFit={true}
-          contentInset={{ top: 0, left: 0, bottom: 0, right: 0 }}
         />
       </View>
     </View>
@@ -72,21 +87,17 @@ export default function YouTubeFullScreenScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0b1920" },
   
-  floatingTopBar: { 
-    position: "absolute", 
-    top: 8, 
-    left: 12, 
-    right: 12, 
-    zIndex: 99, 
+  topBar: { 
+    height: 48,
+    width: "100%",
+    backgroundColor: "#0b1920", 
     flexDirection: "row", 
     alignItems: "center", 
     justifyContent: "space-between", 
-    backgroundColor: "rgba(11,25,32,0.85)", 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(233,196,106,0.2)"
+    paddingHorizontal: 16, 
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(233,196,106,0.2)",
+    zIndex: 100,
   },
   
   backBtn: { 
@@ -95,7 +106,7 @@ const styles = StyleSheet.create({
     gap: 6, 
     backgroundColor: "rgba(255,255,255,0.1)", 
     paddingHorizontal: 10, 
-    paddingVertical: 4, 
+    paddingVertical: 5, 
     borderRadius: 6, 
     borderWidth: 2, 
     borderColor: "transparent" 
@@ -105,6 +116,6 @@ const styles = StyleSheet.create({
   backText: { color: "#FFF", fontSize: 11, fontWeight: "800" },
   brandTitle: { color: "#E9C46A", fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
   
-  fullWidthContainer: { flex: 1, width: "100%", height: "100%", backgroundColor: "#000" },
-  webview: { flex: 1, backgroundColor: "transparent", width: "100%", height: "100%" },
+  webWrapper: { flex: 1, width: "100%", backgroundColor: "#000" },
+  webview: { flex: 1, backgroundColor: "transparent" },
 });
