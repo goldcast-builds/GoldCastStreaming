@@ -3,14 +3,14 @@ import { View, Text, StyleSheet, Pressable, BackHandler } from "react-native";
 import { WebView } from "react-native-webview";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 
 export default function YouTubeFullScreenScreen() {
   const router = useRouter();
   const webViewRef = useRef<WebView>(null);
   const canGoBackRef = useRef(false);
 
-  // Interceção do botão "voltar" físico para navegar no histórico do YouTube
+  // Interceção segura do botão "voltar" nativa do Expo Router
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
@@ -27,11 +27,9 @@ export default function YouTubeFullScreenScreen() {
     }, [router])
   );
 
-  // Bloqueio preventivo de requisições de rede direcionadas a servidores de anúncios do YouTube/Google
+  // Bloqueio de domínios de anúncios ao nível da rede
   const handleShouldStartLoad = (request: { url: string }) => {
     const { url } = request;
-    
-    // Lista de domínios de publicidade comuns do ecossistema Google/YouTube
     const adDomains = [
       "googlesyndication.com",
       "doubleclick.net",
@@ -40,15 +38,13 @@ export default function YouTubeFullScreenScreen() {
       "pagead2.googlesyndication.com"
     ];
 
-    // Se o pedido for para um domínio de anúncios, bloqueia imediatamente
     if (adDomains.some((domain) => url.includes(domain))) {
       return false; 
     }
-
     return true;
   };
 
-  // Script injetado para forçar a limpeza visual e saltar anúncios instantaneamente caso passem
+  // Script injetado para limpar elementos visuais de publicidade
   const injectedJavaScript = `
     (function() {
       const style = document.createElement('style');
@@ -61,22 +57,10 @@ export default function YouTubeFullScreenScreen() {
       \`;
       document.head.appendChild(style);
 
-      // Mutação dinâmica para destruir qualquer overlay de anúncio assim que ele nascer no DOM
-      const observer = new MutationObserver(function(mutations) {
+      setInterval(function() {
         const skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-overlay-close-button');
-        if (skipBtn) {
-          skipBtn.click();
-        }
-        const adOverlay = document.querySelector('.ad-showing');
-        if (adOverlay) {
-          const video = document.querySelector('video');
-          if (video && !isNaN(video.duration)) {
-            video.currentTime = video.duration;
-          }
-        }
-      });
-
-      observer.observe(document.body, { childList: true, subtree: true });
+        if (skipBtn) skipBtn.click();
+      }, 300);
     })();
     true;
   `;
@@ -97,7 +81,7 @@ export default function YouTubeFullScreenScreen() {
         <Text style={styles.brandTitle}>GoldCast • YouTube Clean</Text>
       </View>
 
-      {/* WebView com filtragem de rede e injeção anti-ads avançada */}
+      {/* WebView com filtragem e ecrã completo */}
       <View style={styles.webWrapper}>
         <WebView
           ref={webViewRef}
