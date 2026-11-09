@@ -14,7 +14,6 @@ export interface Prefs { autoReconnect: boolean; autoplay: boolean; liveFormat: 
 const defaultPrefs = (): Prefs => ({ autoReconnect: true, autoplay: true, liveFormat: "auto" });
 export type DeviceMode = "tv" | "mobile";
 
-// ---------- secure persistence (SecureStore on device, AsyncStorage on web) ----------
 async function secureSet(key: string, value: string | null) {
   if (Platform.OS === "web") return value == null ? AsyncStorage.removeItem(key) : AsyncStorage.setItem(key, value);
   if (value == null) return SecureStore.deleteItemAsync(key);
@@ -25,20 +24,19 @@ async function secureGet(key: string): Promise<string | null> {
   return SecureStore.getItemAsync(key);
 }
 
-// ---------- types ----------
 export type Kind = "live" | "vod" | "series";
 export type Source = { kind: "xtream" } | { kind: "list"; listId: string };
 
 export interface PlayItem {
   kind: Kind;
-  id: string;                 // stream_id / episode id / channel id
+  id: string;
   title: string;
-  subtitle?: string;          // category / series name
+  subtitle?: string;
   logo?: string;
-  urls: string[];             // ordered candidate URLs
+  urls: string[];
   epgChannelId?: string | null;
-  streamId?: number | string; // for get_short_epg
-  progressKey?: string;       // for VOD/series resume
+  streamId?: number | string;
+  progressKey?: string;
   favKind?: Kind;
   favId?: string;
   raw?: any;
@@ -48,8 +46,8 @@ export interface Progress { position: number; duration: number; updatedAt: numbe
 
 interface UserData {
   favorites: Record<Kind, string[]>;
-  recents: Record<Kind, any[]>;       // most recent first, max 30
-  progress: Record<string, Progress>; // key -> progress
+  recents: Record<Kind, any[]>;
+  progress: Record<string, Progress>;
 }
 const emptyUD = (): UserData => ({
   favorites: { live: [], vod: [], series: [] },
@@ -151,7 +149,6 @@ export const useSession = create<State>((set, get) => ({
       let session: XtreamSession | null = null;
       if (raw) {
         const saved = JSON.parse(raw);
-        // Re-validate with the panel in the background; keep last known session so the UI opens instantly
         session = saved as XtreamSession;
         authenticate(saved.server, saved.username, saved.password)
           .then(async (fresh) => {
@@ -160,7 +157,6 @@ export const useSession = create<State>((set, get) => ({
           })
           .catch(async (e) => {
             if (e?.kind === "auth" || e?.kind === "expired") {
-              // Access revoked / expired: block content and require a new login
               set({ session: { ...saved, userInfo: { ...saved.userInfo, status: e.kind === "expired" ? "Expired" : "Invalid", auth: e.kind === "auth" ? 0 : 1 } } });
             }
           });
@@ -214,7 +210,12 @@ export const useSession = create<State>((set, get) => ({
     if (!session || loading.live || (catalog.liveLoaded && !force)) return;
     set((st) => ({ loading: { ...st.loading, live: true }, errors: { ...st.errors, live: null } }));
     try {
-      const [liveCats, live] = await Promise.all([xtream.liveCategories(session), xtream.liveStreams(session)]);
+      const [liveCatsRaw, liveRaw] = await Promise.all([
+        xtream.liveCategories(session).catch(() => []),
+        xtream.liveStreams(session).catch(() => [])
+      ]);
+      const liveCats = Array.isArray(liveCatsRaw) ? liveCatsRaw : [];
+      const live = Array.isArray(liveRaw) ? liveRaw : [];
       set((st) => ({ catalog: { ...st.catalog, liveCats, live, liveLoaded: true } }));
     } catch (e: any) {
       set((st) => ({ errors: { ...st.errors, live: e?.message || "Falha ao carregar canais." } }));
@@ -222,12 +223,18 @@ export const useSession = create<State>((set, get) => ({
       set((st) => ({ loading: { ...st.loading, live: false } }));
     }
   },
+
   loadVod: async (force) => {
     const { session, catalog, loading } = get();
     if (!session || loading.vod || (catalog.vodLoaded && !force)) return;
     set((st) => ({ loading: { ...st.loading, vod: true }, errors: { ...st.errors, vod: null } }));
     try {
-      const [vodCats, vod] = await Promise.all([xtream.vodCategories(session), xtream.vodStreams(session)]);
+      const [vodCatsRaw, vodRaw] = await Promise.all([
+        xtream.vodCategories(session).catch(() => []),
+        xtream.vodStreams(session).catch(() => [])
+      ]);
+      const vodCats = Array.isArray(vodCatsRaw) ? vodCatsRaw : [];
+      const vod = Array.isArray(vodRaw) ? vodRaw : [];
       set((st) => ({ catalog: { ...st.catalog, vodCats, vod, vodLoaded: true } }));
     } catch (e: any) {
       set((st) => ({ errors: { ...st.errors, vod: e?.message || "Falha ao carregar filmes." } }));
@@ -235,12 +242,18 @@ export const useSession = create<State>((set, get) => ({
       set((st) => ({ loading: { ...st.loading, vod: false } }));
     }
   },
+
   loadSeries: async (force) => {
     const { session, catalog, loading } = get();
     if (!session || loading.series || (catalog.seriesLoaded && !force)) return;
     set((st) => ({ loading: { ...st.loading, series: true }, errors: { ...st.errors, series: null } }));
     try {
-      const [seriesCats, series] = await Promise.all([xtream.seriesCategories(session), xtream.series(session)]);
+      const [seriesCatsRaw, seriesRaw] = await Promise.all([
+        xtream.seriesCategories(session).catch(() => []),
+        xtream.series(session).catch(() => [])
+      ]);
+      const seriesCats = Array.isArray(seriesCatsRaw) ? seriesCatsRaw : [];
+      const series = Array.isArray(seriesRaw) ? seriesRaw : [];
       set((st) => ({ catalog: { ...st.catalog, seriesCats, series, seriesLoaded: true } }));
     } catch (e: any) {
       set((st) => ({ errors: { ...st.errors, series: e?.message || "Falha ao carregar séries." } }));
@@ -296,7 +309,6 @@ export const useSession = create<State>((set, get) => ({
   setQueueIndex: (i) => set({ queueIndex: i }),
 }));
 
-/** Account is usable only when the panel says auth=1 and status Active (and not past exp_date). */
 export function accountState(s: XtreamSession | null): "active" | "expired" | "invalid" | "none" {
   if (!s) return "none";
   if (Number(s.userInfo?.auth) !== 1) return "invalid";
