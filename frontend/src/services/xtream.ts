@@ -84,17 +84,18 @@ export interface ServerInfo {
   https_port?: string | number;
   server_protocol?: string;
   timezone?: string;
+  timestamp_now?: number;
   xui?: boolean;
   version?: string;
 }
 
 export interface XtreamSession {
-  server: string;       // server used for API calls (normalized, as typed / fallback)
+  server: string;
   username: string;
   password: string;
   userInfo: UserInfo;
   serverInfo: ServerInfo;
-  playbackBases: string[]; // ordered candidates (https preferred when advertised)
+  playbackBases: string[];
   liveFormat: "m3u8" | "ts";
   connectedAt: number;
 }
@@ -134,7 +135,6 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Re
   }
 }
 
-// XUI panels temporarily ban IPs that fire many requests at once -> serialize API calls with a small gap.
 let chain: Promise<any> = Promise.resolve();
 function serialized<T>(fn: () => Promise<T>): Promise<T> {
   const run = chain.then(fn, fn);
@@ -257,7 +257,6 @@ export async function authenticate(
   throw lastErr || new XtreamError("network", MSG.network);
 }
 
-/** Uses server_info returned by the panel. Prefers HTTPS when the panel advertises https_port. */
 export function buildPlaybackBases(authServer: string, info: ServerInfo): string[] {
   const bases: string[] = [];
   const host = (info.url || "").trim().toLowerCase();
@@ -278,14 +277,15 @@ export function liveUrls(s: XtreamSession, streamId: number | string, format?: "
 }
 
 export function movieUrls(s: XtreamSession, streamId: number | string, ext?: string): string[] {
-  return s.playbackBases.map((b) => `${b}/movie/${encodeURIComponent(s.username)}/${encodeURIComponent(s.password)}/${streamId}.${ext || "mp4"}`);
+  const safeExt = (ext && typeof ext === "string" && ext.trim()) ? ext.trim().replace(/^\./, "") : "mp4";
+  return s.playbackBases.map((b) => `${b}/movie/${encodeURIComponent(s.username)}/${encodeURIComponent(s.password)}/${streamId}.${safeExt}`);
 }
 
 export function episodeUrls(s: XtreamSession, episodeId: number | string, ext?: string): string[] {
-  return s.playbackBases.map((b) => `${b}/series/${encodeURIComponent(s.username)}/${encodeURIComponent(s.password)}/${episodeId}.${ext || "mp4"}`);
+  const safeExt = (ext && typeof ext === "string" && ext.trim()) ? ext.trim().replace(/^\./, "") : "mp4";
+  return s.playbackBases.map((b) => `${b}/series/${encodeURIComponent(s.username)}/${encodeURIComponent(s.password)}/${episodeId}.${safeExt}`);
 }
 
-/** Strip credentials from a URL before logging/displaying. */
 export function redactUrl(url: string): string {
   return url.replace(/\/(live|movie|series)\/[^/]+\/[^/]+\//, "/$1/***/***/").replace(/(username|password)=[^&]*/gi, "$1=***");
 }
@@ -309,8 +309,8 @@ export const xtream = {
     if (!Array.isArray(data)) return [];
     let items = data as LiveStream[];
     if (search) {
-      const s = search.toLowerCase();
-      items = items.filter((x) => String(x.name || "").toLowerCase().includes(s));
+      const sQuery = search.toLowerCase();
+      items = items.filter((x) => String(x.name || "").toLowerCase().includes(sQuery));
     }
     const slice = limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
     return slice.map((x) => ({
@@ -335,18 +335,33 @@ export const xtream = {
     if (!Array.isArray(data)) return [];
     let items = data as VodStream[];
     if (search) {
-      const s = search.toLowerCase();
-      items = items.filter((x) => String(x.name || "").toLowerCase().includes(s));
+      const sQuery = search.toLowerCase();
+      items = items.filter((x) => String(x.name || "").toLowerCase().includes(sQuery));
     }
     const slice = limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
     return slice.map((x) => ({
       ...x,
       stream_id: Number(x.stream_id),
+      container_extension: x.container_extension || "mp4",
     }));
   },
 
-  vodInfo: async (s: XtreamSession, vodId: number | string): Promise<any> =>
-    callApi(s.server, s.username, s.password, "get_vod_info", { vod_id: vodId }),
+  vodInfo: async (s: XtreamSession, vodId: number | string): Promise<any> => {
+    const res = await callApi(s.server, s.username, s.password, "get_vod_info", { vod_id: vodId });
+    if (!res || typeof res !== "object") return {};
+    return {
+      ...res,
+      info: {
+        ...(res.info || {}),
+        plot: res.info?.plot || "",
+        cast: res.info?.cast || "",
+        genre: res.info?.genre || "",
+        director: res.info?.director || "",
+        rating: res.info?.rating || "",
+        movie_image: res.info?.movie_image || "",
+      },
+    };
+  },
 
   seriesCategories: async (s: XtreamSession): Promise<Category[]> =>
     asList(await callApi(s.server, s.username, s.password, "get_series_categories")),
@@ -364,14 +379,17 @@ export const xtream = {
     if (!Array.isArray(data)) return [];
     let items = data as SeriesItem[];
     if (search) {
-      const s = search.toLowerCase();
-      items = items.filter((x) => String(x.name || "").toLowerCase().includes(s));
+      const sQuery = search.toLowerCase();
+      items = items.filter((x) => String(x.name || "").toLowerCase().includes(sQuery));
     }
     return limit && limit > 0 ? items.slice(offset, offset + limit) : (offset > 0 ? items.slice(offset) : items);
   },
 
-  seriesInfo: async (s: XtreamSession, seriesId: number | string): Promise<any> =>
-    callApi(s.server, s.username, s.password, "get_series_info", { series_id: seriesId }),
+  seriesInfo: async (s: XtreamSession, seriesId: number | string): Promise<any> => {
+    const res = await callApi(s.server, s.username, s.password, "get_series_info", { series_id: seriesId });
+    if (!res || typeof res !== "object") return {};
+    return res;
+  },
 
   shortEpg: async (s: XtreamSession, streamId: number | string, limit = 4): Promise<EpgEntry[]> => {
     try {
@@ -401,15 +419,14 @@ function decodeB64(v: any): string {
   }
 }
 
-// ---------- formatting helpers ----------
-export function fmtUnixSP(ts?: string | number | null, withTime = true): string | null {
+export function fmtUnixSP(ts?: string | number | null, withTime = true, serverTz?: string): string | null {
   if (ts == null || ts === "" || ts === "null") return null;
   const n = Number(ts);
   if (!n || Number.isNaN(n)) return null;
   const d = new Date(n * 1000);
   try {
     return new Intl.DateTimeFormat("pt-BR", {
-      timeZone: "America/Sao_Paulo",
+      timeZone: serverTz || "America/Sao_Paulo",
       day: "2-digit", month: "2-digit", year: "numeric",
       ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
     }).format(d);
@@ -418,10 +435,10 @@ export function fmtUnixSP(ts?: string | number | null, withTime = true): string 
   }
 }
 
-export function fmtTimeSP(ts?: number): string {
+export function fmtTimeSP(ts?: number, serverTz?: string): string {
   if (!ts) return "";
   try {
-    return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(new Date(ts * 1000));
+    return new Intl.DateTimeFormat("pt-BR", { timeZone: serverTz || "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(new Date(ts * 1000));
   } catch {
     const d = new Date(ts * 1000);
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
