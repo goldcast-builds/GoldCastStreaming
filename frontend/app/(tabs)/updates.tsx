@@ -1,16 +1,15 @@
 import React, { useRef } from "react";
 import { View, Text, StyleSheet, Pressable, BackHandler } from "react-native";
 import { WebView } from "react-native-webview";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { useFocusEffect } from "expo-router";
 
 export default function YouTubeFullScreenScreen() {
   const router = useRouter();
   const webViewRef = useRef<WebView>(null);
   const canGoBackRef = useRef(false);
 
-  // Interceção segura do botão "voltar" nativa do Expo Router
+  // Interceção segura do botão "voltar" para navegar no histórico interno
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
@@ -26,44 +25,6 @@ export default function YouTubeFullScreenScreen() {
       return () => subscription.remove();
     }, [router])
   );
-
-  // Bloqueio de domínios de anúncios ao nível da rede
-  const handleShouldStartLoad = (request: { url: string }) => {
-    const { url } = request;
-    const adDomains = [
-      "googlesyndication.com",
-      "doubleclick.net",
-      "googleadservices.com",
-      "adservice.google.com",
-      "pagead2.googlesyndication.com"
-    ];
-
-    if (adDomains.some((domain) => url.includes(domain))) {
-      return false; 
-    }
-    return true;
-  };
-
-  // Script injetado para limpar elementos visuais de publicidade
-  const injectedJavaScript = `
-    (function() {
-      const style = document.createElement('style');
-      style.innerHTML = \`
-        .ytp-ad-module, .ytp-ad-player-overlay, #masthead-ad, ytd-display-ad-renderer, .video-ads {
-          display: none !important;
-          visibility: hidden !important;
-        }
-        body { width: 100% !important; overflow-x: hidden !important; }
-      \`;
-      document.head.appendChild(style);
-
-      setInterval(function() {
-        const skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-overlay-close-button');
-        if (skipBtn) skipBtn.click();
-      }, 300);
-    })();
-    true;
-  `;
 
   return (
     <View style={styles.container}>
@@ -81,18 +42,16 @@ export default function YouTubeFullScreenScreen() {
         <Text style={styles.brandTitle}>GoldCast • YouTube Clean</Text>
       </View>
 
-      {/* WebView com filtragem e ecrã completo */}
+      {/* WebView apontado para a versão limpa/alternativa sem anúncios */}
       <View style={styles.webWrapper}>
         <WebView
           ref={webViewRef}
-          source={{ uri: "https://m.youtube.com" }}
+          source={{ uri: "https://m.yout-ube.com" }}
           style={styles.webview}
           javaScriptEnabled={true}
           domStorageEnabled={true}
           allowsInlineMediaPlayback={true}
           mediaPlaybackRequiresUserAction={false}
-          injectedJavaScript={injectedJavaScript}
-          onShouldStartLoadWithRequest={handleShouldStartLoad}
           onNavigationStateChange={(navState) => {
             canGoBackRef.current = navState.canGoBack;
           }}
