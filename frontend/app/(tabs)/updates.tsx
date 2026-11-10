@@ -3,28 +3,21 @@ import { View, Text, StyleSheet, Pressable, BackHandler } from "react-native";
 import { WebView } from "react-native-webview";
 import { useRouter, useFocusEffect } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { useVideoPlayer, VideoView } from "expo-video"; // Integrado com o player nativo do GoldCast
 
 export default function YouTubeFullScreenScreen() {
   const router = useRouter();
   const webViewRef = useRef<WebView>(null);
-  const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
-  const [activeStreamUrl, setActiveStreamUrl] = useState<string | null>(null);
+  const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
+  const [cleanPlayerUrl, setCleanPlayerUrl] = useState<string | null>(null);
   const canGoBackRef = useRef(false);
-
-  // Instância do leitor nativo do GoldCast para reproduzir o vídeo sem anúncios
-  const player = useVideoPlayer(activeStreamUrl || "", (playerInstance) => {
-    playerInstance.loop = false;
-    playerInstance.play();
-  });
 
   // Interceção segura do botão "voltar" nativo
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
-        if (activeStreamUrl) {
-          // Se estiver a ver no leitor do GoldCast, fecha o player e volta para o YouTube
-          setActiveStreamUrl(null);
+        if (cleanPlayerUrl) {
+          // Se estiver a ver o player limpo, volta para o YouTube normal
+          setCleanPlayerUrl(null);
           return true;
         }
         if (canGoBackRef.current && webViewRef.current) {
@@ -37,20 +30,18 @@ export default function YouTubeFullScreenScreen() {
 
       const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
       return () => subscription.remove();
-    }, [router, activeStreamUrl])
+    }, [router, cleanPlayerUrl])
   );
 
-  // Deteta quando o utilizador clica num vídeo no YouTube normal
+  // Deteta quando o utilizador navega para um vídeo no YouTube normal
   const handleNavigationStateChange = (navState: any) => {
     const { url } = navState;
     canGoBackRef.current = navState.canGoBack;
 
-    // Expressão regular para extrair o ID do vídeo do YouTube (ex: watch?v=XXXXXXXXXXX)
-    const match = url.match(/[?&]v=([^&#]*)/);
-    if (match && match[1]) {
-      setCurrentVideoId(match[1]);
+    if (url.includes("youtube.com/watch?v=")) {
+      setCurrentVideoUrl(url);
     } else {
-      setCurrentVideoId(null);
+      setCurrentVideoUrl(null);
     }
   };
 
@@ -61,8 +52,8 @@ export default function YouTubeFullScreenScreen() {
         <Pressable 
           focusable={true} 
           onPress={() => {
-            if (activeStreamUrl) {
-              setActiveStreamUrl(null);
+            if (cleanPlayerUrl) {
+              setCleanPlayerUrl(null);
             } else {
               router.back();
             }
@@ -71,62 +62,48 @@ export default function YouTubeFullScreenScreen() {
           hitSlop={15}
         >
           <Ionicons name="arrow-back" size={20} color="#FFF" />
-          <Text style={styles.backText}>{activeStreamUrl ? "Voltar ao YouTube" : "Voltar ao Menu"}</Text>
+          <Text style={styles.backText}>{cleanPlayerUrl ? "Voltar ao YouTube" : "Voltar ao Menu"}</Text>
         </Pressable>
-        <Text style={styles.brandTitle}>GoldCast • Media Hub</Text>
+        <Text style={styles.brandTitle}>GoldCast • YouTube Smart Clean</Text>
       </View>
 
-      {/* Conteúdo Principal */}
+      {/* Conteúdo Principal (WebView normal ou WebView Limpo com hífen) */}
       <View style={styles.webWrapper}>
-        {activeStreamUrl ? (
-          /* Leitor Nativo do GoldCast ativado para reproduzir o vídeo detetado */
-          <View style={styles.playerContainer}>
-            <VideoView
-              style={styles.nativeVideo}
-              player={player}
-              allowsFullscreen={true}
-              allowsPictureInPicture={true}
-            />
-          </View>
-        ) : (
-          /* WebView para navegar livremente pelo YouTube */
-          <WebView
-            ref={webViewRef}
-            source={{ uri: "https://m.youtube.com" }}
-            style={styles.webview}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            allowsInlineMediaPlayback={true}
-            mediaPlaybackRequiresUserAction={false}
-            onNavigationStateChange={handleNavigationStateChange}
-            scalesPageToFit={true}
-          />
-        )}
+        <WebView
+          ref={webViewRef}
+          source={{ uri: cleanPlayerUrl || "https://m.youtube.com" }}
+          style={styles.webview}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          allowsInlineMediaPlayback={true}
+          mediaPlaybackRequiresUserAction={false}
+          onNavigationStateChange={handleNavigationStateChange}
+          scalesPageToFit={true}
+        />
 
-        {/* Botão Flutuante Inteligente para abrir no Leitor Principal */}
-        {currentVideoId && !activeStreamUrl && (
+        {/* Botão Flutuante Inteligente (Aparece ao abrir um vídeo) */}
+        {currentVideoUrl && !cleanPlayerUrl && (
           <View style={styles.floatingBanner}>
             <View style={styles.bannerInfo}>
-              <Ionicons name="tv" size={22} color="#E9C46A" />
+              <Ionicons name="shield-checkmark" size={22} color="#E9C46A" />
               <View>
-                <Text style={styles.bannerTitle}>Abrir no Player GoldCast</Text>
-                <Text style={styles.bannerSubtitle}>Reproduzir sem interrupções e com alta performance</Text>
+                <Text style={styles.bannerTitle}>Vídeo Detetado!</Text>
+                <Text style={styles.bannerSubtitle}>Assista sem interrupções de propagandas</Text>
               </View>
             </View>
 
             <Pressable
               focusable={true}
               onPress={() => {
-                // Constrói o fluxo limpo baseado no ID do vídeo para abrir no leitor nativo
-                // (Utiliza a rota do Invidious/Piped stream ou o formato compatível com o expo-video)
-                const streamUrl = `https://piped.video/latest/stream?id=${currentVideoId}`;
-                setActiveStreamUrl(streamUrl);
-                setCurrentVideoId(null);
+                // Transforma o URL atual adicionando o hífen para carregar sem anúncios de forma garantida
+                const clean = currentVideoUrl.replace("youtube.com", "yout-ube.com");
+                setCleanPlayerUrl(clean);
+                setCurrentVideoUrl(null);
               }}
               style={({ focused }) => [styles.watchCleanBtn, focused && styles.btnFocused]}
             >
-              <Ionicons name="play" size={18} color="#000" />
-              <Text style={styles.watchCleanText}>Assistir no Player</Text>
+              <Ionicons name="play-circle" size={18} color="#000" />
+              <Text style={styles.watchCleanText}>Assistir sem Anúncios</Text>
             </Pressable>
           </View>
         )}
@@ -170,10 +147,6 @@ const styles = StyleSheet.create({
   webWrapper: { flex: 1, width: "100%", backgroundColor: "#000", position: "relative" },
   webview: { flex: 1, backgroundColor: "transparent" },
 
-  playerContainer: { flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" },
-  nativeVideo: { width: "100%", height: "100%" },
-
-  // Estilos do Botão Flutuante
   floatingBanner: {
     position: "absolute",
     bottom: 24,
