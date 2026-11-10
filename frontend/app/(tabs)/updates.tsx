@@ -9,7 +9,7 @@ export default function YouTubeFullScreenScreen() {
   const webViewRef = useRef<WebView>(null);
   const canGoBackRef = useRef(false);
 
-  // Interceção segura do botão "voltar" para navegar no histórico interno
+  // Interceção segura do botão "voltar" nativo
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
@@ -26,6 +26,28 @@ export default function YouTubeFullScreenScreen() {
     }, [router])
   );
 
+  // Lógica inteligente de navegação e substituição por hífen ao clicar num vídeo
+  const handleShouldStartLoad = (request: { url: string }) => {
+    const { url } = request;
+
+    // Se o utilizador clicar num vídeo do YouTube normal (contém watch?v=)
+    if (url.includes("youtube.com/watch?v=")) {
+      // Verifica se já está a usar a versão com o hífen para evitar loops de redirecionamento
+      if (!url.includes("yout-ube.com")) {
+        // Substitui "youtube.com" por "yout-ube.com" mantendo todo o resto do link (ID do vídeo, parâmetros, etc.)
+        const cleanUrl = url.replace("youtube.com", "yout-ube.com");
+
+        // Carrega a versão limpa do vídeo programaticamente no WebView
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`window.location.href = "${cleanUrl}"; true;`);
+        }
+        return false; // Bloqueia o carregamento do link original com anúncios
+      }
+    }
+
+    return true; // Permite a navegação normal nos menus, pesquisa e página inicial
+  };
+
   return (
     <View style={styles.container}>
       {/* Barra superior de controlo para voltar ao menu do GoldCast */}
@@ -39,19 +61,20 @@ export default function YouTubeFullScreenScreen() {
           <Ionicons name="arrow-back" size={20} color="#FFF" />
           <Text style={styles.backText}>Voltar ao Menu</Text>
         </Pressable>
-        <Text style={styles.brandTitle}>GoldCast • YouTube Clean</Text>
+        <Text style={styles.brandTitle}>GoldCast • YouTube Smart Clean</Text>
       </View>
 
-      {/* WebView apontado para o Piped (frontend alternativo completo do YouTube sem anúncios) */}
+      {/* WebView principal */}
       <View style={styles.webWrapper}>
         <WebView
           ref={webViewRef}
-          source={{ uri: "https://piped.video" }}
+          source={{ uri: "https://m.youtube.com" }}
           style={styles.webview}
           javaScriptEnabled={true}
           domStorageEnabled={true}
           allowsInlineMediaPlayback={true}
           mediaPlaybackRequiresUserAction={false}
+          onShouldStartLoadWithRequest={handleShouldStartLoad}
           onNavigationStateChange={(navState) => {
             canGoBackRef.current = navState.canGoBack;
           }}
