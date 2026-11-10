@@ -26,26 +26,23 @@ export default function YouTubeFullScreenScreen() {
     }, [router])
   );
 
-  // Lógica inteligente de navegação e substituição por hífen ao clicar num vídeo
+  // Interceção de rede nativa: substitui o link por "yout-ube.com" antes de carregar o vídeo
   const handleShouldStartLoad = (request: { url: string }) => {
     const { url } = request;
 
-    // Se o utilizador clicar num vídeo do YouTube normal (contém watch?v=)
-    if (url.includes("youtube.com/watch?v=")) {
-      // Verifica se já está a usar a versão com o hífen para evitar loops de redirecionamento
-      if (!url.includes("yout-ube.com")) {
-        // Substitui "youtube.com" por "yout-ube.com" mantendo todo o resto do link (ID do vídeo, parâmetros, etc.)
-        const cleanUrl = url.replace("youtube.com", "yout-ube.com");
+    // Se o URL for do YouTube e contiver um vídeo ou lista de reprodução, mas ainda não tiver o hífen
+    if (url.includes("youtube.com") && !url.includes("yout-ube.com")) {
+      // Substitui youtube.com por yout-ube.com mantendo todo o resto do link intacto
+      const cleanUrl = url.replace("youtube.com", "yout-ube.com");
 
-        // Carrega a versão limpa do vídeo programaticamente no WebView
-        if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`window.location.href = "${cleanUrl}"; true;`);
-        }
-        return false; // Bloqueia o carregamento do link original com anúncios
+      // Força o WebView a carregar diretamente o link limpo
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(`window.location.href = "${cleanUrl}"; true;`);
       }
+      return false; // Bloqueia o carregamento do link original com anúncios
     }
 
-    return true; // Permite a navegação normal nos menus, pesquisa e página inicial
+    return true; // Permite a navegação normal nos restantes elementos
   };
 
   return (
@@ -61,7 +58,7 @@ export default function YouTubeFullScreenScreen() {
           <Ionicons name="arrow-back" size={20} color="#FFF" />
           <Text style={styles.backText}>Voltar ao Menu</Text>
         </Pressable>
-        <Text style={styles.brandTitle}>GoldCast • YouTube Smart Clean</Text>
+        <Text style={styles.brandTitle}>GoldCast • YouTube Clean</Text>
       </View>
 
       {/* WebView principal */}
