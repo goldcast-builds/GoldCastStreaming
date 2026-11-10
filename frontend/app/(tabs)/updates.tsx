@@ -42,11 +42,11 @@ export default function YouTubeFullScreenScreen() {
         <Text style={styles.brandTitle}>GoldCast • YouTube Clean</Text>
       </View>
 
-      {/* WebView apontado para a versão limpa/alternativa sem anúncios */}
+      {/* WebView apontado para o Piped (frontend alternativo completo do YouTube sem anúncios) */}
       <View style={styles.webWrapper}>
         <WebView
           ref={webViewRef}
-          source={{ uri: "https://m.yout-ube.com" }}
+          source={{ uri: "https://piped.video" }}
           style={styles.webview}
           javaScriptEnabled={true}
           domStorageEnabled={true}
