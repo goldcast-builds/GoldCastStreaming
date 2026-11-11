@@ -22,8 +22,27 @@ export default function LiveScreen() {
     }
   }, []);
 
-  const channels = catalog?.live || catalog?.channels || [];
-  const categories = catalog?.liveCats || catalog?.categories?.live || [];
+  // Palavras-chave para identificar categorias e canais adultos
+  const adultKeywords = ["adult", "xxx", "18+", "private", "hot", "erotic", "senhoril"];
+
+  const isAdultContent = (name: string) => {
+    if (!name) return false;
+    const lower = name.toLowerCase();
+    return adultKeywords.some((kw) => lower.includes(kw));
+  };
+
+  const categories = useMemo(() => {
+    const rawCats = catalog?.liveCats || catalog?.categories?.live || [];
+    return rawCats.filter((cat) => !isAdultContent(cat?.category_name || cat?.name || ""));
+  }, [catalog]);
+
+  const channels = useMemo(() => {
+    const rawChannels = catalog?.live || catalog?.channels || [];
+    return rawChannels.filter((c) => {
+      const name = (c?.name || c?.title || "").toLowerCase();
+      return !adultKeywords.some((kw) => name.includes(kw));
+    });
+  }, [catalog]);
 
   const filteredChannels = useMemo(() => {
     let result = channels;
