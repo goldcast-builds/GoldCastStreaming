@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -12,9 +12,13 @@ export default function LiveScreen() {
   const loadLive = useSession((s) => s.loadLive);
   const setQueue = useSession((s) => s.setQueue);
   const loading = useSession((s) => s.loading.live);
+  const parentalPin = useSession((s) => s.parentalPin || s.settings?.parentalPin || "1234");
   
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [enteredPin, setEnteredPin] = useState("");
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     if (!catalog.liveLoaded || (catalog.live || []).length === 0) {
@@ -22,7 +26,6 @@ export default function LiveScreen() {
     }
   }, []);
 
-  // Palavras-chave para identificar categorias e canais adultos
   const adultKeywords = ["adult", "xxx", "18+", "private", "hot", "erotic", "senhoril"];
 
   const isAdultContent = (name: string) => {
@@ -31,18 +34,8 @@ export default function LiveScreen() {
     return adultKeywords.some((kw) => lower.includes(kw));
   };
 
-  const categories = useMemo(() => {
-    const rawCats = catalog?.liveCats || catalog?.categories?.live || [];
-    return rawCats.filter((cat) => !isAdultContent(cat?.category_name || cat?.name || ""));
-  }, [catalog]);
-
-  const channels = useMemo(() => {
-    const rawChannels = catalog?.live || catalog?.channels || [];
-    return rawChannels.filter((c) => {
-      const name = (c?.name || c?.title || "").toLowerCase();
-      return !adultKeywords.some((kw) => name.includes(kw));
-    });
-  }, [catalog]);
+  const categories = catalog?.liveCats || catalog?.categories?.live || [];
+  const channels = catalog?.live || catalog?.channels || [];
 
   const filteredChannels = useMemo(() => {
     let result = channels;
@@ -58,6 +51,56 @@ export default function LiveScreen() {
 
     return result;
   }, [channels, selectedCategory, searchQuery]);
+
+  const verifyPinAndExecute = (action: () => void) => {
+    setPendingAction(() => action);
+    setEnteredPin("");
+    setPinModalVisible(true);
+  };
+
+  const handleCategoryPress = (catId: string, catName: string) => {
+    if (isAdultContent(catName)) {
+      verifyPinAndExecute(() => setSelectedCategory(catId));
+    } else {
+      setSelectedCategory(catId);
+    }
+  };
+
+  const handleChannelPress = (channelId: string, channelName: string, logoUri: string, rawItem: any) => {
+    const action = () => {
+      if (!session) return;
+      const liveStreamUrl = `${session.server.replace(/\/+$/, "")}/live/${session.username}/${session.password}/${channelId}.ts`;
+
+      setQueue([{
+        kind: "live",
+        id: channelId,
+        title: channelName,
+        subtitle: "Canal ao Vivo",
+        logo: logoUri,
+        urls: [liveStreamUrl],
+        raw: rawItem,
+      }], 0);
+
+      router.push("/player");
+    };
+
+    if (isAdultContent(channelName)) {
+      verifyPinAndExecute(action);
+    } else {
+      action();
+    }
+  };
+
+  const confirmPin = () => {
+    if (enteredPin === parentalPin) {
+      setPinModalVisible(false);
+      if (pendingAction) pendingAction();
+      setPendingAction(null);
+    } else {
+      Alert.alert("PIN Incorreto", "O código PIN introduzido está errado.");
+      setEnteredPin("");
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -110,22 +153,7 @@ export default function LiveScreen() {
                   <Pressable
                     focusable={true}
                     accessible={true}
-                    onPress={() => {
-                      if (!session) return;
-                      const liveStreamUrl = `${session.server.replace(/\/+$/, "")}/live/${session.username}/${session.password}/${channelId}.ts`;
-
-                      setQueue([{
-                        kind: "live",
-                        id: channelId,
-                        title: channelName,
-                        subtitle: "Canal ao Vivo",
-                        logo: logoUri,
-                        urls: [liveStreamUrl],
-                        raw: item,
-                      }], 0);
-
-                      router.push("/player");
-                    }}
+                    onPress={() => handleChannelPress(channelId, channelName, logoUri, item)}
                     style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
                   >
                     {logoUri ? (
@@ -161,13 +189,14 @@ export default function LiveScreen() {
 
             {categories.map((cat, idx) => {
               const catId = String(cat?.category_id || cat?.id || idx);
+              const catName = cat?.category_name || cat?.name || "Categoria";
               const isSelected = selectedCategory === catId;
               return (
                 <Pressable
                   key={`cat-live-${catId}-${idx}`}
                   focusable={true}
                   accessible={true}
-                  onPress={() => setSelectedCategory(catId)}
+                  onPress={() => handleCategoryPress(catId, catName)}
                   style={({ focused }) => [
                     styles.catItem,
                     isSelected && styles.catItemActive,
@@ -175,7 +204,7 @@ export default function LiveScreen() {
                   ]}
                 >
                   <Text style={[styles.catText, isSelected && styles.catTextActive]} numberOfLines={2}>
-                    {cat?.category_name || cat?.name || "Categoria"}
+                    {catName}
                   </Text>
                 </Pressable>
               );
@@ -183,6 +212,47 @@ export default function LiveScreen() {
           </ScrollView>
         </View>
       </View>
+
+      {/* Modal de PIN Parental */}
+      {pinModalVisible && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Ionicons name="lock-closed" size={32} color="#E9C46A" />
+            <Text style={styles.modalTitle}>Controlo Parental</Text>
+            <Text style={styles.modalSub}>Introduza o PIN para aceder ao canal restrito</Text>
+            
+            <TextInput
+              style={styles.pinInput}
+              keyboardType="numeric"
+              secureTextEntry={true}
+              placeholder="PIN"
+              placeholderTextColor="#6B7280"
+              value={enteredPin}
+              onChangeText={setEnteredPin}
+              maxLength={6}
+              autoFocus={true}
+            />
+
+            <View style={styles.modalActions}>
+              <Pressable
+                focusable={true}
+                onPress={() => setPinModalVisible(false)}
+                style={({ focused }) => [styles.modalBtnCancel, focused && styles.cardFocused]}
+              >
+                <Text style={styles.modalBtnCancelText}>Cancelar</Text>
+              </Pressable>
+
+              <Pressable
+                focusable={true}
+                onPress={confirmPin}
+                style={({ focused }) => [styles.modalBtnConfirm, focused && styles.cardFocused]}
+              >
+                <Text style={styles.modalBtnConfirmText}>Confirmar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -212,4 +282,15 @@ const styles = StyleSheet.create({
   catItemActive: { backgroundColor: "#E9C46A" },
   catText: { color: "#9CA3AF", fontSize: 11, fontWeight: "700" },
   catTextActive: { color: "#000", fontWeight: "900" },
+
+  modalOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "center", alignItems: "center", zIndex: 1000 },
+  modalBox: { width: 340, backgroundColor: "#152E3B", borderRadius: 16, padding: 24, alignItems: "center", borderWidth: 2, borderColor: "#E9C46A" },
+  modalTitle: { color: "#FFF", fontSize: 18, fontWeight: "900", marginTop: 10 },
+  modalSub: { color: "#9CA3AF", fontSize: 11, textAlign: "center", marginVertical: 10 },
+  pinInput: { width: "100%", height: 46, backgroundColor: "#0B1920", borderRadius: 8, color: "#FFF", textAlign: "center", fontSize: 18, fontWeight: "900", borderWidth: 1, borderColor: "rgba(233,196,106,0.3)", marginBottom: 16 },
+  modalActions: { flexDirection: "row", gap: 12, width: "100%" },
+  modalBtnCancel: { flex: 1, height: 40, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 8, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" },
+  modalBtnCancelText: { color: "#FFF", fontSize: 12, fontWeight: "800" },
+  modalBtnConfirm: { flex: 1, height: 40, backgroundColor: "#E9C46A", borderRadius: 8, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" },
+  modalBtnConfirmText: { color: "#000", fontSize: 12, fontWeight: "900" },
 });
