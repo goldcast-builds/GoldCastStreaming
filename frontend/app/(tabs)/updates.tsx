@@ -16,7 +16,6 @@ export default function YouTubeFullScreenScreen() {
     React.useCallback(() => {
       const onBackPress = () => {
         if (cleanPlayerUrl) {
-          // Se estiver a ver o player limpo, volta para o YouTube normal
           setCleanPlayerUrl(null);
           return true;
         }
@@ -33,7 +32,6 @@ export default function YouTubeFullScreenScreen() {
     }, [router, cleanPlayerUrl])
   );
 
-  // Deteta quando o utilizador navega para um vídeo no YouTube normal
   const handleNavigationStateChange = (navState: any) => {
     const { url } = navState;
     canGoBackRef.current = navState.canGoBack;
@@ -47,7 +45,7 @@ export default function YouTubeFullScreenScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Barra superior de controlo para voltar ao menu do GoldCast */}
+      {/* Barra superior com espaçamento e visibilidade perfeita */}
       <View style={styles.topBar}>
         <Pressable 
           focusable={true} 
@@ -61,13 +59,13 @@ export default function YouTubeFullScreenScreen() {
           style={({ focused }) => [styles.backBtn, focused && styles.btnFocused]}
           hitSlop={15}
         >
-          <Ionicons name="arrow-back" size={20} color="#FFF" />
+          <Ionicons name="arrow-back" size={20} color="#000" />
           <Text style={styles.backText}>{cleanPlayerUrl ? "Voltar ao YouTube" : "Voltar ao Menu"}</Text>
         </Pressable>
         <Text style={styles.brandTitle}>GoldCast • YouTube Smart Clean</Text>
       </View>
 
-      {/* Conteúdo Principal (WebView normal ou WebView Limpo com hífen) */}
+      {/* Conteúdo Principal */}
       <View style={styles.webWrapper}>
         <WebView
           ref={webViewRef}
@@ -95,7 +93,6 @@ export default function YouTubeFullScreenScreen() {
             <Pressable
               focusable={true}
               onPress={() => {
-                // Transforma o URL atual adicionando o hífen para carregar sem anúncios de forma garantida
                 const clean = currentVideoUrl.replace("youtube.com", "yout-ube.com");
                 setCleanPlayerUrl(clean);
                 setCurrentVideoUrl(null);
@@ -116,15 +113,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0b1920" },
   
   topBar: { 
-    height: 48,
+    height: 52,
     width: "100%",
-    backgroundColor: "#0b1920", 
+    backgroundColor: "#07080A", 
     flexDirection: "row", 
     alignItems: "center", 
     justifyContent: "space-between", 
     paddingHorizontal: 16, 
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(233,196,106,0.2)",
+    borderBottomWidth: 1.5,
+    borderBottomColor: "rgba(233,196,106,0.3)",
     zIndex: 100,
   },
   
@@ -132,17 +129,17 @@ const styles = StyleSheet.create({
     flexDirection: "row", 
     alignItems: "center", 
     gap: 6, 
-    backgroundColor: "rgba(255,255,255,0.1)", 
-    paddingHorizontal: 10, 
-    paddingVertical: 5, 
+    backgroundColor: "#E9C46A", 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
     borderRadius: 6, 
     borderWidth: 2, 
     borderColor: "transparent" 
   },
   
-  btnFocused: { borderColor: "#E9C46A", backgroundColor: "#152E3B", transform: [{ scale: 1.02 }] },
-  backText: { color: "#FFF", fontSize: 11, fontWeight: "800" },
-  brandTitle: { color: "#E9C46A", fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
+  btnFocused: { borderColor: "#FFF", backgroundColor: "#F4A261", transform: [{ scale: 1.05 }] },
+  backText: { color: "#000", fontSize: 12, fontWeight: "900" },
+  brandTitle: { color: "#E9C46A", fontSize: 12, fontWeight: "900", letterSpacing: 0.8 },
   
   webWrapper: { flex: 1, width: "100%", backgroundColor: "#000", position: "relative" },
   webview: { flex: 1, backgroundColor: "transparent" },
