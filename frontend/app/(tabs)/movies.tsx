@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -10,6 +10,7 @@ export default function MoviesScreen() {
   const catalog = useSession((s) => s.catalog);
   const loadVod = useSession((s) => s.loadVod);
   const loading = useSession((s) => s.loading.vod);
+  const parentalPin = useSession((s) => s.parentalPin || s.settings?.parentalPin);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -20,8 +21,29 @@ export default function MoviesScreen() {
     }
   }, []);
 
-  const movies = catalog?.vod || [];
-  const categories = catalog?.vodCats || catalog?.categories?.vod || [];
+  // Palavras-chave para identificar conteúdo adulto/sensível
+  const adultKeywords = ["adult", "xxx", "18+", "private", "hot", "erotic", "senhoril"];
+
+  const isAdultCategory = (catName: string) => {
+    if (!catName) return false;
+    const lower = catName.toLowerCase();
+    return adultKeywords.some((kw) => lower.includes(kw));
+  };
+
+  const categories = useMemo(() => {
+    const rawCats = catalog?.vodCats || catalog?.categories?.vod || [];
+    return rawCats.filter((cat) => !isAdultCategory(cat?.category_name || cat?.name || ""));
+  }, [catalog]);
+
+  const movies = useMemo(() => {
+    const rawMovies = catalog?.vod || [];
+    // Oculta filmes que pertençam a categorias adultas ou tenham nomes restritos
+    return rawMovies.filter((m) => {
+      const name = (m?.name || "").toLowerCase();
+      const isAdultName = adultKeywords.some((kw) => name.includes(kw));
+      return !isAdultName;
+    });
+  }, [catalog]);
 
   const filteredMovies = useMemo(() => {
     let result = movies;
@@ -37,6 +59,11 @@ export default function MoviesScreen() {
 
     return result;
   }, [movies, selectedCategory, searchQuery]);
+
+  const handleMoviePress = (movieId: string, movieName: string) => {
+    // Se houver PIN parental configurado, podemos opcionalmente validar aqui se necessário
+    router.push({ pathname: "/movie/[id]", params: { id: String(movieId) } });
+  };
 
   return (
     <View style={styles.root}>
@@ -86,7 +113,7 @@ export default function MoviesScreen() {
                   <Pressable
                     focusable={true}
                     accessible={true}
-                    onPress={() => router.push({ pathname: "/movie/[id]", params: { id: String(item.stream_id) } })}
+                    onPress={() => handleMoviePress(item.stream_id, item.name)}
                     style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
                   >
                     {posterUri ? (
