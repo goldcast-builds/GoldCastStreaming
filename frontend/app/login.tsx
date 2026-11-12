@@ -9,6 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  TVEventType,
+  NativeModules,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -19,6 +21,9 @@ import { createM3UUrl, listLists, setActiveListId } from "../src/utils/api";
 
 const VALIDATE_CODE_URL =
   "https://lljsnoovwvxebzbaal.supabase.co/functions/v1/validate-code";
+
+// Deteta se é uma plataforma de TV de forma segura
+const isTV = Platform.isTV || Platform.OS === "android" && (NativeModules.PlatformConstants?.uiMode === "television");
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -452,7 +457,7 @@ export default function LoginScreen() {
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
                     <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
                     <TVInputField
-                      inputRef={passRef}
+                      inputRef= {passRef}
                       icon="🔒"
                       placeholder="Palavra-passe"
                       value={pass}
@@ -535,7 +540,7 @@ export default function LoginScreen() {
   );
 }
 
-// COMPONENTE TVINPUTFIELD BLINDADO CONTRA O FECHO NA TV BOX
+// COMPONENTE TVINPUTFIELD ADAPTATIVO (TV / MÓVEL)
 function TVInputField({
   inputRef,
   icon,
@@ -550,7 +555,12 @@ function TVInputField({
   const [isFocused, setIsFocused] = useState(false);
 
   return (
-    <View style={[styles.inputBox, isFocused && styles.inputBoxFocused]}>
+    <Pressable
+      onPress={() => {
+        inputRef.current?.focus();
+      }}
+      style={[styles.inputBox, isFocused && styles.inputBoxFocused]}
+    >
       {icon && <Text style={styles.inputEmoji}>{icon}</Text>}
       <TextInput
         ref={inputRef}
@@ -562,13 +572,14 @@ function TVInputField({
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
-        showSoftInputOnFocus={false}
+        // Se for TV, desativa o teclado nativo. Se for telemóvel, permite abrir o teclado normalmente!
+        showSoftInputOnFocus={isTV ? false : true}
         style={[styles.textInput, isFocused && { color: "#FFF", fontWeight: "700" }]}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
       />
       {rightElement}
-    </View>
+    </Pressable>
   );
 }
 
