@@ -494,7 +494,7 @@ export default function HomeTab() {
                     onPress={() => setSelectedEpgCat(catId)}
                     style={[styles.epgCatTab, isSelected && styles.epgCatTabActive]}
                   >
-                    <Text style={[styles.epgCatText, isSelected && styles.epgCatTabActive]} numberOfLines={1}>
+                    <Text style={[styles.epgCatText, isSelected && styles.epgCatTextActive]} numberOfLines={1}>
                       {cat?.category_name || cat?.name || "Categoria"}
                     </Text>
                   </Pressable>
@@ -558,6 +558,7 @@ export default function HomeTab() {
                 onChangeText={setSearchQuery}
                 autoFocus={true}
                 blurOnSubmit={false}
+                showSoftInputOnFocus={false}
               />
             </View>
 
@@ -884,26 +885,62 @@ const styles = StyleSheet.create({
     height: "100%" 
   },
 
-  // Estilos do Modal EPG
-  epgModalCard: { width: "94%", maxWidth: 1000, height: "88%", backgroundColor: "#152E3B", borderRadius: 20, borderWidth: 1.5, borderColor: "rgba(233,196,106,0.3)", padding: 20, gap: 14 },
-  epgHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)", paddingBottom: 10 },
-  epgCategoriesBar: { gap: 8, paddingVertical: 4, maxHeight: 42 },
-  epgCatTab: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 8, height: 36, justifyContent: "center" },
+  // Estilos do Modal EPG Otimizados para TV
+  epgModalCard: { 
+    width: "92%", 
+    maxWidth: 1100, 
+    height: "85%", 
+    backgroundColor: "#152E3B", 
+    borderRadius: 20, 
+    borderWidth: 1.5, 
+    borderColor: "rgba(233,196,106,0.3)", 
+    padding: 18, 
+    gap: 12 
+  },
+  epgHeader: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "space-between", 
+    borderBottomWidth: 1, 
+    borderBottomColor: "rgba(255,255,255,0.08)", 
+    paddingBottom: 8 
+  },
+  epgCategoriesBar: { gap: 8, paddingVertical: 2, maxHeight: 40 },
+  epgCatTab: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 8, height: 34, justifyContent: "center" },
   epgCatTabActive: { backgroundColor: "#E9C46A" },
   epgCatText: { color: "#9CA3AF", fontSize: 11, fontWeight: "800" },
   epgCatTextActive: { color: "#000", fontWeight: "900" },
-  epgContentArea: { flex: 1, backgroundColor: "#10222B", borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "rgba(233,196,106,0.15)" },
-  epgTableHead: { flexDirection: "row", backgroundColor: "#1B3B4B", paddingVertical: 10, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: "rgba(233,196,106,0.2)" },
-  epgHeadChannelCol: { width: "35%", color: "#E9C46A", fontSize: 11, fontWeight: "900" },
+  
+  epgContentArea: { 
+    flex: 1, 
+    backgroundColor: "#10222B", 
+    borderRadius: 12, 
+    overflow: "hidden", 
+    borderWidth: 1, 
+    borderColor: "rgba(233,196,106,0.15)" 
+  },
+  epgTableHead: { flexDirection: "row", backgroundColor: "#1B3B4B", paddingVertical: 8, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: "rgba(233,196,106,0.2)" },
+  epgHeadChannelCol: { width: "32%", color: "#E9C46A", fontSize: 11, fontWeight: "900" },
   epgHeadTimeCol: { flex: 1, color: "#E9C46A", fontSize: 11, fontWeight: "900" },
-  epgListScroll: { padding: 6, gap: 6 },
-  epgRowItem: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(27,59,75,0.6)", borderRadius: 8, padding: 10, borderWidth: 1.5, borderColor: "transparent" },
+  epgListScroll: { padding: 4, gap: 6 },
+  
+  epgRowItem: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    backgroundColor: "rgba(27,59,75,0.6)", 
+    borderRadius: 8, 
+    paddingVertical: 8,
+    paddingHorizontal: 10, 
+    borderWidth: 1.5, 
+    borderColor: "transparent",
+    minHeight: 52 
+  },
   epgRowFocused: { borderColor: "#E9C46A", backgroundColor: "#1B3B4B", transform: [{ scale: 1.01 }] },
-  epgChannelInfoCol: { width: "35%", flexDirection: "row", alignItems: "center", gap: 10, paddingRight: 10 },
-  epgLogo: { width: 36, height: 36, borderRadius: 6 },
-  epgChannelName: { color: "#FFF", fontSize: 12, fontWeight: "800", flex: 1 },
-  epgProgramInfoCol: { flex: 1, gap: 3 },
-  epgProgramTitle: { color: "#E9C46A", fontSize: 12, fontWeight: "800" },
+  epgChannelInfoCol: { width: "32%", flexDirection: "row", alignItems: "center", gap: 8, paddingRight: 8 },
+  epgLogo: { width: 32, height: 32, borderRadius: 6 },
+  epgChannelName: { color: "#FFF", fontSize: 11.5, fontWeight: "800", flex: 1 },
+  epgProgramInfoCol: { flex: 1, gap: 2 },
+  epgProgramTitle: { color: "#E9C46A", fontSize: 11.5, fontWeight: "800" },
   epgProgramSub: { color: "#9CA3AF", fontSize: 10, fontWeight: "600" },
 
   // Estilos da Pesquisa Global
