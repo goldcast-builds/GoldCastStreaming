@@ -11,12 +11,13 @@ config.cacheStores = [
   new FileStore({ root: path.join(root, 'cache') }),
 ];
 
-// Mapeamento dos módulos nativos do Node para o ambiente móvel (necessário para o Supabase)
+// Mapeamento completo dos módulos nativos do Node para o ambiente móvel (Supabase)
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
   stream: require.resolve('stream-browserify'),
   zlib: require.resolve('browserify-zlib'),
   crypto: require.resolve('crypto-browserify'),
+  util: require.resolve('util'),
 };
 
 // Reduce the number of workers to decrease resource usage
