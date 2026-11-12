@@ -11,6 +11,9 @@ const SOURCE_KEY = "goldcast_source_v1";
 const DEVICE_KEY = "goldcast_device_mode";
 const PREFS_KEY = "goldcast_prefs_v1";
 
+const SUPABASE_URL = "https://lljsnoovwvxebzbaal.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsanNub292dndleHplYnpiYWFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTcxNDUsImV4cCI6MjEwNzI5MzE0NX0.z22CI4c1Ru4z1jx95589huH9NKcy44cBthXVV1thO8g";
+
 export interface Prefs { 
   autoReconnect: boolean; 
   autoplay: boolean; 
@@ -112,6 +115,7 @@ interface State {
   clearHistory: (kind?: Kind) => void;
   saveProgress: (key: string, p: Omit<Progress, "updatedAt">) => void;
   removeProgress: (key: string) => void;
+  loadCloudProgress: () => Promise<void>;
 
   setQueue: (items: PlayItem[], index: number) => void;
   setQueueIndex: (i: number) => void;
@@ -169,6 +173,7 @@ export const useSession = create<State>((set, get) => ({
           .then(async (fresh) => {
             set({ session: fresh });
             await secureSet(SESSION_KEY, JSON.stringify(fresh));
+            get().loadCloudProgress(); // Sincroniza nuvem após autenticar
           })
           .catch(async (e) => {
             if (e?.kind === "auth" || e?.kind === "expired") {
@@ -180,6 +185,7 @@ export const useSession = create<State>((set, get) => ({
       let source: Source | null = src ? JSON.parse(src) : null;
       if (!source && session) source = { kind: "xtream" };
       set({ session, ud, source, restored: true });
+      if (session) get().loadCloudProgress();
     } catch {
       set({ restored: true });
     }
@@ -196,6 +202,7 @@ export const useSession = create<State>((set, get) => ({
     if (remember) await secureSet(SESSION_KEY, JSON.stringify(session));
     else await secureSet(SESSION_KEY, null);
     onStage?.("done");
+    get().loadCloudProgress(); // Sincroniza nuvem ao entrar
     return session;
   },
 
@@ -303,6 +310,7 @@ export const useSession = create<State>((set, get) => ({
     set({ ud: nud });
     persistUD(session, nud);
   },
+
   saveProgress: (key, p) => {
     const { ud, session } = get();
     const entries = Object.entries({ ...ud.progress, [key]: { ...p, updatedAt: Date.now() } })
@@ -311,13 +319,74 @@ export const useSession = create<State>((set, get) => ({
     const nud = { ...ud, progress: Object.fromEntries(entries) };
     set({ ud: nud });
     persistUD(session, nud);
+
+    // Sincronização em segundo plano com o Supabase
+    const username = session?.userInfo?.username || session?.username;
+    if (username) {
+      fetch(`${SUPABASE_URL}/rest/v1/user_progress`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json",
+          "Prefer": "resolution=merge-duplicates"
+        },
+        body: JSON.stringify({
+          username: String(username),
+          progress_key: String(key),
+          position: Number(p.position),
+          duration: Number(p.duration),
+          updated_at: new Date().toISOString()
+        })
+      }).catch((e) => console.log("Erro ao sincronizar progresso:", e));
+    }
   },
+
   removeProgress: (key) => {
     const { ud, session } = get();
     const { [key]: _, ...rest } = ud.progress;
     const nud = { ...ud, progress: rest };
     set({ ud: nud });
     persistUD(session, nud);
+  },
+
+  loadCloudProgress: async () => {
+    const session = get().session;
+    const username = session?.userInfo?.username || session?.username;
+    if (!username) return;
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/user_progress?username=eq.${username}`, {
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Accept": "application/json"
+        }
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data) && data.length > 0) {
+        const { ud, session: curSession } = get();
+        const currentProgress = { ...ud.progress };
+
+        data.forEach((row: any) => {
+          if (row.progress_key && (!currentProgress[row.progress_key] || row.position > currentProgress[row.progress_key].position)) {
+            currentProgress[row.progress_key] = {
+              position: row.position,
+              duration: row.duration,
+              updatedAt: new Date(row.updated_at).getTime() || Date.now(),
+              title: currentProgress[row.progress_key]?.title || "Continuar a Assistir",
+              item: currentProgress[row.progress_key]?.item || { kind: "vod", id: row.progress_key, title: "Vídeo", urls: [] }
+            };
+          }
+        });
+
+        const nud = { ...ud, progress: currentProgress };
+        set({ ud: nud });
+        persistUD(curSession, nud);
+      }
+    } catch (e) {
+      console.log("Erro ao carregar progresso da nuvem:", e);
+    }
   },
 
   setQueue: (items, index) => set({ queue: items, queueIndex: index }),
