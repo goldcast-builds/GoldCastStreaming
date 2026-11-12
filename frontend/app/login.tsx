@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  TVEventType,
   NativeModules,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,9 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Logo } from "../src/components/Logo";
 import { useSession } from "../src/store/session";
 import { createM3UUrl, listLists, setActiveListId } from "../src/utils/api";
-
-const VALIDATE_CODE_URL =
-  "https://lljsnoovwvxebzbaal.supabase.co/functions/v1/validate-code";
+import { supabase } from "../src/utils/supabase";
 
 // Deteta se é uma plataforma de TV de forma segura
 const isTV = Platform.isTV || Platform.OS === "android" && (NativeModules.PlatformConstants?.uiMode === "television");
@@ -106,15 +103,12 @@ export default function LoginScreen() {
     setStatusMsg("A validar licença do reprodutor...");
 
     try {
-      const res = await fetch(VALIDATE_CODE_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail, code: cleanCode }),
+      const { data, error: fnError } = await supabase.functions.invoke("validate-code", {
+        body: { email: cleanEmail, code: cleanCode },
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Chave de software ou e-mail inválido.");
+      if (fnError || !data?.success) {
+        throw new Error(fnError?.message || data?.message || "Chave de software ou e-mail inválido.");
       }
 
       await AsyncStorage.setItem("@goldcast_app_licensed", "true");
@@ -457,7 +451,7 @@ export default function LoginScreen() {
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
                     <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
                     <TVInputField
-                      inputRef= {passRef}
+                      inputRef={passRef}
                       icon="🔒"
                       placeholder="Palavra-passe"
                       value={pass}
@@ -572,7 +566,6 @@ function TVInputField({
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
-        // Se for TV, desativa o teclado nativo. Se for telemóvel, permite abrir o teclado normalmente!
         showSoftInputOnFocus={isTV ? false : true}
         style={[styles.textInput, isFocused && { color: "#FFF", fontWeight: "700" }]}
         onFocus={() => setIsFocused(true)}
