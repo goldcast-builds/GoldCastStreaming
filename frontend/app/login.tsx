@@ -535,7 +535,7 @@ export default function LoginScreen() {
   );
 }
 
-// COMPONENTE TVINPUTFIELD BLINDADO CONTRA DUPLICIDADE DE EVENTOS NA TV
+// COMPONENTE TVINPUTFIELD BLINDADO CONTRA O FECHO NA TV BOX
 function TVInputField({
   inputRef,
   icon,
@@ -562,6 +562,7 @@ function TVInputField({
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
+        showSoftInputOnFocus={false}
         style={[styles.textInput, isFocused && { color: "#FFF", fontWeight: "700" }]}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
