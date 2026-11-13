@@ -26,6 +26,7 @@ config.resolver.extraNodeModules = {
   querystring: require.resolve('querystring-es3'),
   buffer: require.resolve('buffer'),
   assert: require.resolve('assert'),
+  path: require.resolve('path-browserify'),
 };
 
 config.maxWorkers = 2;
