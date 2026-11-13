@@ -18,6 +18,7 @@ config.resolver.extraNodeModules = {
   zlib: require.resolve('browserify-zlib'),
   crypto: require.resolve('crypto-browserify'),
   util: require.resolve('util'),
+  http: require.resolve('stream-http'),
 };
 
 // Reduce the number of workers to decrease resource usage
