@@ -27,6 +27,7 @@ config.resolver.extraNodeModules = {
   buffer: require.resolve('buffer'),
   assert: require.resolve('assert'),
   path: require.resolve('path-browserify'),
+  fs: require.resolve('browserify-fs'),
 };
 
 config.maxWorkers = 2;
