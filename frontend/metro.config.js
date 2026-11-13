@@ -19,7 +19,10 @@ config.resolver.extraNodeModules = {
   crypto: require.resolve('crypto-browserify'),
   util: require.resolve('util'),
   http: require.resolve('stream-http'),
+  https: require.resolve('https-browserify'),
   net: require.resolve('net-browserify'),
+  events: require.resolve('events'),
+  querystring: require.resolve('querystring-es3'),
 };
 
 // Reduce the number of workers to decrease resource usage
