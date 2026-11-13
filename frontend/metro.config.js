@@ -25,6 +25,7 @@ config.resolver.extraNodeModules = {
   url: require.resolve('url'),
   events: require.resolve('events'),
   querystring: require.resolve('querystring-es3'),
+  buffer: require.resolve('buffer'),
 };
 
 // Reduce the number of workers to decrease resource usage
