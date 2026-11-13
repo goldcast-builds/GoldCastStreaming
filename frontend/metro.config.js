@@ -5,13 +5,12 @@ const { FileStore } = require('metro-cache');
 
 const config = getDefaultConfig(__dirname);
 
-// Use a stable on-disk store (shared across web/android)
 const root = process.env.METRO_CACHE_ROOT || path.join(__dirname, '.metro-cache');
 config.cacheStores = [
   new FileStore({ root: path.join(root, 'cache') }),
 ];
 
-// Mapeamento completo dos módulos nativos do Node para o ambiente móvel (Supabase)
+// Mapeamento exaustivo de todos os módulos nativos do Node para o ambiente móvel 📱
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
   stream: require.resolve('stream-browserify'),
@@ -29,7 +28,6 @@ config.resolver.extraNodeModules = {
   assert: require.resolve('assert'),
 };
 
-// Reduce the number of workers to decrease resource usage
 config.maxWorkers = 2;
 
 module.exports = config;
