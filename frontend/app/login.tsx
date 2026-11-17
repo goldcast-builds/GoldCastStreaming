@@ -103,20 +103,13 @@ export default function LoginScreen() {
     setStatusMsg("A validar licença do reprodutor...");
 
     try {
-      const response = await fetch("https://lljsnoovwvxzbzbaal.supabase.co/functions/v1/validate-code", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer sb_publishable_NYNyvl3svSrRKskmUfDJGQ_Iq3PCOTt",
-          "apikey": "sb_publishable_NYNyvl3svSrRKskmUfDJGQ_Iq3PCOTt",
-        },
-        body: JSON.stringify({ email: cleanEmail, code: cleanCode }),
+      // Uso do SDK oficial do Supabase para invocar a Edge Function em vez de fetch cru
+      const { data, error: fnError } = await supabase.functions.invoke("validate-code", {
+        body: { email: cleanEmail, code: cleanCode },
       });
 
-      const data = await response.json();
-
-      if (!response.ok || !data?.success) {
-        throw new Error(data?.message || "Chave de software ou e-mail inválido.");
+      if (fnError || !data?.success) {
+        throw new Error(fnError?.message || data?.message || "Chave de software ou e-mail inválido.");
       }
 
       await AsyncStorage.setItem("@goldcast_app_licensed", "true");
