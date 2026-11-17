@@ -20,7 +20,7 @@ import { createM3UUrl, listLists, setActiveListId } from "../src/utils/api";
 import { supabase } from "../src/utils/supabase";
 
 // Deteta se é uma plataforma de TV de forma segura
-const isTV = Platform.isTV || Platform.OS === "android" && (NativeModules.PlatformConstants?.uiMode === "television");
+const isTV = Platform.isTV || (Platform.OS === "android" && NativeModules.PlatformConstants?.uiMode === "television");
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -103,12 +103,20 @@ export default function LoginScreen() {
     setStatusMsg("A validar licença do reprodutor...");
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("validate-code", {
-        body: { email: cleanEmail, code: cleanCode },
+      const response = await fetch("https://lljsnoovwvxzbzbaal.supabase.co/functions/v1/validate-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sb_publishable_NYNyvl3svSrRKskmUfDJGQ_Iq3PCOTt",
+          "apikey": "sb_publishable_NYNyvl3svSrRKskmUfDJGQ_Iq3PCOTt",
+        },
+        body: JSON.stringify({ email: cleanEmail, code: cleanCode }),
       });
 
-      if (fnError || !data?.success) {
-        throw new Error(fnError?.message || data?.message || "Chave de software ou e-mail inválido.");
+      const data = await response.json();
+
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.message || "Chave de software ou e-mail inválido.");
       }
 
       await AsyncStorage.setItem("@goldcast_app_licensed", "true");
