@@ -103,7 +103,7 @@ export default function LoginScreen() {
     setStatusMsg("A validar licença do reprodutor...");
 
     try {
-      const response = await fetch("https://lljsnoovwvxzbzbaal.supabase.co/functions/v1/validate-code", {
+      const response = await fetch("https://lljsnoovwvxebzbaal.supabase.co/functions/v1/validate-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
