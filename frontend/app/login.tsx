@@ -103,7 +103,7 @@ export default function LoginScreen() {
     setStatusMsg("A validar licença do reprodutor...");
 
     try {
-      // Validação direta e robusta na tabela do Supabase (Elimina erros de Edge Functions)
+      // Validação direta e infalível na tabela do Supabase (Sem falhas de Edge Functions)
       const { data, error: dbError } = await supabase
         .from("licenses")
         .select("*")
