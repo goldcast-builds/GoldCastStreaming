@@ -103,13 +103,16 @@ export default function LoginScreen() {
     setStatusMsg("A validar licença do reprodutor...");
 
     try {
-      // Uso do SDK oficial do Supabase para invocar a Edge Function em vez de fetch cru
-      const { data, error: fnError } = await supabase.functions.invoke("validate-code", {
-        body: { email: cleanEmail, code: cleanCode },
-      });
+      // Validação direta e robusta na tabela do Supabase (Elimina erros de Edge Functions)
+      const { data, error: dbError } = await supabase
+        .from("licenses")
+        .select("*")
+        .eq("email", cleanEmail)
+        .eq("code", cleanCode)
+        .single();
 
-      if (fnError || !data?.success) {
-        throw new Error(fnError?.message || data?.message || "Chave de software ou e-mail inválido.");
+      if (dbError || !data) {
+        throw new Error("Chave de software ou e-mail inválido.");
       }
 
       await AsyncStorage.setItem("@goldcast_app_licensed", "true");
