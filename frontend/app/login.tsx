@@ -27,12 +27,7 @@ export default function LoginScreen() {
   const login = useSession((s) => s.login);
   const setSource = useSession((s) => s.setSource);
 
-  const [activeTab, setActiveTab] = useState<"license" | "trial">("license");
-  const [step, setStep] = useState<"form" | "iptv">("form");
-  const [connectMode, setConnectMode] = useState<"xtream" | "m3u">("xtream");
-
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
+  const [connectMode, setConnectMode] = useState<"xtream" | "m3u" | "trial">("xtream");
 
   const [server, setServer] = useState("");
   const [user, setUser] = useState("");
@@ -43,8 +38,6 @@ export default function LoginScreen() {
   const [m3uName, setM3uName] = useState("");
   const [m3uUrl, setM3uUrl] = useState("");
 
-  const emailRef = useRef<TextInput>(null);
-  const codeRef = useRef<TextInput>(null);
   const serverRef = useRef<TextInput>(null);
   const userRef = useRef<TextInput>(null);
   const passRef = useRef<TextInput>(null);
@@ -60,22 +53,13 @@ export default function LoginScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const [savedLicensed, savedEmail, savedCode, savedServer, savedUser] = await Promise.all([
-          AsyncStorage.getItem("@goldcast_app_licensed"),
-          AsyncStorage.getItem("@goldcast_saved_email"),
-          AsyncStorage.getItem("@goldcast_saved_code"),
+        const [savedServer, savedUser] = await Promise.all([
           AsyncStorage.getItem("@goldcast_saved_server"),
           AsyncStorage.getItem("@goldcast_saved_user"),
         ]);
 
-        if (savedEmail) setEmail(savedEmail);
-        if (savedCode) setCode(savedCode);
         if (savedServer) setServer(savedServer);
         if (savedUser) setUser(savedUser);
-
-        if (savedLicensed === "true") {
-          setStep("iptv");
-        }
       } catch {}
     })();
 
@@ -83,63 +67,6 @@ export default function LoginScreen() {
       mounted.current = false;
     };
   }, []);
-
-  const handleValidateLicense = async () => {
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanCode = code.trim().toUpperCase();
-
-    setError(null);
-    if (!cleanEmail || !cleanEmail.includes("@")) {
-      setError("Indique um endereço de e-mail válido.");
-      return;
-    }
-    if (!cleanCode) {
-      setError("Indique a chave de ativação do reprodutor.");
-      return;
-    }
-
-    setLoading(true);
-    setStatusMsg("A validar licença do reprodutor...");
-
-    try {
-      // Chamada HTTP REST direta ao Supabase (Contorna totalmente falhas de DNS/UnknownHostException do SDK mobile)
-      const restUrl = `https://lljsnoovwvxzbzbaal.supabase.co/rest/v1/access_codes?code=ilike.${encodeURIComponent(cleanCode)}&select=*`;
-      
-      const response = await fetch(restUrl, {
-        method: "GET",
-        headers: {
-          "apikey": "sb_publishable_NYNyvl3svSrRKskmUfDJGQ_Iq3PCOTt",
-          "Authorization": "Bearer sb_publishable_NYNyvl3svSrRKskmUfDJGQ_Iq3PCOTt",
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Falha na comunicação com o servidor.");
-      }
-
-      const rows = await response.json();
-
-      if (!rows || rows.length === 0) {
-        throw new Error("Chave de ativação não encontrada no sistema.");
-      }
-
-      await AsyncStorage.setItem("@goldcast_app_licensed", "true");
-      await AsyncStorage.setItem("@goldcast_saved_email", cleanEmail);
-      await AsyncStorage.setItem("@goldcast_saved_code", cleanCode);
-
-      setStep("iptv");
-    } catch (e: any) {
-      if (mounted.current) {
-        setError(e?.message || "Falha na validação da chave do reprodutor.");
-      }
-    } finally {
-      if (mounted.current) {
-        setLoading(false);
-        setStatusMsg(null);
-      }
-    }
-  };
 
   const handleConnectIPTV = async () => {
     setError(null);
@@ -229,7 +156,7 @@ export default function LoginScreen() {
       if (!expDate || expDate === "null" || expDate === "") {
         useSession.getState().logout?.();
         throw new Error(
-          "Esta área é exclusiva para testes temporários (até 24 horas). Para contas definitivas, ative a chave de software."
+          "Esta área é exclusiva para testes temporários (até 24 horas)."
         );
       }
 
@@ -245,14 +172,6 @@ export default function LoginScreen() {
       if (diffHours <= 0) {
         useSession.getState().logout?.();
         throw new Error("Este período de demonstração já se encontra expirado.");
-      }
-
-      if (diffHours > 26) {
-        useSession.getState().logout?.();
-        const diasRestantes = Math.round(diffHours / 24);
-        throw new Error(
-          `Esta secção destina-se apenas a períodos de teste até 24h. A conta possui validade de ${diasRestantes} dias.`
-        );
       }
 
       setTimeout(() => router.replace("/(tabs)"), 350);
@@ -280,75 +199,36 @@ export default function LoginScreen() {
           <Logo size={70} />
         </View>
         <Text style={styles.brand}>GoldCast Media Player</Text>
-        <Text style={styles.subtitle}>Escolha o formato e introduza as fontes de reprodução.</Text>
+        <Text style={styles.subtitle}>Introduza os dados de acesso do seu provedor.</Text>
 
-        {step === "form" && (
-          <View style={styles.tabSelector}>
-            <TVTabButton
-              label="🔑 Chave do Reprodutor"
-              active={activeTab === "license"}
-              onPress={() => {
-                setActiveTab("license");
-                setError(null);
-              }}
-            />
-            <TVTabButton
-              label="⏱️ Acesso de Demonstração"
-              active={activeTab === "trial"}
-              onPress={() => {
-                setActiveTab("trial");
-                setError(null);
-              }}
-            />
-          </View>
-        )}
+        <View style={styles.tabSelector}>
+          <TVTabButton
+            label="🔑 Servidor Xtream"
+            active={connectMode === "xtream"}
+            onPress={() => {
+              setConnectMode("xtream");
+              setError(null);
+            }}
+          />
+          <TVTabButton
+            label="🔗 Lista M3U"
+            active={connectMode === "m3u"}
+            onPress={() => {
+              setConnectMode("m3u");
+              setError(null);
+            }}
+          />
+          <TVTabButton
+            label="⏱️ Demonstração"
+            active={connectMode === "trial"}
+            onPress={() => {
+              setConnectMode("trial");
+              setError(null);
+            }}
+          />
+        </View>
 
-        {/* 1. ATIVAÇÃO DO SOFTWARE */}
-        {step === "form" && activeTab === "license" && (
-          <View style={styles.formWrap}>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>O SEU E-MAIL</Text>
-              <TVInputField
-                inputRef={emailRef}
-                icon="✉️"
-                placeholder="exemplo@gmail.com"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>CHAVE DE ATIVAÇÃO / CÓDIGO</Text>
-              <TVInputField
-                inputRef={codeRef}
-                icon="🔑"
-                placeholder="Ex: GOLD-VIP-365D"
-                value={code}
-                onChangeText={(t: string) => setCode(t.toUpperCase())}
-                autoCapitalize="characters"
-              />
-            </View>
-
-            <TVActionButton
-              label="ATIVAR E CONTINUAR"
-              loading={loading}
-              onPress={handleValidateLicense}
-            />
-
-            <TVLinkButton
-              label="⚡ Não possui chave? Entrar com período de teste →"
-              onPress={() => {
-                setActiveTab("trial");
-                setError(null);
-              }}
-            />
-          </View>
-        )}
-
-        {/* 2. ÁREA DE DEMONSTRAÇÃO (24H) */}
-        {step === "form" && activeTab === "trial" && (
+        {connectMode === "xtream" && (
           <View style={styles.formWrap}>
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>SERVIDOR / URL DO PROVEDOR</Text>
@@ -396,135 +276,98 @@ export default function LoginScreen() {
             </View>
 
             <TVActionButton
-              label="INICIAR DEMONSTRAÇÃO (24H)"
+              label="ENTRAR NO REPRODUTOR"
               loading={loading}
-              onPress={handleConnectTrial}
-            />
-
-            <TVLinkButton
-              label="← Voltar à ativação por chave"
-              onPress={() => {
-                setActiveTab("license");
-                setError(null);
-              }}
+              onPress={handleConnectIPTV}
             />
           </View>
         )}
 
-        {/* 3. LIGAÇÃO DE CONTEÚDOS (XTREAM OU M3U) */}
-        {step === "iptv" && (
+        {connectMode === "m3u" && (
           <View style={styles.formWrap}>
-            <View style={styles.tabSelector}>
-              <TVTabButton
-                label="🔑 Servidor Xtream"
-                active={connectMode === "xtream"}
-                onPress={() => {
-                  setConnectMode("xtream");
-                  setError(null);
-                }}
-              />
-              <TVTabButton
-                label="🔗 Lista M3U (URL)"
-                active={connectMode === "m3u"}
-                onPress={() => {
-                  setConnectMode("m3u");
-                  setError(null);
-                }}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>NOME DA LISTA (OPCIONAL)</Text>
+              <TVInputField
+                inputRef={m3uNameRef}
+                icon="📝"
+                placeholder="Ex: Minha Lista Principal"
+                value={m3uName}
+                onChangeText={setM3uName}
               />
             </View>
 
-            {connectMode === "xtream" && (
-              <>
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>SERVIDOR / URL DO PROVEDOR</Text>
-                  <TVInputField
-                    inputRef={serverRef}
-                    icon="🌐"
-                    placeholder="http://servidordoprovedor.com:8080"
-                    value={server}
-                    onChangeText={setServer}
-                    keyboardType="url"
-                    autoCapitalize="none"
-                  />
-                </View>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>URL DA LISTA (M3U / M3U8)</Text>
+              <TVInputField
+                inputRef={m3uUrlRef}
+                icon="🔗"
+                placeholder="https://exemplo.com/lista.m3u"
+                value={m3uUrl}
+                onChangeText={setM3uUrl}
+                keyboardType="url"
+                autoCapitalize="none"
+              />
+            </View>
 
-                <View style={styles.rowFields}>
-                  <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>UTILIZADOR</Text>
-                    <TVInputField
-                      inputRef={userRef}
-                      icon="👤"
-                      placeholder="Utilizador"
-                      value={user}
-                      onChangeText={setUser}
-                      autoCapitalize="none"
-                    />
-                  </View>
+            <TVActionButton
+              label="CARREGAR LISTA M3U"
+              loading={loading}
+              onPress={handleConnectM3U}
+            />
+          </View>
+        )}
 
-                  <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
-                    <TVInputField
-                      inputRef={passRef}
-                      icon="🔒"
-                      placeholder="Palavra-passe"
-                      value={pass}
-                      onChangeText={setPass}
-                      secureTextEntry={!showPass}
-                      autoCapitalize="none"
-                      rightElement={
-                        <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
-                          <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
-                        </Pressable>
-                      }
-                    />
-                  </View>
-                </View>
+        {connectMode === "trial" && (
+          <View style={styles.formWrap}>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>SERVIDOR / URL DO PROVEDOR (TESTE)</Text>
+              <TVInputField
+                inputRef={serverRef}
+                icon="🌐"
+                placeholder="http://servidordoprovedor.com:8080"
+                value={server}
+                onChangeText={setServer}
+                keyboardType="url"
+                autoCapitalize="none"
+              />
+            </View>
 
-                <TVActionButton
-                  label="ENTRAR NO REPRODUTOR"
-                  loading={loading}
-                  onPress={handleConnectIPTV}
+            <View style={styles.rowFields}>
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={styles.fieldLabel}>UTILIZADOR</Text>
+                <TVInputField
+                  inputRef={userRef}
+                  icon="👤"
+                  placeholder="Utilizador"
+                  value={user}
+                  onChangeText={setUser}
+                  autoCapitalize="none"
                 />
-              </>
-            )}
+              </View>
 
-            {connectMode === "m3u" && (
-              <>
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>NOME DA LISTA (OPCIONAL)</Text>
-                  <TVInputField
-                    inputRef={m3uNameRef}
-                    icon="📝"
-                    placeholder="Ex: Minha Lista Principal"
-                    value={m3uName}
-                    onChangeText={setM3uName}
-                  />
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>URL DA LISTA (M3U / M3U8)</Text>
-                  <TVInputField
-                    inputRef={m3uUrlRef}
-                    icon="🔗"
-                    placeholder="https://exemplo.com/lista.m3u"
-                    value={m3uUrl}
-                    onChangeText={setM3uUrl}
-                    keyboardType="url"
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                <TVActionButton
-                  label="CARREGAR LISTA M3U"
-                  loading={loading}
-                  onPress={handleConnectM3U}
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={styles.fieldLabel}>PALAVRA-PASSE</Text>
+                <TVInputField
+                  inputRef={passRef}
+                  icon="🔒"
+                  placeholder="Palavra-passe"
+                  value={pass}
+                  onChangeText={setPass}
+                  secureTextEntry={!showPass}
+                  autoCapitalize="none"
+                  rightElement={
+                    <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
+                      <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
+                    </Pressable>
+                  }
                 />
-              </>
-            )}
+              </View>
+            </View>
 
-            <TVLinkButton
-              label="← Alterar chave do reprodutor / e-mail"
-              onPress={() => setStep("form")}
+            <TVActionButton
+              label="INICIAR DEMONSTRAÇÃO"
+              loading={loading}
+              onPress={handleConnectTrial}
             />
           </View>
         )}
@@ -640,22 +483,6 @@ function TVActionButton({ label, loading, onPress }: { label: string; loading: b
   );
 }
 
-function TVLinkButton({ label, onPress }: { label: string; onPress: () => void }) {
-  const [isFocused, setIsFocused] = useState(false);
-
-  return (
-    <Pressable
-      focusable={true}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      onPress={onPress}
-      style={[styles.linkBtn, isFocused && styles.linkBtnFocused]}
-    >
-      <Text style={[styles.linkBtnText, isFocused && { color: "#000", fontWeight: "900" }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#1B3B4B" },
   content: { paddingHorizontal: 30, maxWidth: 620, width: "100%", alignSelf: "center", justifyContent: "center" },
@@ -682,10 +509,6 @@ const styles = StyleSheet.create({
   btnGold: { backgroundColor: "#E9C46A", height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", marginTop: 4, borderWidth: 2, borderColor: "transparent" },
   btnGoldFocused: { borderColor: "#FFF", borderWidth: 2.5, transform: [{ scale: 1.01 }] },
   btnGoldText: { color: "#000", fontSize: 12, fontWeight: "900", letterSpacing: 0.8 },
-
-  linkBtn: { alignSelf: "center", paddingHorizontal: 10, marginTop: 2, borderRadius: 6 },
-  linkBtnFocused: { backgroundColor: "#E9C46A" },
-  linkBtnText: { color: "#E9C46A", fontSize: 11, fontWeight: "800" },
 
   statusBox: { marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 10, backgroundColor: "#152E3B", borderRadius: 10 },
   statusText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
