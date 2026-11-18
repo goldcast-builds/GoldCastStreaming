@@ -17,7 +17,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Logo } from "../src/components/Logo";
 import { useSession } from "../src/store/session";
 import { createM3UUrl, listLists, setActiveListId } from "../src/utils/api";
-import { supabase } from "../src/utils/supabase";
 
 // Deteta se é uma plataforma de TV de forma segura
 const isTV = Platform.isTV || (Platform.OS === "android" && NativeModules.PlatformConstants?.uiMode === "television");
@@ -103,18 +102,25 @@ export default function LoginScreen() {
     setStatusMsg("A validar licença do reprodutor...");
 
     try {
-      // Validação simplificada baseada apenas no código de acesso
-      const { data, error: dbError } = await supabase
-        .from("access_codes")
-        .select("*")
-        .ilike("code", cleanCode.trim())
-        .maybeSingle();
+      // Chamada HTTP REST direta ao Supabase (Contorna totalmente falhas de DNS/UnknownHostException do SDK mobile)
+      const restUrl = `https://lljsnoovwvxzbzbaal.supabase.co/rest/v1/access_codes?code=ilike.${encodeURIComponent(cleanCode)}&select=*`;
+      
+      const response = await fetch(restUrl, {
+        method: "GET",
+        headers: {
+          "apikey": "sb_publishable_NYNyvl3svSrRKskmUfDJGQ_Iq3PCOTt",
+          "Authorization": "Bearer sb_publishable_NYNyvl3svSrRKskmUfDJGQ_Iq3PCOTt",
+          "Content-Type": "application/json",
+        },
+      });
 
-      if (dbError) {
-        throw new Error("Erro na base de dados: " + dbError.message);
+      if (!response.ok) {
+        throw new Error("Falha na comunicação com o servidor.");
       }
 
-      if (!data) {
+      const rows = await response.json();
+
+      if (!rows || rows.length === 0) {
         throw new Error("Chave de ativação não encontrada no sistema.");
       }
 
