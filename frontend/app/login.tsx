@@ -103,28 +103,19 @@ export default function LoginScreen() {
     setStatusMsg("A validar licença do reprodutor...");
 
     try {
-      // Consulta robusta na tabela 'access_codes' ignorando diferenças de maiúsculas/minúsculas na chave
+      // Validação simplificada baseada apenas no código de acesso
       const { data, error: dbError } = await supabase
         .from("access_codes")
         .select("*")
-        .ilike("code", cleanCode)
+        .ilike("code", cleanCode.trim())
         .maybeSingle();
 
-      if (dbError || !data) {
+      if (dbError) {
+        throw new Error("Erro na base de dados: " + dbError.message);
+      }
+
+      if (!data) {
         throw new Error("Chave de ativação não encontrada no sistema.");
-      }
-
-      // Se a chave existir mas tiver um e-mail associado diferente, validamos
-      if (data.user_email && data.user_email.trim().toLowerCase() !== cleanEmail) {
-        throw new Error("Este e-mail não corresponde ao associado a esta chave.");
-      }
-
-      // Se o campo user_email estiver vazio na base de dados, atualizamos automaticamente com o e-mail inserido
-      if (!data.user_email) {
-        await supabase
-          .from("access_codes")
-          .update({ user_email: cleanEmail })
-          .eq("id", data.id);
       }
 
       await AsyncStorage.setItem("@goldcast_app_licensed", "true");
