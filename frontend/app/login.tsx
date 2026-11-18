@@ -103,25 +103,23 @@ export default function LoginScreen() {
     setStatusMsg("A validar licença do reprodutor...");
 
     try {
-      // Consulta direta na tabela correta 'access_codes' e colunas exatas do Supabase
+      // Consulta robusta na tabela 'access_codes' ignorando diferenças de maiúsculas/minúsculas na chave
       const { data, error: dbError } = await supabase
         .from("access_codes")
         .select("*")
-        .eq("code", cleanCode)
-        .single();
+        .ilike("code", cleanCode)
+        .maybeSingle();
 
       if (dbError || !data) {
-        throw new Error("Chave de ativação inválida.");
+        throw new Error("Chave de ativação não encontrada no sistema.");
       }
 
-      // Verifica se o e-mail corresponde (ou se permite associar caso esteja NULL na BD)
-      const registeredEmail = data.user_email ? data.user_email.trim().toLowerCase() : null;
-      
-      if (registeredEmail && registeredEmail !== cleanEmail) {
+      // Se a chave existir mas tiver um e-mail associado diferente, validamos
+      if (data.user_email && data.user_email.trim().toLowerCase() !== cleanEmail) {
         throw new Error("Este e-mail não corresponde ao associado a esta chave.");
       }
 
-      // Se a linha na BD não tiver e-mail associado ainda, atualiza automaticamente com o e-mail digitado
+      // Se o campo user_email estiver vazio na base de dados, atualizamos automaticamente com o e-mail inserido
       if (!data.user_email) {
         await supabase
           .from("access_codes")
