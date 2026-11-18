@@ -103,16 +103,30 @@ export default function LoginScreen() {
     setStatusMsg("A validar licença do reprodutor...");
 
     try {
-      // Validação direta e infalível na tabela do Supabase (Sem falhas de Edge Functions)
+      // Consulta direta na tabela correta 'access_codes' e colunas exatas do Supabase
       const { data, error: dbError } = await supabase
-        .from("licenses")
+        .from("access_codes")
         .select("*")
-        .eq("email", cleanEmail)
         .eq("code", cleanCode)
         .single();
 
       if (dbError || !data) {
-        throw new Error("Chave de software ou e-mail inválido.");
+        throw new Error("Chave de ativação inválida.");
+      }
+
+      // Verifica se o e-mail corresponde (ou se permite associar caso esteja NULL na BD)
+      const registeredEmail = data.user_email ? data.user_email.trim().toLowerCase() : null;
+      
+      if (registeredEmail && registeredEmail !== cleanEmail) {
+        throw new Error("Este e-mail não corresponde ao associado a esta chave.");
+      }
+
+      // Se a linha na BD não tiver e-mail associado ainda, atualiza automaticamente com o e-mail digitado
+      if (!data.user_email) {
+        await supabase
+          .from("access_codes")
+          .update({ user_email: cleanEmail })
+          .eq("id", data.id);
       }
 
       await AsyncStorage.setItem("@goldcast_app_licensed", "true");
