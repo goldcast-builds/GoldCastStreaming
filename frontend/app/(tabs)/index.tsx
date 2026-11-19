@@ -16,6 +16,7 @@ import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import YoutubePlayer from "react-native-youtube-iframe";
 import { useSession } from "../../src/store/session";
 
 type MatchStatus = "AO VIVO" | "EM BREVE" | "ENCERRADO";
@@ -27,12 +28,14 @@ interface GuiaMatch {
   league: string;
   teamA: string;
   teamB: string;
+  logoA?: string;
+  logoB?: string;
   score: string;
   status: MatchStatus;
   channels: string;
 }
 
-const FUTEBOL_CACHE_KEY = "@goldcast_home_futebol_v1";
+const FUTEBOL_CACHE_KEY = "@goldcast_home_futebol_v2";
 
 const LEAGUE_ENDPOINTS = [
   {
@@ -64,6 +67,25 @@ function formatHoraBR(iso?: string): string {
   }
 }
 
+async function buscarMelhoresMomentosVideoId(query: string): Promise<string | null> {
+  try {
+    const encoded = encodeURIComponent(query);
+    const res = await fetch(`https://www.youtube.com/results?search_query=${encoded}`, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8",
+      },
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const match = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function buscarJogosFutebolHoje(): Promise<GuiaMatch[]> {
   const lista: GuiaMatch[] = [];
 
@@ -83,6 +105,9 @@ async function buscarJogosFutebolHoje(): Promise<GuiaMatch[]> {
         const teamA = home?.team?.shortDisplayName || home?.team?.displayName;
         const teamB = away?.team?.shortDisplayName || away?.team?.displayName;
         if (!teamA || !teamB) continue;
+
+        const logoA = home?.team?.logo || home?.team?.logos?.[0]?.href || "";
+        const logoB = away?.team?.logo || away?.team?.logos?.[0]?.href || "";
 
         const state = ev?.status?.type?.state;
         let status: MatchStatus = "EM BREVE";
@@ -113,6 +138,8 @@ async function buscarJogosFutebolHoje(): Promise<GuiaMatch[]> {
           league: ep.label,
           teamA,
           teamB,
+          logoA,
+          logoB,
           score,
           status,
           channels,
@@ -181,6 +208,11 @@ export default function HomeTab() {
   const [jogoFilter, setJogoFilter] = useState<FilterTab>("todos");
   const [loadingJogos, setLoadingJogos] = useState(false);
   const [refreshingJogos, setRefreshingJogos] = useState(false);
+
+  // Estado do player de Melhores Momentos
+  const [highlightsMatch, setHighlightsMatch] = useState<GuiaMatch | null>(null);
+  const [highlightsVideoId, setHighlightsVideoId] = useState<string | null>(null);
+  const [loadingHighlights, setLoadingHighlights] = useState(false);
 
   const [epgCategories, setEpgCategories] = useState<any[]>([]);
   const [selectedEpgCat, setSelectedEpgCat] = useState<string>("all");
@@ -302,6 +334,32 @@ export default function HomeTab() {
     if (!showJogosModal) return;
     carregarJogos(false);
   }, [showJogosModal, carregarJogos]);
+
+  const handleOpenHighlights = async (match: GuiaMatch) => {
+    setHighlightsMatch(match);
+    setHighlightsVideoId(null);
+    setLoadingHighlights(true);
+
+    const vid =
+      (await buscarMelhoresMomentosVideoId(`${match.teamA} x ${match.teamB} melhores momentos`)) ||
+      (await buscarMelhoresMomentosVideoId(`${match.teamA} ${match.teamB} highlights`));
+
+    setHighlightsVideoId(vid);
+    setLoadingHighlights(false);
+  };
+
+  const handleGoToMatchChannel = (match: GuiaMatch) => {
+    setShowJogosModal(false);
+    const canalSugerido = match.channels
+      .split(/[•,|/]+/)
+      .map((c) => c.trim())
+      .find((c) => c.length > 1 && c.toLowerCase() !== "premiere • sportv • espn");
+
+    router.push({
+      pathname: "/(tabs)/live",
+      params: { search: canalSugerido || match.teamA },
+    });
+  };
 
   const jogosFiltrados = useMemo(() => {
     if (jogoFilter === "ao_vivo") return guiaJogos.filter((j) => j.status === "AO VIVO");
@@ -529,12 +587,16 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* MODAL DE FUTEBOL */}
+      {/* MODAL PREMIUM DE FUTEBOL */}
       <Modal
         visible={showJogosModal}
         animationType="fade"
         transparent={true}
-        onRequestClose={() => setShowJogosModal(false)}
+        onRequestClose={() => {
+          setHighlightsMatch(null);
+          setHighlightsVideoId(null);
+          setShowJogosModal(false);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -543,7 +605,7 @@ export default function HomeTab() {
                 <View style={styles.modalIconBox}>
                   <Ionicons name="football" size={18} color="#E9C46A" />
                 </View>
-                <Text style={styles.modalTitle}>⚽ CENTRAL DE FUTEBOL — HOJE</Text>
+                <Text style={styles.modalTitle}>⚽ FUTEBOL PREMIUM — HOJE</Text>
               </View>
 
               <View style={styles.tabToggleRow}>
@@ -597,7 +659,11 @@ export default function HomeTab() {
                   <Ionicons name="refresh" size={18} color="#E9C46A" />
                 </Pressable>
                 <Pressable
-                  onPress={() => setShowJogosModal(false)}
+                  onPress={() => {
+                    setHighlightsMatch(null);
+                    setHighlightsVideoId(null);
+                    setShowJogosModal(false);
+                  }}
                   style={styles.closeBtn}
                   focusable={true}
                 >
@@ -606,11 +672,53 @@ export default function HomeTab() {
               </View>
             </View>
 
+            {/* Player de Melhores Momentos quando selecionado */}
+            {highlightsMatch && (
+              <View style={styles.highlightsBox}>
+                <View style={styles.highlightsHeader}>
+                  <Text style={styles.highlightsTitle} numberOfLines={1}>
+                    🎬 Melhores Momentos: {highlightsMatch.teamA} x {highlightsMatch.teamB}
+                  </Text>
+                  <Pressable
+                    focusable={true}
+                    onPress={() => {
+                      setHighlightsMatch(null);
+                      setHighlightsVideoId(null);
+                    }}
+                    style={styles.smallCloseBtn}
+                  >
+                    <Ionicons name="close" size={14} color="#FFF" />
+                  </Pressable>
+                </View>
+
+                {loadingHighlights ? (
+                  <View style={styles.highlightsLoading}>
+                    <ActivityIndicator size="small" color="#E9C46A" />
+                    <Text style={styles.loadingText}>Buscando vídeo de melhores momentos...</Text>
+                  </View>
+                ) : highlightsVideoId ? (
+                  <View style={styles.videoPlayerWrap}>
+                    <YoutubePlayer
+                      height={175}
+                      width={520}
+                      play={true}
+                      videoId={highlightsVideoId}
+                      webViewStyle={{ opacity: 0.99 }}
+                    />
+                  </View>
+                ) : (
+                  <Text style={styles.loadingText}>
+                    Vídeo não encontrado no momento para este confronto.
+                  </Text>
+                )}
+              </View>
+            )}
+
             {loadingJogos ? (
               <View style={styles.centerBox}>
                 <ActivityIndicator size="large" color="#E9C46A" />
                 <Text style={styles.loadingText}>
-                  Carregando partidas e placares de futebol...
+                  Carregando partidas, escudos e placares...
                 </Text>
               </View>
             ) : jogosFiltrados.length === 0 ? (
@@ -633,24 +741,7 @@ export default function HomeTab() {
                 }
               >
                 {jogosFiltrados.map((g) => (
-                  <Pressable
-                    key={g.id}
-                    focusable={true}
-                    onPress={() => {
-                      setShowJogosModal(false);
-                      const canalSugerido = g.channels
-                        .split(/[•,|/]+/)
-                        .map((c) => c.trim())
-                        .find(
-                          (c) => c.length > 1 && c.toLowerCase() !== "premiere • sportv • espn"
-                        );
-                      router.push({
-                        pathname: "/(tabs)/live",
-                        params: { search: canalSugerido || g.teamA },
-                      });
-                    }}
-                    style={({ focused }) => [styles.guiaCard, focused && styles.cardFocused]}
-                  >
+                  <View key={g.id} style={styles.guiaCard}>
                     <View style={styles.guiaCardTopRow}>
                       <View style={styles.guiaTimeBadge}>
                         <Ionicons name="time-outline" size={12} color="#000" />
@@ -673,25 +764,84 @@ export default function HomeTab() {
                       </Text>
                     </View>
 
+                    {/* Confronto com Escudos */}
                     <View style={styles.guiaMatchRow}>
-                      <Text style={styles.teamText} numberOfLines={1}>
-                        {g.teamA}
-                      </Text>
+                      <View style={styles.teamWithBadge}>
+                        {g.logoA ? (
+                          <Image
+                            source={{ uri: g.logoA }}
+                            style={styles.teamCrest}
+                            contentFit="contain"
+                            cachePolicy="memory-disk"
+                          />
+                        ) : (
+                          <Ionicons name="shield-outline" size={18} color="#E9C46A" />
+                        )}
+                        <Text style={styles.teamText} numberOfLines={1}>
+                          {g.teamA}
+                        </Text>
+                      </View>
+
                       <View style={styles.scoreBox}>
                         <Text style={styles.scoreText}>{g.score}</Text>
                       </View>
-                      <Text style={[styles.teamText, { textAlign: "right" }]} numberOfLines={1}>
-                        {g.teamB}
-                      </Text>
+
+                      <View style={[styles.teamWithBadge, styles.teamWithBadgeRight]}>
+                        <Text
+                          style={[styles.teamText, { textAlign: "right" }]}
+                          numberOfLines={1}
+                        >
+                          {g.teamB}
+                        </Text>
+                        {g.logoB ? (
+                          <Image
+                            source={{ uri: g.logoB }}
+                            style={styles.teamCrest}
+                            contentFit="contain"
+                            cachePolicy="memory-disk"
+                          />
+                        ) : (
+                          <Ionicons name="shield-outline" size={18} color="#E9C46A" />
+                        )}
+                      </View>
                     </View>
 
-                    <View style={styles.guiaChannelsRow}>
-                      <Ionicons name="tv-outline" size={13} color="#E9C46A" />
-                      <Text style={styles.guiaChannelsText} numberOfLines={1}>
-                        Canais: {g.channels}
-                      </Text>
+                    {/* Rodapé com Canais + Botões de Ação */}
+                    <View style={styles.guiaFooterRow}>
+                      <View style={styles.guiaChannelsRow}>
+                        <Ionicons name="tv-outline" size={13} color="#E9C46A" />
+                        <Text style={styles.guiaChannelsText} numberOfLines={1}>
+                          {g.channels}
+                        </Text>
+                      </View>
+
+                      <View style={styles.matchActionsRow}>
+                        <Pressable
+                          focusable={true}
+                          onPress={() => handleOpenHighlights(g)}
+                          style={({ focused }) => [
+                            styles.actionPillBtn,
+                            focused && styles.cardFocused,
+                          ]}
+                        >
+                          <Ionicons name="play-circle" size={13} color="#E9C46A" />
+                          <Text style={styles.actionPillText}>Melhores Momentos</Text>
+                        </Pressable>
+
+                        <Pressable
+                          focusable={true}
+                          onPress={() => handleGoToMatchChannel(g)}
+                          style={({ focused }) => [
+                            styles.actionPillGoldBtn,
+                            focused && styles.cardFocused,
+                          ]}
+                        >
+                          <Ionicons name="tv" size={13} color="#000" />
+                          <Text style={styles.actionPillGoldText}>Canal</Text>
+                        </Pressable>
+                      </View>
                     </View>
-                  </Pressable>
+                  </View>
                 ))}
               </ScrollView>
             )}
@@ -977,25 +1127,25 @@ const styles = StyleSheet.create({
   },
   cardTripleInner: { alignItems: "center", gap: 6 },
   cardTitleTriple: { color: "#FFF", fontSize: 14, fontWeight: "900", letterSpacing: 1 },
-  cardFocused: { borderColor: "#E9C46A", transform: [{ scale: 1.03 }] },
+  cardFocused: { borderColor: "#E9C46A", transform: [{ scale: 1.02 }] },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.82)",
+    backgroundColor: "rgba(0,0,0,0.84)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: 18,
   },
   modalCard: {
     width: "100%",
-    maxWidth: 740,
-    height: "84%",
+    maxWidth: 780,
+    height: "88%",
     backgroundColor: "#141722",
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: "rgba(233,196,106,0.35)",
+    borderColor: "rgba(233,196,106,0.4)",
     padding: 18,
-    gap: 12,
+    gap: 10,
   },
   modalHeader: {
     flexDirection: "row",
@@ -1031,8 +1181,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  smallCloseBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#222634",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  highlightsBox: {
+    backgroundColor: "#10131C",
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "rgba(233,196,106,0.3)",
+    alignItems: "center",
+    gap: 8,
+  },
+  highlightsHeader: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  highlightsTitle: { color: "#E9C46A", fontSize: 12, fontWeight: "800", flex: 1 },
+  highlightsLoading: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 14 },
+  videoPlayerWrap: { borderRadius: 10, overflow: "hidden", backgroundColor: "#000" },
+
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  loadingText: { color: "#9CA3AF", fontSize: 13, fontWeight: "600" },
+  loadingText: { color: "#9CA3AF", fontSize: 12.5, fontWeight: "600" },
   listContainer: { gap: 10, paddingBottom: 16 },
   guiaCard: {
     backgroundColor: "#1A1E2D",
@@ -1061,23 +1238,80 @@ const styles = StyleSheet.create({
   },
   statusLive: { backgroundColor: "#EF4444" },
   statusText: { color: "#D1D5DB", fontSize: 9.5, fontWeight: "800" },
-  guiaLeagueText: { color: "#9CA3AF", fontSize: 10, fontWeight: "700", flex: 1, textAlign: "right" },
+  guiaLeagueText: {
+    color: "#9CA3AF",
+    fontSize: 10,
+    fontWeight: "700",
+    flex: 1,
+    textAlign: "right",
+  },
   guiaMatchRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
+    paddingVertical: 2,
   },
-  teamText: { color: "#FFF", fontSize: 13.5, fontWeight: "800", flex: 1 },
+  teamWithBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    flex: 1,
+  },
+  teamWithBadgeRight: {
+    justifyContent: "flex-end",
+  },
+  teamCrest: {
+    width: 22,
+    height: 22,
+  },
+  teamText: { color: "#FFF", fontSize: 13, fontWeight: "800", flexShrink: 1 },
   scoreBox: {
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(0,0,0,0.38)",
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(233,196,106,0.2)",
   },
-  scoreText: { color: "#E9C46A", fontSize: 13, fontWeight: "900" },
-  guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  guiaChannelsText: { color: "#E9C46A", fontSize: 11, fontWeight: "700", flex: 1 },
+  scoreText: { color: "#E9C46A", fontSize: 12.5, fontWeight: "900" },
+
+  guiaFooterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    flexWrap: "wrap",
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.05)",
+  },
+  guiaChannelsRow: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
+  guiaChannelsText: { color: "#D1D5DB", fontSize: 11, fontWeight: "700", flex: 1 },
+  matchActionsRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  actionPillBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(233,196,106,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(233,196,106,0.35)",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 7,
+  },
+  actionPillText: { color: "#E9C46A", fontSize: 10.5, fontWeight: "800" },
+  actionPillGoldBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#E9C46A",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 7,
+  },
+  actionPillGoldText: { color: "#000", fontSize: 10.5, fontWeight: "900" },
+
   searchInput: {
     backgroundColor: "#1A1E2D",
     color: "#FFF",
