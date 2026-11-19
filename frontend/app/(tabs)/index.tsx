@@ -227,7 +227,7 @@ export default function HomeTab() {
     const animMovies = Animated.loop(
       Animated.timing(scrollAnimMovies, {
         toValue: 1,
-        duration: 25000,
+        duration: 26000,
         easing: Easing.linear,
         useNativeDriver: true,
       })
@@ -237,7 +237,7 @@ export default function HomeTab() {
     const animSeries = Animated.loop(
       Animated.timing(scrollAnimSeries, {
         toValue: 1,
-        duration: 25000,
+        duration: 26000,
         easing: Easing.linear,
         useNativeDriver: true,
       })
@@ -318,12 +318,12 @@ export default function HomeTab() {
 
   const translateXMovies = scrollAnimMovies.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -400],
+    outputRange: [0, -520],
   });
 
   const translateXSeries = scrollAnimSeries.interpolate({
     inputRange: [0, 1],
-    outputRange: [-400, 0],
+    outputRange: [-520, 0],
   });
 
   return (
@@ -396,7 +396,7 @@ export default function HomeTab() {
                     <Image
                       source={{ uri: item.stream_icon }}
                       style={styles.fullSize}
-                      contentFit="cover"
+                      contentFit="contain"
                       cachePolicy="memory-disk"
                     />
                     <View style={styles.tickerGradient}>
@@ -431,7 +431,7 @@ export default function HomeTab() {
                     <Image
                       source={{ uri: s.cover }}
                       style={styles.fullSize}
-                      contentFit="cover"
+                      contentFit="contain"
                       cachePolicy="memory-disk"
                     />
                     <View style={styles.tickerGradient}>
@@ -885,7 +885,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
   headerIconBtn: { padding: 6 },
@@ -920,16 +920,18 @@ const styles = StyleSheet.create({
 
   mainLayoutContainer: { flex: 1, flexDirection: "row", gap: 16 },
   leftContainer: { flex: 1, justifyContent: "space-between" },
-  dynamicRowSection: { marginBottom: 8 },
-  sectionCategoryTitle: { color: "#FFF", fontSize: 13, fontWeight: "800", marginBottom: 6 },
-  tickerWrapper: { height: 106, overflow: "hidden", borderRadius: 12 },
+  dynamicRowSection: { marginBottom: 6 },
+  sectionCategoryTitle: { color: "#FFF", fontSize: 12.5, fontWeight: "800", marginBottom: 5 },
+  tickerWrapper: { height: 126, overflow: "hidden", borderRadius: 12 },
   tickerTrack: { flexDirection: "row", gap: 10 },
   tickerCard: {
-    width: 150,
-    height: 106,
+    width: 94,
+    height: 126,
     borderRadius: 10,
     overflow: "hidden",
     backgroundColor: "#152E3B",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   fullSize: { width: "100%", height: "100%" },
   tickerGradient: {
@@ -937,11 +939,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    backgroundColor: "rgba(0,0,0,0.78)",
+    paddingHorizontal: 5,
+    paddingVertical: 3,
   },
-  tickerTitle: { color: "#FFF", fontSize: 10, fontWeight: "700" },
+  tickerTitle: { color: "#FFF", fontSize: 9.5, fontWeight: "700" },
 
   bottomBarBelow: {
     flexDirection: "row",
