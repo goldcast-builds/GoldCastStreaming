@@ -6,12 +6,164 @@ import { colors, radius } from "../utils/theme";
 
 interface TrailerPreviewProps {
   title: string;
+  year?: string | number;
+  mediaType?: "movie" | "series" | "tv";
 }
 
-export function TrailerPreviewBox({ title }: TrailerPreviewProps) {
-  const [videoId, setVideoId] = useState<string | null>(null);
+interface CandidateVideo {
+  videoId: string;
+  title: string;
+  score: number;
+}
+
+const NOISE_TAGS = [
+  /\b(4k|uhd|fhd|hd|1080p|720p|480p|hdr|dv|dolby\s*vision|web-?dl|webrip|bluray|bdrip|camrip|x264|x265|hevc|aac|dual\s*audio)\b/gi,
+  /\b(dublado|legendado|nacional|pt-?br|multi|completo|epis[oó]dio\s*\d+|ep\.?\s*\d+|temp\.?\s*\d+|s\d{1,2}e\d{1,2}|season\s*\d+)\b/gi,
+  /\[[^\]]*\]|\([^)]*\)/g,
+];
+
+const BLOCKED_TERMS = [
+  "rickroll",
+  "never gonna give you up",
+  "karaoke",
+  "lyrics",
+  "letra",
+  "gameplay",
+  "walkthrough",
+  "10 hours",
+  "compilation",
+  "top 10",
+  "reaction",
+  "react",
+  "review",
+  "crítica",
+  "critica",
+  "ending",
+  "explained",
+  "recap",
+  "resumo",
+  "soundtrack",
+  "trilha sonora",
+  "theme song",
+  "full movie",
+  "filme completo",
+];
+
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanMediaTitle(rawTitle: string): string {
+  let cleaned = rawTitle;
+  for (const pattern of NOISE_TAGS) {
+    cleaned = cleaned.replace(pattern, " ");
+  }
+  return cleaned
+    .replace(/\s*[-–—:|/]+\s*$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractSearchCandidates(htmlText: string): Array<{ videoId: string; videoTitle: string }> {
+  const results: Array<{ videoId: string; videoTitle: string }> = [];
+  const seen = new Set<string>();
+
+  const rendererRegex =
+    /"videoId":"([a-zA-Z0-9_-]{11})"[\s\S]{0,600}?"title":\{"runs":\[\{"text":"([^"]+)"\}/g;
+
+  for (const match of htmlText.matchAll(rendererRegex)) {
+    const videoId = match[1];
+    const videoTitle = match[2]
+      .replace(/\\u0026/g, "&")
+      .replace(/\\"/g, '"')
+      .replace(/\\\//g, "/");
+
+    if (!seen.has(videoId)) {
+      seen.add(videoId);
+      results.push({ videoId, videoTitle });
+    }
+    if (results.length >= 25) break;
+  }
+
+  return results;
+}
+
+function scoreCandidate(
+  videoTitle: string,
+  cleanTitle: string,
+  year?: string | number,
+  mediaType?: "movie" | "series" | "tv"
+): number {
+  const normVideo = normalizeText(videoTitle);
+  const normTitle = normalizeText(cleanTitle);
+  if (!normVideo || !normTitle) return -100;
+
+  let score = 0;
+  const words = normTitle.split(" ").filter((w) => w.length > 1);
+
+  // Correspondência exata ou frase completa do título
+  if (normVideo.includes(normTitle)) {
+    score += 50;
+  } else if (words.length > 0) {
+    const matchedWords = words.filter((w) => normVideo.includes(w));
+    const ratio = matchedWords.length / words.length;
+    if (ratio < 0.7) {
+      return -100;
+    }
+    score += Math.round(ratio * 35);
+  }
+
+  // Sinais positivos de trailer / teaser
+  if (/\b(trailer|teaser|oficial|official)\b/.test(normVideo)) {
+    score += 20;
+  }
+  if (/\b(legendado|dublado|pt br|brasil|oficial)\b/.test(normVideo)) {
+    score += 8;
+  }
+
+  // Tipo de mídia (série/filme)
+  const isSeries = mediaType === "series" || mediaType === "tv";
+  if (isSeries && /\b(serie|series|temporada|season|1a temporada|primeira temporada)\b/.test(normVideo)) {
+    score += 10;
+  }
+
+  // Validação de ano quando informado
+  const cleanYear = year ? String(year).match(/\b(19|20)\d{2}\b/)?.[0] : undefined;
+  if (cleanYear) {
+    if (normVideo.includes(cleanYear)) {
+      score += 18;
+    } else {
+      const yearsInVideo = [...normVideo.matchAll(/\b(19|20)\d{2}\b/g)].map((m) => m[0]);
+      if (yearsInVideo.length > 0 && !yearsInVideo.includes(cleanYear)) {
+        score -= 25;
+      }
+    }
+  }
+
+  // Penalidades para ruído, músicas, reacts, resumos e clones
+  for (const blocked of BLOCKED_TERMS) {
+    if (normVideo.includes(blocked)) {
+      score -= 60;
+    }
+  }
+
+  return score;
+}
+
+export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProps) {
+  const [candidates, setCandidates] = useState<CandidateVideo[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [reportIndex, setReportIndex] = useState(0);
+
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [title, year, mediaType]);
 
   useEffect(() => {
     if (!title) return;
@@ -20,29 +172,57 @@ export function TrailerPreviewBox({ title }: TrailerPreviewProps) {
     const fetchTrailer = async () => {
       setLoading(true);
       try {
-        // Altera a query de busca se o usuário reportar que o vídeo está errado
-        const searchQuery = reportIndex > 0 
-          ? `${title} trailer legendado pt-br oficial ${reportIndex}` 
-          : `${title} trailer oficial legendado`;
+        const cleanTitle = cleanMediaTitle(title) || title.trim();
+        const yearSuffix = year ? ` ${year}` : "";
+        const categoryWord = mediaType === "series" || mediaType === "tv" ? "serie" : "filme";
 
-        const query = encodeURIComponent(searchQuery);
-        const response = await fetch(`https://www.youtube.com/results?search_query=${query}`);
-        const htmlText = await response.text();
+        const queries = [
+          `"${cleanTitle}"${yearSuffix} trailer oficial`,
+          `${cleanTitle}${yearSuffix} ${categoryWord} trailer oficial legendado`,
+          `${cleanTitle}${yearSuffix} trailer`,
+        ];
 
-        // Extrai múltiplos IDs de vídeos possíveis dos resultados do YouTube
-        const matches = [...htmlText.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)];
-        
-        if (matches && matches[reportIndex] && matches[reportIndex][1] && isMounted) {
-          setVideoId(matches[reportIndex][1]);
-        } else if (matches && matches[0] && isMounted) {
-          setVideoId(matches[0][1]);
-        } else if (isMounted) {
-          setVideoId("dQw4w9WgXcQ");
+        const aggregated = new Map<string, CandidateVideo>();
+
+        for (const q of queries) {
+          const encoded = encodeURIComponent(q);
+          const response = await fetch(`https://www.youtube.com/results?search_query=${encoded}`);
+          if (!response.ok) continue;
+
+          const htmlText = await response.text();
+          const extracted = extractSearchCandidates(htmlText);
+
+          for (const item of extracted) {
+            const score = scoreCandidate(item.videoTitle, cleanTitle, year, mediaType);
+            if (score >= 30) {
+              const existing = aggregated.get(item.videoId);
+              if (!existing || score > existing.score) {
+                aggregated.set(item.videoId, {
+                  videoId: item.videoId,
+                  title: item.videoTitle,
+                  score,
+                });
+              }
+            }
+          }
+
+          if (aggregated.size >= 4) break;
+        }
+
+        const ranked = [...aggregated.values()].sort((a, b) => b.score - a.score);
+
+        if (isMounted) {
+          setCandidates(ranked);
+          setCurrentIndex(0);
         }
       } catch {
-        if (isMounted) setVideoId("dQw4w9WgXcQ");
+        if (isMounted) {
+          setCandidates([]);
+        }
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -50,12 +230,14 @@ export function TrailerPreviewBox({ title }: TrailerPreviewProps) {
     return () => {
       isMounted = false;
     };
-  }, [title, reportIndex]);
+  }, [title, year, mediaType]);
 
   const handleReportIncorrect = () => {
-    // Incrementa o índice para buscar uma alternativa diferente na lista do YouTube
-    setReportIndex((prev) => prev + 1);
+    if (candidates.length === 0) return;
+    setCurrentIndex((prev) => (prev + 1) % candidates.length);
   };
+
+  const activeVideoId = candidates[currentIndex]?.videoId ?? null;
 
   return (
     <View style={styles.wrapper}>
@@ -71,25 +253,39 @@ export function TrailerPreviewBox({ title }: TrailerPreviewProps) {
           <View style={styles.loadingBox}>
             <ActivityIndicator size="small" color={colors.gold} />
           </View>
-        ) : videoId ? (
+        ) : activeVideoId ? (
           <YoutubePlayer
             height={160}
             width={300}
             play={false}
-            videoId={videoId}
+            videoId={activeVideoId}
             webViewStyle={{ opacity: 0.99 }}
           />
-        ) : null}
+        ) : (
+          <View style={styles.loadingBox}>
+            <Ionicons name="videocam-off-outline" size={22} color="#9CA3AF" />
+            <Text style={styles.emptyText}>Trailer não encontrado</Text>
+          </View>
+        )}
       </View>
 
       {/* Botão de Reportar Vídeo Incorreto */}
       <Pressable
         focusable={true}
         onPress={handleReportIncorrect}
-        style={({ focused }) => [styles.reportBtn, focused && styles.reportBtnFocused]}
+        disabled={candidates.length <= 1}
+        style={({ focused }) => [
+          styles.reportBtn,
+          focused && styles.reportBtnFocused,
+          candidates.length <= 1 && styles.reportBtnDisabled,
+        ]}
       >
         <Ionicons name="alert-circle-outline" size={12} color="#EF4444" />
-        <Text style={styles.reportText}>Não é este o trailer? Reportar / Trocar</Text>
+        <Text style={styles.reportText}>
+          {candidates.length > 1
+            ? `Não é este o trailer? Trocar (${currentIndex + 1}/${candidates.length})`
+            : "Não é este o trailer? Reportar / Trocar"}
+        </Text>
       </Pressable>
     </View>
   );
@@ -137,6 +333,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
+  },
+  emptyText: {
+    color: "#9CA3AF",
+    fontSize: 11,
+    fontWeight: "700",
   },
   reportBtn: {
     flexDirection: "row",
@@ -152,6 +354,9 @@ const styles = StyleSheet.create({
   reportBtnFocused: {
     backgroundColor: "#EF4444",
     borderColor: "#FFF",
+  },
+  reportBtnDisabled: {
+    opacity: 0.55,
   },
   reportText: {
     color: "#FCA5A5",
