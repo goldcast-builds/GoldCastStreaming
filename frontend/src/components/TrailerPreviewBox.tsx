@@ -22,15 +22,18 @@ const NOISE_TAGS = [
   /\[[^\]]*\]|\([^)]*\)/g,
 ];
 
-const BLOCKED_TERMS = [
+const HARD_BLOCKED = [
   "rickroll",
   "never gonna give you up",
   "karaoke",
-  "lyrics",
-  "letra",
   "gameplay",
   "walkthrough",
   "10 hours",
+];
+
+const SOFT_BLOCKED = [
+  "lyrics",
+  "letra",
   "compilation",
   "top 10",
   "reaction",
@@ -38,13 +41,9 @@ const BLOCKED_TERMS = [
   "review",
   "crítica",
   "critica",
-  "ending",
   "explained",
   "recap",
   "resumo",
-  "soundtrack",
-  "trilha sonora",
-  "theme song",
   "full movie",
   "filme completo",
 ];
@@ -74,8 +73,9 @@ function extractSearchCandidates(htmlText: string): Array<{ videoId: string; vid
   const results: Array<{ videoId: string; videoTitle: string }> = [];
   const seen = new Set<string>();
 
+  // Tenta extrair videoId + título próximo no HTML/JSON do YouTube
   const rendererRegex =
-    /"videoId":"([a-zA-Z0-9_-]{11})"[\s\S]{0,600}?"title":\{"runs":\[\{"text":"([^"]+)"\}/g;
+    /"videoId":"([a-zA-Z0-9_-]{11})"[\s\S]{0,800}?"title":\{"runs":\[\{"text":"([^"]+)"\}/g;
 
   for (const match of htmlText.matchAll(rendererRegex)) {
     const videoId = match[1];
@@ -91,6 +91,19 @@ function extractSearchCandidates(htmlText: string): Array<{ videoId: string; vid
     if (results.length >= 25) break;
   }
 
+  // Fallback de extração apenas de videoId caso o formato do JSON varie
+  if (results.length === 0) {
+    const idMatches = [...htmlText.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)];
+    for (const m of idMatches) {
+      const videoId = m[1];
+      if (!seen.has(videoId)) {
+        seen.add(videoId);
+        results.push({ videoId, videoTitle: "" });
+      }
+      if (results.length >= 15) break;
+    }
+  }
+
   return results;
 }
 
@@ -102,54 +115,56 @@ function scoreCandidate(
 ): number {
   const normVideo = normalizeText(videoTitle);
   const normTitle = normalizeText(cleanTitle);
-  if (!normVideo || !normTitle) return -100;
+  if (!normTitle) return 0;
+
+  // Se o HTML não trouxe título legível, dá nota neutra baixa em vez de descartar tudo
+  if (!normVideo) return 15;
+
+  for (const blocked of HARD_BLOCKED) {
+    if (normVideo.includes(blocked)) return -999;
+  }
 
   let score = 0;
   const words = normTitle.split(" ").filter((w) => w.length > 1);
 
-  // Correspondência exata ou frase completa do título
   if (normVideo.includes(normTitle)) {
-    score += 50;
+    score += 45;
   } else if (words.length > 0) {
     const matchedWords = words.filter((w) => normVideo.includes(w));
     const ratio = matchedWords.length / words.length;
-    if (ratio < 0.7) {
-      return -100;
+    if (ratio < 0.5) {
+      return -50;
     }
-    score += Math.round(ratio * 35);
+    score += Math.round(ratio * 30);
   }
 
-  // Sinais positivos de trailer / teaser
-  if (/\b(trailer|teaser|oficial|official)\b/.test(normVideo)) {
+  if (/\b(trailer|teaser|promo|preview|oficial|official)\b/.test(normVideo)) {
     score += 20;
   }
   if (/\b(legendado|dublado|pt br|brasil|oficial)\b/.test(normVideo)) {
     score += 8;
   }
 
-  // Tipo de mídia (série/filme)
   const isSeries = mediaType === "series" || mediaType === "tv";
-  if (isSeries && /\b(serie|series|temporada|season|1a temporada|primeira temporada)\b/.test(normVideo)) {
-    score += 10;
+  if (isSeries && /\b(serie|series|temporada|season)\b/.test(normVideo)) {
+    score += 8;
   }
 
-  // Validação de ano quando informado
   const cleanYear = year ? String(year).match(/\b(19|20)\d{2}\b/)?.[0] : undefined;
   if (cleanYear) {
     if (normVideo.includes(cleanYear)) {
-      score += 18;
+      score += 12;
     } else {
       const yearsInVideo = [...normVideo.matchAll(/\b(19|20)\d{2}\b/g)].map((m) => m[0]);
       if (yearsInVideo.length > 0 && !yearsInVideo.includes(cleanYear)) {
-        score -= 25;
+        score -= 15;
       }
     }
   }
 
-  // Penalidades para ruído, músicas, reacts, resumos e clones
-  for (const blocked of BLOCKED_TERMS) {
-    if (normVideo.includes(blocked)) {
-      score -= 60;
+  for (const soft of SOFT_BLOCKED) {
+    if (normVideo.includes(soft)) {
+      score -= 35;
     }
   }
 
@@ -174,19 +189,25 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
       try {
         const cleanTitle = cleanMediaTitle(title) || title.trim();
         const yearSuffix = year ? ` ${year}` : "";
-        const categoryWord = mediaType === "series" || mediaType === "tv" ? "serie" : "filme";
 
         const queries = [
-          `"${cleanTitle}"${yearSuffix} trailer oficial`,
-          `${cleanTitle}${yearSuffix} ${categoryWord} trailer oficial legendado`,
+          `${cleanTitle}${yearSuffix} trailer oficial`,
           `${cleanTitle}${yearSuffix} trailer`,
+          `${cleanTitle} trailer`,
         ];
 
-        const aggregated = new Map<string, CandidateVideo>();
+        const strictMap = new Map<string, CandidateVideo>();
+        const fallbackMap = new Map<string, CandidateVideo>();
 
         for (const q of queries) {
           const encoded = encodeURIComponent(q);
-          const response = await fetch(`https://www.youtube.com/results?search_query=${encoded}`);
+          const response = await fetch(`https://www.youtube.com/results?search_query=${encoded}`, {
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+              "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
+          });
           if (!response.ok) continue;
 
           const htmlText = await response.text();
@@ -194,25 +215,30 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
 
           for (const item of extracted) {
             const score = scoreCandidate(item.videoTitle, cleanTitle, year, mediaType);
-            if (score >= 30) {
-              const existing = aggregated.get(item.videoId);
-              if (!existing || score > existing.score) {
-                aggregated.set(item.videoId, {
-                  videoId: item.videoId,
-                  title: item.videoTitle,
-                  score,
-                });
+            if (score <= -900) continue;
+
+            if (score >= 10) {
+              const prev = strictMap.get(item.videoId);
+              if (!prev || score > prev.score) {
+                strictMap.set(item.videoId, { videoId: item.videoId, title: item.videoTitle, score });
+              }
+            } else if (score > -50) {
+              const prev = fallbackMap.get(item.videoId);
+              if (!prev || score > prev.score) {
+                fallbackMap.set(item.videoId, { videoId: item.videoId, title: item.videoTitle, score });
               }
             }
           }
 
-          if (aggregated.size >= 4) break;
+          if (strictMap.size >= 4) break;
         }
 
-        const ranked = [...aggregated.values()].sort((a, b) => b.score - a.score);
+        const rankedStrict = [...strictMap.values()].sort((a, b) => b.score - a.score);
+        const rankedFallback = [...fallbackMap.values()].sort((a, b) => b.score - a.score);
+        const finalList = rankedStrict.length > 0 ? rankedStrict : rankedFallback;
 
         if (isMounted) {
-          setCandidates(ranked);
+          setCandidates(finalList);
           setCurrentIndex(0);
         }
       } catch {
