@@ -1,24 +1,34 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ScrollView, ActivityIndicator, Alert } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { useSession } from "../../src/store/session";
 
 export default function LiveScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ search?: string; query?: string }>();
+  const initialQuery = (params?.search || params?.query || "").trim();
+
   const session = useSession((s) => s.session);
   const catalog = useSession((s) => s.catalog);
   const loadLive = useSession((s) => s.loadLive);
   const setQueue = useSession((s) => s.setQueue);
   const loading = useSession((s) => s.loading.live);
   const parentalPin = useSession((s) => s.parentalPin || s.settings?.parentalPin || "1234");
-  
-  const [searchQuery, setSearchQuery] = useState("");
+
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (initialQuery) {
+      setSearchQuery(initialQuery);
+      setSelectedCategory("all");
+    }
+  }, [initialQuery]);
 
   useEffect(() => {
     if (!catalog.liveLoaded || (catalog.live || []).length === 0) {
@@ -123,6 +133,11 @@ export default function LiveScreen() {
           autoCorrect={false}
           autoCapitalize="none"
         />
+        {searchQuery.length > 0 && (
+          <Pressable focusable={true} onPress={() => setSearchQuery("")} hitSlop={8}>
+            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.contentBody}>
@@ -148,7 +163,7 @@ export default function LiveScreen() {
                 const channelId = String(item?.stream_id || item?.id || "");
                 const channelName = item?.name || item?.title || "Canal sem nome";
                 const logoUri = item?.stream_icon || "";
-                
+
                 return (
                   <Pressable
                     focusable={true}
@@ -220,7 +235,7 @@ export default function LiveScreen() {
             <Ionicons name="lock-closed" size={32} color="#E9C46A" />
             <Text style={styles.modalTitle}>Controlo Parental</Text>
             <Text style={styles.modalSub}>Introduza o PIN para aceder ao canal restrito</Text>
-            
+
             <TextInput
               style={styles.pinInput}
               keyboardType="numeric"
