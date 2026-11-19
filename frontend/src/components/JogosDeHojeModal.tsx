@@ -16,7 +16,7 @@ import { colors } from "../utils/theme";
 type MatchStatus = "live" | "scheduled" | "finished";
 type FilterTab = "all" | "live" | "scheduled";
 
-interface FutebolMatch {
+export interface FutebolMatch {
   id: string;
   time: string;
   league: string;
@@ -62,9 +62,18 @@ const FALLBACK_MATCHES: FutebolMatch[] = [
 ];
 
 const LEAGUE_ENDPOINTS = [
-  { url: "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/scoreboard", label: "Brasileirão Série A" },
-  { url: "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard", label: "UEFA Champions League" },
-  { url: "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard", label: "Premier League" },
+  {
+    url: "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/scoreboard",
+    label: "Brasileirão Série A",
+  },
+  {
+    url: "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard",
+    label: "UEFA Champions League",
+  },
+  {
+    url: "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
+    label: "Premier League",
+  },
 ];
 
 function formatBrazilTime(dateIso?: string): string {
@@ -105,7 +114,7 @@ async function fetchFootballScoreboard(): Promise<FutebolMatch[]> {
         const awayName = away?.team?.shortDisplayName || away?.team?.displayName;
         if (!homeName || !awayName) continue;
 
-        const state = event?.status?.type?.state; // "pre" | "in" | "post"
+        const state = event?.status?.type?.state;
         let status: MatchStatus = "scheduled";
         let timeLabel = formatBrazilTime(event?.date);
 
@@ -126,8 +135,10 @@ async function fetchFootballScoreboard(): Promise<FutebolMatch[]> {
             ? [...new Set(broadcastNames)].join(" • ")
             : "Transmissão ao Vivo";
 
-        const homeScoreNum = state !== "pre" && home?.score !== undefined ? Number(home.score) : null;
-        const awayScoreNum = state !== "pre" && away?.score !== undefined ? Number(away.score) : null;
+        const homeScoreNum =
+          state !== "pre" && home?.score !== undefined ? Number(home.score) : null;
+        const awayScoreNum =
+          state !== "pre" && away?.score !== undefined ? Number(away.score) : null;
 
         collected.push({
           id: String(event?.id || `${endpoint.label}-${homeName}-${awayName}`),
@@ -135,14 +146,16 @@ async function fetchFootballScoreboard(): Promise<FutebolMatch[]> {
           league: endpoint.label,
           homeTeam: homeName,
           awayTeam: awayName,
-          homeScore: homeScoreNum !== null && !Number.isNaN(homeScoreNum) ? homeScoreNum : null,
-          awayScore: awayScoreNum !== null && !Number.isNaN(awayScoreNum) ? awayScoreNum : null,
+          homeScore:
+            homeScoreNum !== null && !Number.isNaN(homeScoreNum) ? homeScoreNum : null,
+          awayScore:
+            awayScoreNum !== null && !Number.isNaN(awayScoreNum) ? awayScoreNum : null,
           status,
           channels,
         });
       }
     } catch {
-      // Continua para o próximo campeonato sem derrubar os demais
+      // Continua para o próximo campeonato sem interromper os demais
     }
   }
 
@@ -153,8 +166,12 @@ async function fetchFootballScoreboard(): Promise<FutebolMatch[]> {
 
   const cachedRaw = await AsyncStorage.getItem(CACHE_KEY).catch(() => null);
   if (cachedRaw) {
-    const parsed = JSON.parse(cachedRaw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    try {
+      const parsed = JSON.parse(cachedRaw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {
+      // Ignora cache corrompido e segue para fallback
+    }
   }
 
   return FALLBACK_MATCHES;
