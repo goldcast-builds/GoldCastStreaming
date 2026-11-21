@@ -165,7 +165,6 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.gridContainer} showsVerticalScrollIndicator={false}>
-        {/* 1. Conta */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -176,7 +175,6 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Conta</Text>
         </Pressable>
 
-        {/* 2. Atualizar App */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -189,7 +187,6 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Atualizar App</Text>
         </Pressable>
 
-        {/* 3. Listas e Perfis */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -200,7 +197,6 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Listas e Perfis</Text>
         </Pressable>
 
-        {/* 4. Listas M3U */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -211,7 +207,6 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Listas M3U</Text>
         </Pressable>
 
-        {/* 5. Atualizar Conteúdo */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -222,7 +217,6 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Atualizar conteúdo</Text>
         </Pressable>
 
-        {/* 6. Reprodução */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -238,7 +232,6 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Reprodução</Text>
         </Pressable>
 
-        {/* 7. Histórico e favoritos */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -251,7 +244,6 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Histórico e favoritos</Text>
         </Pressable>
 
-        {/* 8. Controlo Parental */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -262,7 +254,6 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Controlo Parental</Text>
         </Pressable>
 
-        {/* 9. Relatório de Diagnóstico (LOGS DO SISTEMA) */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -273,7 +264,6 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Diagnóstico (Logs)</Text>
         </Pressable>
 
-        {/* 10. Limpar cache */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -284,7 +274,6 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Limpar cache</Text>
         </Pressable>
 
-        {/* 11. Sobre */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -295,7 +284,6 @@ export default function SettingsScreen() {
           <Text style={styles.cardText}>Sobre</Text>
         </Pressable>
 
-        {/* 12. Sair */}
         <Pressable
           focusable={true}
           accessible={true}
@@ -311,7 +299,6 @@ export default function SettingsScreen() {
         </Pressable>
       </ScrollView>
 
-      {/* MODAL DE HISTÓRICO DE LOGS E RELATÓRIO DE DIAGNÓSTICO */}
       <Modal
         visible={showLogsModal}
         animationType="fade"
@@ -428,7 +415,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1.5,
   },
-
   gridContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -462,7 +448,6 @@ const styles = StyleSheet.create({
   logoutCard: {
     borderColor: "rgba(231,111,81,0.3)",
   },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
@@ -504,7 +489,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-
   logsScroll: {
     flex: 1,
     backgroundColor: "#10222B",
@@ -546,7 +530,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     flex: 1,
   },
-
   modalFooter: {
     flexDirection: "row",
     justifyContent: "flex-end",
