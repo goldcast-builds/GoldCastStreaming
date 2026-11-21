@@ -122,13 +122,13 @@ export default function MovieDetails() {
           ) : null}
           <LinearGradient colors={["rgba(0,0,0,0.35)", colors.bg]} style={StyleSheet.absoluteFill} />
 
-          {/* PAINEL DE AVALIAÇÕES (IMDb, Rotten, Metacritic) E FICHA TÉCNICA */}
-          <MovieMetadataPanel title={title} />
+          {/* PAINEL DE AVALIAÇÕES E TRAILER NO TOPO */}
+          <View style={styles.topWidgetsLayer}>
+            <MovieMetadataPanel title={title} />
+            <TrailerPreviewBox title={title} />
+          </View>
 
-          {/* TRAILER DO YOUTUBE */}
-          <TrailerPreviewBox title={title} />
-
-          <View style={[styles.heroRow, { paddingTop: insets.top + spacing.sm }]}>
+          <View style={[styles.heroRow, { paddingTop: Math.max(insets.top + 88, 106) }]}>
             <View style={styles.posterWrap}>
               {poster ? (
                 <Image
@@ -141,7 +141,7 @@ export default function MovieDetails() {
                 <Ionicons name="film" size={40} color={colors.textDim} />
               )}
             </View>
-            <View style={{ flex: 1, justifyContent: "flex-end", gap: 6 }}>
+            <View style={{ flex: 1, justifyContent: "flex-end", gap: 6, zIndex: 3 }}>
               <Text style={styles.title}>{title}</Text>
               {rows.slice(0, 3).map(([k, v]) => (
                 <Text key={k} style={styles.metaLine} numberOfLines={1}>
@@ -182,7 +182,7 @@ export default function MovieDetails() {
                 </>
               )}
 
-              {/* CENAS DO FILME (ALTERA O PLANO DE FUNDO AO FOCAR/TOCAR) */}
+              {/* CENAS DO FILME */}
               {enrichment?.gallery && enrichment.gallery.length > 0 && (
                 <View style={{ gap: 8 }}>
                   <View style={styles.sectionHeaderRow}>
@@ -351,8 +351,9 @@ function TVBackButton({ onPress, top }: { onPress: () => void; top: number }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  hero: { minHeight: 300, overflow: "hidden" },
-  heroRow: { flexDirection: "row", gap: spacing.lg, padding: spacing.lg, paddingTop: 60 },
+  hero: { minHeight: 320, overflow: "hidden" },
+  topWidgetsLayer: { zIndex: 2 },
+  heroRow: { flexDirection: "row", gap: spacing.lg, padding: spacing.lg, paddingTop: 106, zIndex: 3 },
   posterWrap: {
     width: 130,
     aspectRatio: 2 / 3,
