@@ -30,6 +30,7 @@ export default function ContinueWatchingScreen() {
       <View style={styles.header}>
         <Pressable
           focusable={true}
+          accessible={true}
           onPress={() => router.back()}
           style={({ focused }) => [styles.backBtn, focused && styles.cardFocused]}
           hitSlop={10}
@@ -54,19 +55,25 @@ export default function ContinueWatchingScreen() {
           contentContainerStyle={styles.gridContainer}
           columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item: entry }: { item: any }) => {
+          removeClippedSubviews={false}
+          renderItem={({ item: entry, index }: { item: any; index: number }) => {
             const media = entry.item;
             const position = Number(entry?.position || 0);
             const duration = Number(entry?.duration || 0);
             const percentage =
-              duration > 0 ? Math.min(100, Math.max(4, Math.round((position / duration) * 100))) : 20;
+              duration > 0
+                ? Math.min(100, Math.max(4, Math.round((position / duration) * 100)))
+                : 20;
 
             return (
               <Pressable
                 focusable={true}
+                accessible={true}
+                hasTVPreferredFocus={index === 0}
                 onPress={() => {
                   const targetId = String(media.id);
-                  const resumeParam = position > 0 ? { resumeSec: String(Math.floor(position)) } : {};
+                  const resumeParam =
+                    position > 0 ? { resumeSec: String(Math.floor(position)) } : {};
 
                   if (media.kind === "vod" || media.kind === "movie") {
                     router.push({
