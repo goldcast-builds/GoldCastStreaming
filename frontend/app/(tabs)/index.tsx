@@ -18,6 +18,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { useSession } from "../../src/store/session";
+import { xtream } from "../../src/services/xtream";
 
 type MatchStatus = "AO VIVO" | "EM BREVE" | "ENCERRADO";
 type FilterTab = "todos" | "ao_vivo" | "proximos";
@@ -33,6 +34,14 @@ interface GuiaMatch {
   score: string;
   status: MatchStatus;
   channels: string;
+}
+
+interface EpgProgramInfo {
+  title: string;
+  startLabel: string;
+  endLabel: string;
+  progress: number;
+  nextTitle?: string;
 }
 
 const FUTEBOL_CACHE_KEY = "@goldcast_home_futebol_v2";
@@ -65,6 +74,47 @@ function formatHoraBR(iso?: string): string {
   } catch {
     return "Hoje";
   }
+}
+
+function parseEpgTimestamp(raw: any): number {
+  if (!raw) return 0;
+  const num = Number(raw);
+  if (Number.isFinite(num) && num > 0) {
+    return num < 2_000_000_000 ? num * 1000 : num;
+  }
+  const parsed = Date.parse(String(raw));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function formatEpgTime(raw: any): string {
+  if (!raw) return "";
+  const num = Number(raw);
+  const date =
+    Number.isFinite(num) && num > 0
+      ? new Date(num < 2_000_000_000 ? num * 1000 : num)
+      : new Date(String(raw));
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  } catch {
+    return "";
+  }
+}
+
+function decodeBase64Safe(val: any): string {
+  if (!val || typeof val !== "string") return "";
+  if (/^[A-Za-z0-9+/=]+$/.test(val) && val.length % 4 === 0) {
+    try {
+      if (typeof globalThis.atob === "function") {
+        return decodeURIComponent(escape(globalThis.atob(val)));
+      }
+    } catch {}
+  }
+  return val;
 }
 
 async function buscarMelhoresMomentosVideoId(query: string): Promise<string | null> {
@@ -145,9 +195,7 @@ async function buscarJogosFutebolHoje(): Promise<GuiaMatch[]> {
           channels,
         });
       }
-    } catch {
-      // Segue para a próxima liga sem interromper
-    }
+    } catch {}
   }
 
   if (lista.length > 0) {
@@ -209,7 +257,6 @@ export default function HomeTab() {
   const [loadingJogos, setLoadingJogos] = useState(false);
   const [refreshingJogos, setRefreshingJogos] = useState(false);
 
-  // Estado do player de Melhores Momentos
   const [highlightsMatch, setHighlightsMatch] = useState<GuiaMatch | null>(null);
   const [highlightsVideoId, setHighlightsVideoId] = useState<string | null>(null);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
@@ -217,6 +264,7 @@ export default function HomeTab() {
   const [epgCategories, setEpgCategories] = useState<any[]>([]);
   const [selectedEpgCat, setSelectedEpgCat] = useState<string>("all");
   const [epgChannels, setEpgChannels] = useState<any[]>([]);
+  const [epgByChannel, setEpgByChannel] = useState<Record<string, EpgProgramInfo>>({});
 
   const scrollAnimMovies = useRef(new Animated.Value(0)).current;
   const scrollAnimSeries = useRef(new Animated.Value(0)).current;
@@ -292,11 +340,88 @@ export default function HomeTab() {
   }, [catalog]);
 
   const filteredEpgChannels = useMemo(() => {
-    if (selectedEpgCat === "all") return epgChannels.slice(0, 30);
+    if (selectedEpgCat === "all") return epgChannels.slice(0, 40);
     return epgChannels
       .filter((c) => String(c?.category_id) === String(selectedEpgCat))
-      .slice(0, 30);
+      .slice(0, 40);
   }, [epgChannels, selectedEpgCat]);
+
+  useEffect(() => {
+    if (!showEpgModal || !session || filteredEpgChannels.length === 0) return;
+    let isMounted = true;
+
+    const fetchEpgData = async () => {
+      const newMap: Record<string, EpgProgramInfo> = {};
+      const visibleSlice = filteredEpgChannels.slice(0, 16);
+
+      await Promise.all(
+        visibleSlice.map(async (ch: any) => {
+          const chId = String(ch?.stream_id || ch?.id || "");
+          if (!chId) return;
+
+          try {
+            let entries: any[] = [];
+            if (typeof (xtream as any)?.getShortEpg === "function") {
+              const res = await (xtream as any).getShortEpg(session, chId, 4);
+              entries = Array.isArray(res?.epg_listings)
+                ? res.epg_listings
+                : Array.isArray(res)
+                ? res
+                : [];
+            } else if (typeof (xtream as any)?.getEpg === "function") {
+              const res = await (xtream as any).getEpg(session, chId);
+              entries = Array.isArray(res?.epg_listings)
+                ? res.epg_listings
+                : Array.isArray(res)
+                ? res
+                : [];
+            }
+
+            if (!entries.length) return;
+
+            const nowMs = Date.now();
+            const currentIdx = entries.findIndex((e: any) => {
+              const start = parseEpgTimestamp(e?.start_timestamp || e?.start);
+              const stop = parseEpgTimestamp(e?.stop_timestamp || e?.end);
+              return start > 0 && stop > start && nowMs >= start && nowMs <= stop;
+            });
+
+            const currentEntry = currentIdx >= 0 ? entries[currentIdx] : entries[0];
+            const nextEntry = currentIdx >= 0 ? entries[currentIdx + 1] : entries[1];
+
+            const startMs = parseEpgTimestamp(currentEntry?.start_timestamp || currentEntry?.start);
+            const stopMs = parseEpgTimestamp(currentEntry?.stop_timestamp || currentEntry?.end);
+            const progress =
+              startMs > 0 && stopMs > startMs
+                ? Math.min(1, Math.max(0, (nowMs - startMs) / (stopMs - startMs)))
+                : 0.35;
+
+            const progTitle =
+              decodeBase64Safe(currentEntry?.title) || currentEntry?.title || "Programação no Ar";
+            const nextProgTitle =
+              decodeBase64Safe(nextEntry?.title) || nextEntry?.title || undefined;
+
+            newMap[chId] = {
+              title: progTitle,
+              startLabel: formatEpgTime(currentEntry?.start_timestamp || currentEntry?.start),
+              endLabel: formatEpgTime(currentEntry?.stop_timestamp || currentEntry?.end),
+              progress,
+              nextTitle: nextProgTitle,
+            };
+          } catch {}
+        })
+      );
+
+      if (isMounted) {
+        setEpgByChannel((prev) => ({ ...prev, ...newMap }));
+      }
+    };
+
+    fetchEpgData();
+    return () => {
+      isMounted = false;
+    };
+  }, [showEpgModal, session, filteredEpgChannels]);
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim() || searchQuery.trim().length < 2) {
@@ -672,7 +797,6 @@ export default function HomeTab() {
               </View>
             </View>
 
-            {/* Player de Melhores Momentos quando selecionado */}
             {highlightsMatch && (
               <View style={styles.highlightsBox}>
                 <View style={styles.highlightsHeader}>
@@ -764,7 +888,6 @@ export default function HomeTab() {
                       </Text>
                     </View>
 
-                    {/* Confronto com Escudos */}
                     <View style={styles.guiaMatchRow}>
                       <View style={styles.teamWithBadge}>
                         {g.logoA ? (
@@ -806,7 +929,6 @@ export default function HomeTab() {
                       </View>
                     </View>
 
-                    {/* Rodapé com Canais + Botões de Ação */}
                     <View style={styles.guiaFooterRow}>
                       <View style={styles.guiaChannelsRow}>
                         <Ionicons name="tv-outline" size={13} color="#E9C46A" />
@@ -943,7 +1065,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* MODAL EPG RÁPIDO */}
+      {/* MODAL EPG RICO EM TEMPO REAL */}
       <Modal
         visible={showEpgModal}
         animationType="fade"
@@ -953,7 +1075,13 @@ export default function HomeTab() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📺 GUIA DE CANAIS (EPG)</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={styles.modalIconBox}>
+                  <Ionicons name="tv" size={18} color="#E9C46A" />
+                </View>
+                <Text style={styles.modalTitle}>📺 GUIA DE PROGRAMAÇÃO (EPG AO VIVO)</Text>
+              </View>
+
               <Pressable
                 onPress={() => setShowEpgModal(false)}
                 style={styles.closeBtn}
@@ -966,7 +1094,7 @@ export default function HomeTab() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={{ maxHeight: 40, marginBottom: 10 }}
+              style={{ maxHeight: 38, marginBottom: 8 }}
               contentContainerStyle={{ gap: 8 }}
             >
               <Pressable
@@ -1002,25 +1130,78 @@ export default function HomeTab() {
             </ScrollView>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
-              {filteredEpgChannels.map((ch: any, idx: number) => (
-                <Pressable
-                  key={`epg-ch-${ch?.stream_id || idx}`}
-                  focusable={true}
-                  onPress={() => {
-                    setShowEpgModal(false);
-                    router.push({
-                      pathname: "/(tabs)/live",
-                      params: { search: ch?.name || ch?.title || "" },
-                    });
-                  }}
-                  style={styles.searchResultRow}
-                >
-                  <Ionicons name="tv-outline" size={16} color="#E9C46A" />
-                  <Text style={styles.searchResultText} numberOfLines={1}>
-                    {ch?.name || ch?.title}
-                  </Text>
-                </Pressable>
-              ))}
+              {filteredEpgChannels.map((ch: any, idx: number) => {
+                const chId = String(ch?.stream_id || ch?.id || idx);
+                const chName = ch?.name || ch?.title || "Canal";
+                const chLogo = ch?.stream_icon || "";
+                const epg = epgByChannel[chId];
+
+                return (
+                  <Pressable
+                    key={`epg-ch-${chId}-${idx}`}
+                    focusable={true}
+                    onPress={() => {
+                      setShowEpgModal(false);
+                      router.push({
+                        pathname: "/(tabs)/live",
+                        params: { search: chName },
+                      });
+                    }}
+                    style={({ focused }) => [
+                      styles.epgChannelCard,
+                      focused && styles.cardFocused,
+                    ]}
+                  >
+                    <View style={styles.epgChannelLeft}>
+                      {chLogo ? (
+                        <Image
+                          source={{ uri: chLogo }}
+                          style={styles.epgChannelLogo}
+                          contentFit="contain"
+                          cachePolicy="memory-disk"
+                        />
+                      ) : (
+                        <View style={styles.epgLogoPlaceholder}>
+                          <Ionicons name="tv-outline" size={18} color="#E9C46A" />
+                        </View>
+                      )}
+                      <Text style={styles.epgChannelName} numberOfLines={1}>
+                        {chName}
+                      </Text>
+                    </View>
+
+                    <View style={styles.epgProgramCenter}>
+                      <View style={styles.epgProgramHeader}>
+                        <Text style={styles.epgProgramTitle} numberOfLines={1}>
+                          {epg?.title || "Programação em direto"}
+                        </Text>
+                        {epg?.startLabel ? (
+                          <Text style={styles.epgTimeRange}>
+                            {epg.startLabel} {epg.endLabel ? `— ${epg.endLabel}` : ""}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.epgProgressTrack}>
+                        <View
+                          style={[
+                            styles.epgProgressFill,
+                            { width: `${Math.round((epg?.progress || 0.4) * 100)}%` },
+                          ]}
+                        />
+                      </View>
+
+                      {epg?.nextTitle ? (
+                        <Text style={styles.epgNextProgram} numberOfLines={1}>
+                          A seguir: {epg.nextTitle}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    <Ionicons name="chevron-forward" size={16} color="#E9C46A" />
+                  </Pressable>
+                );
+              })}
             </ScrollView>
           </View>
         </View>
@@ -1330,4 +1511,76 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   searchResultText: { color: "#FFF", fontSize: 13, fontWeight: "700", flex: 1 },
+
+  epgChannelCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#1A1E2D",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  epgChannelLeft: {
+    width: 140,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  epgChannelLogo: {
+    width: 32,
+    height: 32,
+  },
+  epgLogoPlaceholder: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  epgChannelName: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "800",
+    flex: 1,
+  },
+  epgProgramCenter: {
+    flex: 1,
+    gap: 4,
+  },
+  epgProgramHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 6,
+  },
+  epgProgramTitle: {
+    color: "#E9C46A",
+    fontSize: 12.5,
+    fontWeight: "800",
+    flex: 1,
+  },
+  epgTimeRange: {
+    color: "#9CA3AF",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  epgProgressTrack: {
+    width: "100%",
+    height: 3.5,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    overflow: "hidden",
+  },
+  epgProgressFill: {
+    height: "100%",
+    backgroundColor: "#E9C46A",
+  },
+  epgNextProgram: {
+    color: "#9CA3AF",
+    fontSize: 10,
+    fontWeight: "600",
+  },
 });
