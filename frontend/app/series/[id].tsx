@@ -94,7 +94,6 @@ export default function SeriesDetails() {
     [info, season]
   );
 
-  // Cenas reais extraídas dos episódios da própria série + galeria validada do TMDB
   const seriesScenes = useMemo(() => {
     const fromEpisodes = episodes
       .map((ep) => ep?.info?.movie_image)
@@ -137,13 +136,13 @@ export default function SeriesDetails() {
         ) : null}
         <LinearGradient colors={["rgba(0,0,0,0.35)", colors.bg]} style={StyleSheet.absoluteFill} />
 
-        {/* PAINEL DE AVALIAÇÕES E FICHA TÉCNICA */}
-        <MovieMetadataPanel title={title} />
+        {/* PAINEL DE AVALIAÇÕES E TRAILER NO TOPO */}
+        <View style={styles.topWidgetsLayer}>
+          <MovieMetadataPanel title={title} />
+          <TrailerPreviewBox title={title} />
+        </View>
 
-        {/* TRAILER DO YOUTUBE */}
-        <TrailerPreviewBox title={title} />
-
-        <View style={[styles.heroRow, { paddingTop: insets.top + 56 }]}>
+        <View style={[styles.heroRow, { paddingTop: Math.max(insets.top + 88, 106) }]}>
           <View style={styles.posterWrap}>
             {poster ? (
               <Image
@@ -156,7 +155,7 @@ export default function SeriesDetails() {
               <Ionicons name="albums" size={40} color={colors.textDim} />
             )}
           </View>
-          <View style={{ flex: 1, justifyContent: "flex-end", gap: 6 }}>
+          <View style={{ flex: 1, justifyContent: "flex-end", gap: 6, zIndex: 3 }}>
             <Text style={styles.title}>{title}</Text>
             {!!(meta.releaseDate || base?.releaseDate) && (
               <Text style={styles.metaLine}>
@@ -197,8 +196,12 @@ export default function SeriesDetails() {
               {selectedBackdrop && (
                 <Pressable
                   focusable={true}
+                  accessible={true}
                   onPress={() => setSelectedBackdrop(null)}
-                  style={styles.resetBgBtn}
+                  style={({ focused }) => [
+                    styles.resetBgBtn,
+                    focused && { borderColor: "#FFD700", borderWidth: 1.5 },
+                  ]}
                 >
                   <Text style={styles.resetBgText}>Restaurar fundo</Text>
                 </Pressable>
@@ -215,6 +218,7 @@ export default function SeriesDetails() {
                   <Pressable
                     key={`sr-scene-${idx}`}
                     focusable={true}
+                    accessible={true}
                     onFocus={() => setSelectedBackdrop(sceneUrl)}
                     onPress={() => setSelectedBackdrop(sceneUrl)}
                     style={({ focused }) => [
@@ -327,6 +331,7 @@ export default function SeriesDetails() {
           }}
           initialNumToRender={10}
           windowSize={7}
+          removeClippedSubviews={false}
         />
       )}
 
@@ -342,6 +347,7 @@ function TVSeriesFavBtn({ fav, onPress }: { fav: boolean; onPress: () => void })
   return (
     <Pressable
       focusable={true}
+      accessible={true}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
@@ -373,6 +379,7 @@ function SeasonChipItem({
   return (
     <Pressable
       focusable={true}
+      accessible={true}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onSelect}
@@ -406,6 +413,7 @@ function TVEpisodeRowItem({
   return (
     <Pressable
       focusable={true}
+      accessible={true}
       hasTVPreferredFocus={index === 0}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
@@ -466,6 +474,7 @@ function TVBackButton({ onPress, top }: { onPress: () => void; top: number }) {
   return (
     <Pressable
       focusable={true}
+      accessible={true}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
@@ -479,8 +488,9 @@ function TVBackButton({ onPress, top }: { onPress: () => void; top: number }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  hero: { minHeight: 300, overflow: "hidden" },
-  heroRow: { flexDirection: "row", gap: spacing.lg, padding: spacing.lg },
+  hero: { minHeight: 320, overflow: "hidden" },
+  topWidgetsLayer: { zIndex: 2 },
+  heroRow: { flexDirection: "row", gap: spacing.lg, padding: spacing.lg, paddingTop: 106, zIndex: 3 },
   posterWrap: {
     width: 130,
     aspectRatio: 2 / 3,
