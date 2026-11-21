@@ -11,6 +11,7 @@ import {
   Easing,
   TextInput,
   RefreshControl,
+  useWindowDimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -237,6 +238,9 @@ async function buscarJogosFutebolHoje(): Promise<GuiaMatch[]> {
 
 export default function HomeTab() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const tvScale = width >= 900 ? Math.min(1.3, Math.max(1.16, width / 1050)) : 1;
+
   const session = useSession((s) => s.session);
   const catalog = useSession((s) => s.catalog);
   const loadVod = useSession((s) => s.loadVod);
@@ -509,58 +513,80 @@ export default function HomeTab() {
     outputRange: [-520, 0],
   });
 
+  const cardW = Math.round(94 * tvScale);
+  const cardH = Math.round(126 * tvScale);
+
   return (
     <View style={[styles.root, { backgroundColor: "#1B3B4B" }]}>
       <View style={styles.tvHeader}>
         <View style={styles.headerLeft}>
           <Pressable
             focusable={true}
+            accessible={true}
             onPress={() => router.push("/(tabs)/settings")}
-            style={styles.headerIconBtn}
+            style={({ focused }) => [styles.headerIconBtn, focused && styles.cardFocused]}
             hitSlop={10}
           >
-            <Ionicons name="menu" size={26} color="#FFF" />
+            <Ionicons name="menu" size={Math.round(26 * tvScale)} color="#FFF" />
           </Pressable>
-          <Text style={styles.tvBrand}>GoldCast Media Player</Text>
+          <Text style={[styles.tvBrand, { fontSize: Math.round(16 * tvScale) }]}>
+            GoldCast Media Player
+          </Text>
         </View>
 
         <View style={styles.headerCenterCode}>
-          <Ionicons name="key" size={13} color="#E9C46A" />
-          <Text style={styles.codeText}>{activationCode}</Text>
+          <Ionicons name="key" size={14} color="#E9C46A" />
+          <Text style={[styles.codeText, { fontSize: Math.round(11 * tvScale) }]}>
+            {activationCode}
+          </Text>
         </View>
 
         <View style={styles.headerRight}>
           <Pressable
             focusable={true}
+            accessible={true}
             onPress={() => setShowEpgModal(true)}
             style={({ focused }) => [styles.epgHeaderBtn, focused && styles.cardFocused]}
           >
             <Ionicons name="list" size={16} color="#E9C46A" />
-            <Text style={styles.epgBtnText}>EPG</Text>
-          </Pressable>
-
-          <Pressable focusable={true} style={styles.headerIconBtn}>
-            <Ionicons name="cart-outline" size={22} color="#FFF" />
+            <Text style={[styles.epgBtnText, { fontSize: Math.round(11 * tvScale) }]}>EPG</Text>
           </Pressable>
 
           <Pressable
             focusable={true}
-            style={styles.headerIconBtn}
-            onPress={() => setShowSearchModal(true)}
+            accessible={true}
+            style={({ focused }) => [styles.headerIconBtn, focused && styles.cardFocused]}
           >
-            <Ionicons name="search-outline" size={22} color="#FFF" />
+            <Ionicons name="cart-outline" size={Math.round(22 * tvScale)} color="#FFF" />
           </Pressable>
 
-          <Text style={styles.headerDate}>{currentDate}</Text>
-          <Text style={styles.headerTime}>{currentTime}</Text>
+          <Pressable
+            focusable={true}
+            accessible={true}
+            style={({ focused }) => [styles.headerIconBtn, focused && styles.cardFocused]}
+            onPress={() => setShowSearchModal(true)}
+          >
+            <Ionicons name="search-outline" size={Math.round(22 * tvScale)} color="#FFF" />
+          </Pressable>
+
+          <Text style={[styles.headerDate, { fontSize: Math.round(11 * tvScale) }]}>
+            {currentDate}
+          </Text>
+          <Text style={[styles.headerTime, { fontSize: Math.round(12 * tvScale) }]}>
+            {currentTime}
+          </Text>
         </View>
       </View>
 
       <View style={styles.mainLayoutContainer}>
         <View style={styles.leftContainer}>
           <View style={styles.dynamicRowSection}>
-            <Text style={styles.sectionCategoryTitle}>🎬 Filmes | Novidades</Text>
-            <View style={styles.tickerWrapper}>
+            <Text
+              style={[styles.sectionCategoryTitle, { fontSize: Math.round(12.5 * tvScale) }]}
+            >
+              🎬 Filmes | Novidades
+            </Text>
+            <View style={[styles.tickerWrapper, { height: cardH }]}>
               <Animated.View
                 style={[styles.tickerTrack, { transform: [{ translateX: translateXMovies }] }]}
               >
@@ -568,13 +594,18 @@ export default function HomeTab() {
                   <Pressable
                     key={`mov-${item.stream_id}-${idx}`}
                     focusable={true}
+                    accessible={true}
                     onPress={() =>
                       router.push({
                         pathname: "/movie/[id]",
                         params: { id: String(item.stream_id) },
                       })
                     }
-                    style={styles.tickerCard}
+                    style={({ focused }) => [
+                      styles.tickerCard,
+                      { width: cardW, height: cardH },
+                      focused && styles.cardFocused,
+                    ]}
                   >
                     <Image
                       source={{ uri: item.stream_icon }}
@@ -583,7 +614,10 @@ export default function HomeTab() {
                       cachePolicy="memory-disk"
                     />
                     <View style={styles.tickerGradient}>
-                      <Text style={styles.tickerTitle} numberOfLines={1}>
+                      <Text
+                        style={[styles.tickerTitle, { fontSize: Math.round(9.5 * tvScale) }]}
+                        numberOfLines={1}
+                      >
                         {item.name}
                       </Text>
                     </View>
@@ -594,8 +628,12 @@ export default function HomeTab() {
           </View>
 
           <View style={styles.dynamicRowSection}>
-            <Text style={styles.sectionCategoryTitle}>🍿 Séries | Em Alta</Text>
-            <View style={styles.tickerWrapper}>
+            <Text
+              style={[styles.sectionCategoryTitle, { fontSize: Math.round(12.5 * tvScale) }]}
+            >
+              🍿 Séries | Em Alta
+            </Text>
+            <View style={[styles.tickerWrapper, { height: cardH }]}>
               <Animated.View
                 style={[styles.tickerTrack, { transform: [{ translateX: translateXSeries }] }]}
               >
@@ -603,13 +641,18 @@ export default function HomeTab() {
                   <Pressable
                     key={`ser-${s.series_id}-${idx}`}
                     focusable={true}
+                    accessible={true}
                     onPress={() =>
                       router.push({
                         pathname: "/series/[id]",
                         params: { id: String(s.series_id) },
                       })
                     }
-                    style={styles.tickerCard}
+                    style={({ focused }) => [
+                      styles.tickerCard,
+                      { width: cardW, height: cardH },
+                      focused && styles.cardFocused,
+                    ]}
                   >
                     <Image
                       source={{ uri: s.cover }}
@@ -618,7 +661,10 @@ export default function HomeTab() {
                       cachePolicy="memory-disk"
                     />
                     <View style={styles.tickerGradient}>
-                      <Text style={styles.tickerTitle} numberOfLines={1}>
+                      <Text
+                        style={[styles.tickerTitle, { fontSize: Math.round(9.5 * tvScale) }]}
+                        numberOfLines={1}
+                      >
                         {s.name}
                       </Text>
                     </View>
@@ -631,42 +677,63 @@ export default function HomeTab() {
           <View style={styles.bottomBarBelow}>
             <Pressable
               focusable={true}
+              accessible={true}
               onPress={() => setShowJogosModal(true)}
               style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}
             >
               <Ionicons name="football-outline" size={20} color="#FFF" />
-              <Text style={styles.bottomCardText}>JOGOS DE HOJE</Text>
+              <Text style={[styles.bottomCardText, { fontSize: Math.round(11 * tvScale) }]}>
+                JOGOS DE HOJE
+              </Text>
             </Pressable>
 
             <Pressable
               focusable={true}
+              accessible={true}
               onPress={() => router.push("/(tabs)/updates")}
               style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}
             >
               <Ionicons name="logo-youtube" size={20} color="#FF0000" />
-              <Text style={styles.bottomCardText}>YOUTUBE</Text>
+              <Text style={[styles.bottomCardText, { fontSize: Math.round(11 * tvScale) }]}>
+                YOUTUBE
+              </Text>
             </Pressable>
 
             <Pressable
               focusable={true}
+              accessible={true}
               onPress={() => router.push("/continue")}
               style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}
             >
               <Ionicons name="play-circle-outline" size={20} color="#E9C46A" />
-              <Text style={[styles.bottomCardText, { color: "#E9C46A" }]}>CONTINUAR</Text>
+              <Text
+                style={[
+                  styles.bottomCardText,
+                  { color: "#E9C46A", fontSize: Math.round(11 * tvScale) },
+                ]}
+              >
+                CONTINUAR
+              </Text>
             </Pressable>
 
             <View style={styles.statusBadgeWrap}>
-              <Text style={[styles.premiumLabel, isTestAccount && { color: "#E76F51" }]}>
+              <Text
+                style={[
+                  styles.premiumLabel,
+                  { fontSize: Math.round(12 * tvScale) },
+                  isTestAccount && { color: "#E76F51" },
+                ]}
+              >
                 {isTestAccount ? "Teste" : "Premium"}
               </Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.rightColumn}>
+        <View style={[styles.rightColumn, { width: Math.round(190 * tvScale) }]}>
           <Pressable
             focusable={true}
+            accessible={true}
             onPress={() => router.push("/(tabs)/movies")}
             style={({ focused }) => [
               styles.cardTriple,
@@ -675,13 +742,16 @@ export default function HomeTab() {
             ]}
           >
             <View style={styles.cardTripleInner}>
-              <Ionicons name="play-circle-outline" size={32} color="#FFF" />
-              <Text style={styles.cardTitleTriple}>FILMES</Text>
+              <Ionicons name="play-circle-outline" size={Math.round(34 * tvScale)} color="#FFF" />
+              <Text style={[styles.cardTitleTriple, { fontSize: Math.round(14 * tvScale) }]}>
+                FILMES
+              </Text>
             </View>
           </Pressable>
 
           <Pressable
             focusable={true}
+            accessible={true}
             onPress={() => router.push("/(tabs)/series")}
             style={({ focused }) => [
               styles.cardTriple,
@@ -690,13 +760,16 @@ export default function HomeTab() {
             ]}
           >
             <View style={styles.cardTripleInner}>
-              <Ionicons name="film-outline" size={32} color="#FFF" />
-              <Text style={styles.cardTitleTriple}>SÉRIES</Text>
+              <Ionicons name="film-outline" size={Math.round(34 * tvScale)} color="#FFF" />
+              <Text style={[styles.cardTitleTriple, { fontSize: Math.round(14 * tvScale) }]}>
+                SÉRIES
+              </Text>
             </View>
           </Pressable>
 
           <Pressable
             focusable={true}
+            accessible={true}
             onPress={() => router.push("/(tabs)/live")}
             style={({ focused }) => [
               styles.cardTriple,
@@ -705,8 +778,10 @@ export default function HomeTab() {
             ]}
           >
             <View style={styles.cardTripleInner}>
-              <Ionicons name="tv-outline" size={32} color="#FFF" />
-              <Text style={styles.cardTitleTriple}>CANAIS</Text>
+              <Ionicons name="tv-outline" size={Math.round(34 * tvScale)} color="#FFF" />
+              <Text style={[styles.cardTitleTriple, { fontSize: Math.round(14 * tvScale) }]}>
+                CANAIS
+              </Text>
             </View>
           </Pressable>
         </View>
@@ -1219,7 +1294,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  headerIconBtn: { padding: 6 },
+  headerIconBtn: { padding: 6, borderRadius: 8, borderWidth: 2, borderColor: "transparent" },
   tvBrand: { color: "#FFF", fontSize: 16, fontWeight: "900" },
   headerCenterCode: {
     flexDirection: "row",
@@ -1242,7 +1317,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: "rgba(233,196,106,0.35)",
   },
   epgBtnText: { color: "#E9C46A", fontSize: 11, fontWeight: "900" },
@@ -1261,7 +1336,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: "hidden",
     backgroundColor: "#152E3B",
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: "rgba(255,255,255,0.08)",
   },
   fullSize: { width: "100%", height: "100%" },
@@ -1308,7 +1383,11 @@ const styles = StyleSheet.create({
   },
   cardTripleInner: { alignItems: "center", gap: 6 },
   cardTitleTriple: { color: "#FFF", fontSize: 14, fontWeight: "900", letterSpacing: 1 },
-  cardFocused: { borderColor: "#E9C46A", transform: [{ scale: 1.02 }] },
+  cardFocused: {
+    borderColor: "#E9C46A",
+    borderWidth: 3,
+    transform: [{ scale: 1.03 }],
+  },
 
   modalOverlay: {
     flex: 1,
