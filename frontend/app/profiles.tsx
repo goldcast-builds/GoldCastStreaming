@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -28,12 +28,16 @@ export default function ProfilesScreen() {
   const [password, setPassword] = useState("");
   const [switchingId, setSwitchingId] = useState<string | null>(null);
 
+  const labelRef = useRef<TextInput>(null);
+  const serverRef = useRef<TextInput>(null);
+  const userRef = useRef<TextInput>(null);
+  const passRef = useRef<TextInput>(null);
+
   useEffect(() => {
     ProfilesStore.init().then(({ profiles: list, activeId: currentActive }) => {
       setProfiles(list);
       setActiveId(currentActive);
 
-      // Se já houver sessão ativa mas nenhum perfil salvo ainda, guarda como base inicial
       if (
         list.length === 0 &&
         session?.server &&
@@ -61,34 +65,37 @@ export default function ProfilesScreen() {
     return () => unsub();
   }, [session]);
 
-  const applySessionFromProfile = useCallback(async (profile: XtreamProfile) => {
-    setSwitchingId(profile.id);
-    try {
-      await ProfilesStore.setActiveProfile(profile.id);
-      const store = useSession.getState() as any;
+  const applySessionFromProfile = useCallback(
+    async (profile: XtreamProfile) => {
+      setSwitchingId(profile.id);
+      try {
+        await ProfilesStore.setActiveProfile(profile.id);
+        const store = useSession.getState() as any;
 
-      if (typeof store.setSession === "function") {
-        store.setSession({
-          server: profile.server,
-          username: profile.username,
-          password: profile.password,
-          user: profile.username,
-          pass: profile.password,
-        });
+        if (typeof store.setSession === "function") {
+          store.setSession({
+            server: profile.server,
+            username: profile.username,
+            password: profile.password,
+            user: profile.username,
+            pass: profile.password,
+          });
+        }
+
+        if (typeof store.loadLive === "function") store.loadLive().catch(() => {});
+        if (typeof store.loadVod === "function") store.loadVod(true).catch(() => {});
+        if (typeof store.loadSeries === "function") store.loadSeries(true).catch(() => {});
+
+        Alert.alert("Lista Ativada", `Agora está a utilizar o perfil "${profile.label}".`, [
+          { text: "Ir para Início", onPress: () => router.replace("/(tabs)") },
+          { text: "OK" },
+        ]);
+      } finally {
+        setSwitchingId(null);
       }
-
-      if (typeof store.loadLive === "function") store.loadLive().catch(() => {});
-      if (typeof store.loadVod === "function") store.loadVod(true).catch(() => {});
-      if (typeof store.loadSeries === "function") store.loadSeries(true).catch(() => {});
-
-      Alert.alert("Lista Ativada", `Agora está a utilizar o perfil "${profile.label}".`, [
-        { text: "Ir para Início", onPress: () => router.replace("/(tabs)") },
-        { text: "OK" },
-      ]);
-    } finally {
-      setSwitchingId(null);
-    }
-  }, [router]);
+    },
+    [router]
+  );
 
   const handleSaveNewProfile = async () => {
     if (!server.trim() || !username.trim() || !password.trim()) {
@@ -114,18 +121,14 @@ export default function ProfilesScreen() {
   };
 
   const handleDeleteProfile = (profile: XtreamProfile) => {
-    Alert.alert(
-      "Remover Lista",
-      `Deseja remover o perfil "${profile.label}"?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Remover",
-          style: "destructive",
-          onPress: () => ProfilesStore.removeProfile(profile.id),
-        },
-      ]
-    );
+    Alert.alert("Remover Lista", `Deseja remover o perfil "${profile.label}"?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Remover",
+        style: "destructive",
+        onPress: () => ProfilesStore.removeProfile(profile.id),
+      },
+    ]);
   };
 
   return (
@@ -133,6 +136,7 @@ export default function ProfilesScreen() {
       <View style={styles.header}>
         <Pressable
           focusable={true}
+          accessible={true}
           onPress={() => router.back()}
           style={({ focused }) => [styles.backBtn, focused && styles.cardFocused]}
           hitSlop={10}
@@ -149,7 +153,16 @@ export default function ProfilesScreen() {
 
         <Pressable
           focusable={true}
-          onPress={() => setShowForm((prev) => !prev)}
+          accessible={true}
+          onPress={() => {
+            setShowForm((prev) => {
+              const next = !prev;
+              if (next) {
+                requestAnimationFrame(() => labelRef.current?.focus());
+              }
+              return next;
+            });
+          }}
           style={({ focused }) => [styles.addBtn, focused && styles.cardFocused]}
         >
           <Ionicons name={showForm ? "close" : "add"} size={18} color="#000" />
@@ -162,13 +175,23 @@ export default function ProfilesScreen() {
           <Text style={styles.formTitle}>Adicionar Nova Lista Xtream</Text>
 
           <TextInput
+            ref={labelRef}
+            focusable={true}
+            accessible={true}
+            showSoftInputOnFocus={true}
             style={styles.input}
             placeholder="Nome da lista (ex: Lista Principal, Reserva)"
             placeholderTextColor="#7C8594"
             value={label}
             onChangeText={setLabel}
+            returnKeyType="next"
+            onSubmitEditing={() => serverRef.current?.focus()}
           />
           <TextInput
+            ref={serverRef}
+            focusable={true}
+            accessible={true}
+            showSoftInputOnFocus={true}
             style={styles.input}
             placeholder="Servidor / URL (ex: http://servidor.com:8080)"
             placeholderTextColor="#7C8594"
@@ -176,9 +199,15 @@ export default function ProfilesScreen() {
             onChangeText={setServer}
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="next"
+            onSubmitEditing={() => userRef.current?.focus()}
           />
           <View style={styles.rowInputs}>
             <TextInput
+              ref={userRef}
+              focusable={true}
+              accessible={true}
+              showSoftInputOnFocus={true}
               style={[styles.input, { flex: 1 }]}
               placeholder="Utilizador"
               placeholderTextColor="#7C8594"
@@ -186,8 +215,14 @@ export default function ProfilesScreen() {
               onChangeText={setUsername}
               autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="next"
+              onSubmitEditing={() => passRef.current?.focus()}
             />
             <TextInput
+              ref={passRef}
+              focusable={true}
+              accessible={true}
+              showSoftInputOnFocus={true}
               style={[styles.input, { flex: 1 }]}
               placeholder="Palavra-passe"
               placeholderTextColor="#7C8594"
@@ -196,11 +231,14 @@ export default function ProfilesScreen() {
               secureTextEntry={true}
               autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={handleSaveNewProfile}
             />
           </View>
 
           <Pressable
             focusable={true}
+            accessible={true}
             onPress={handleSaveNewProfile}
             style={({ focused }) => [styles.saveBtn, focused && styles.cardFocused]}
           >
@@ -224,6 +262,7 @@ export default function ProfilesScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={false}
           renderItem={({ item }) => {
             const isActive = item.id === activeId;
             const isSwitching = switchingId === item.id;
@@ -259,6 +298,7 @@ export default function ProfilesScreen() {
                   {!isActive && (
                     <Pressable
                       focusable={true}
+                      accessible={true}
                       disabled={isSwitching}
                       onPress={() => applySessionFromProfile(item)}
                       style={({ focused }) => [styles.useBtn, focused && styles.cardFocused]}
@@ -273,6 +313,7 @@ export default function ProfilesScreen() {
 
                   <Pressable
                     focusable={true}
+                    accessible={true}
                     onPress={() => handleDeleteProfile(item)}
                     style={({ focused }) => [styles.deleteBtn, focused && styles.cardFocused]}
                   >
