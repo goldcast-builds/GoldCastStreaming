@@ -97,7 +97,14 @@ function AutoUpdateModal() {
           ) : null}
 
           <Pressable
-            style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]}
+            focusable={true}
+            accessible={true}
+            hasTVPreferredFocus={true}
+            style={({ pressed, focused }) => [
+              styles.btn,
+              pressed && { opacity: 0.85 },
+              focused && styles.modalBtnFocused,
+            ]}
             onPress={handleUpdate}
           >
             <Text style={styles.btnText}>ATUALIZAR AGORA</Text>
@@ -105,7 +112,13 @@ function AutoUpdateModal() {
 
           {!updateInfo.forceUpdate && (
             <Pressable
-              style={({ pressed }) => [styles.dismissBtn, pressed && { opacity: 0.7 }]}
+              focusable={true}
+              accessible={true}
+              style={({ pressed, focused }) => [
+                styles.dismissBtn,
+                pressed && { opacity: 0.7 },
+                focused && styles.modalDismissFocused,
+              ]}
               onPress={() => setVisible(false)}
             >
               <Text style={styles.dismissBtnText}>Lembrar mais tarde</Text>
@@ -269,6 +282,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     width: "100%",
     marginTop: 18,
+    borderWidth: 2,
+    borderColor: "transparent",
   },
   btnText: {
     color: "#000",
@@ -278,11 +293,23 @@ const styles = StyleSheet.create({
   },
   dismissBtn: {
     paddingVertical: 12,
+    paddingHorizontal: 16,
     marginTop: 6,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "transparent",
   },
   dismissBtnText: {
     color: "#8E929C",
     fontSize: 12,
     fontWeight: "600",
+  },
+  modalBtnFocused: {
+    borderColor: "#FFF",
+    borderWidth: 3,
+    transform: [{ scale: 1.02 }],
+  },
+  modalDismissFocused: {
+    borderColor: "#E5A93B",
   },
 });
