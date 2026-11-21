@@ -4,7 +4,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSession } from "../../src/store/session";
 import { VideoView, useVideoPlayer } from "expo-video";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { colors } from "../../src/utils/theme";
 
 export default function LivePlayerScreen() {
   const { id } = useLocalSearchParams();
@@ -15,12 +14,10 @@ export default function LivePlayerScreen() {
 
   useEffect(() => {
     if (!session || !id) return;
-    // URL padrão de transmissão Xtream para canais ao vivo
     const url = `${session.server.replace(/\/+$/, "")}/live/${session.username}/${session.password}/${id}.ts`;
     setStreamUrl(url);
   }, [session, id]);
 
-  // Inicializa o expo-video unificado exatamente como nos filmes e séries
   const player = useVideoPlayer(streamUrl, (playerInstance) => {
     playerInstance.loop = false;
     playerInstance.play();
@@ -39,14 +36,13 @@ export default function LivePlayerScreen() {
   return (
     <View style={styles.container}>
       <StatusBar hidden={true} />
-      <VideoView 
-        player={player} 
-        style={styles.video} 
-        nativeControls={true} 
+      <VideoView
+        player={player}
+        style={styles.video}
+        nativeControls={true}
         contentFit="contain"
       />
 
-      {/* Botão de voltar flutuante acessível por controlo remoto para Smart TV */}
       <TVBackLiveButton onPress={() => router.back()} />
     </View>
   );
@@ -59,6 +55,7 @@ function TVBackLiveButton({ onPress }: { onPress: () => void }) {
     <Pressable
       focusable={true}
       accessible={true}
+      hasTVPreferredFocus={true}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
@@ -66,14 +63,33 @@ function TVBackLiveButton({ onPress }: { onPress: () => void }) {
       style={[styles.floatingBackBtn, isFocused && styles.floatingBackBtnFocused]}
     >
       <Ionicons name="arrow-back" size={22} color={isFocused ? "#000000" : "#FFFFFF"} />
-      <Text style={[styles.floatingBackText, isFocused && { color: "#000000", fontWeight: "900" }]}>Voltar</Text>
+      <Text
+        style={[
+          styles.floatingBackText,
+          isFocused && { color: "#000000", fontWeight: "900" },
+        ]}
+      >
+        Voltar
+      </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center", position: "relative" },
-  center: { flex: 1, backgroundColor: "#1B3B4B", justifyContent: "center", alignItems: "center", gap: 12 },
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+  },
+  center: {
+    flex: 1,
+    backgroundColor: "#1B3B4B",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
   loadingText: { color: "#FFF", fontSize: 14, fontWeight: "700" },
   video: { width: "100%", height: "100%" },
   floatingBackBtn: {
