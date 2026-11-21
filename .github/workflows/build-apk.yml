@@ -114,6 +114,18 @@ jobs:
           sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' frontend/android/app/src/main/AndroidManifest.xml
           grep -n "usesCleartextTraffic" frontend/android/app/src/main/AndroidManifest.xml
 
+      - name: Preparar e instalar CMake 3.22.1
+        shell: bash
+        run: |
+          set -e
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          rm -rf "$SDK_ROOT/cmake/3.22.1" "$SDK_ROOT/.temp"
+          rm -rf frontend/android/.cxx frontend/android/app/.cxx frontend/android/build frontend/android/app/build
+          if [ -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_ROOT" --licenses || true
+            yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_ROOT" "cmake;3.22.1" || true
+          fi
+
       - name: Dar permissão ao executável Gradle
         run: |
           chmod +x frontend/android/gradlew
