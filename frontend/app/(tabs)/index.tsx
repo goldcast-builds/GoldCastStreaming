@@ -787,7 +787,7 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* MODAL PREMIUM DE FUTEBOL */}
+      {/* MODAL PREMIUM DE FUTEBOL — JOGOS DE HOJE */}
       <Modal
         visible={showJogosModal}
         animationType="fade"
@@ -811,8 +811,14 @@ export default function HomeTab() {
               <View style={styles.tabToggleRow}>
                 <Pressable
                   focusable={true}
+                  accessible={true}
+                  hasTVPreferredFocus={true}
                   onPress={() => setJogoFilter("todos")}
-                  style={[styles.tabBtn, jogoFilter === "todos" && styles.tabBtnActive]}
+                  style={({ focused }) => [
+                    styles.tabBtn,
+                    jogoFilter === "todos" && styles.tabBtnActive,
+                    focused && styles.cardFocused,
+                  ]}
                 >
                   <Text
                     style={[styles.tabBtnText, jogoFilter === "todos" && styles.tabBtnTextActive]}
@@ -822,8 +828,13 @@ export default function HomeTab() {
                 </Pressable>
                 <Pressable
                   focusable={true}
+                  accessible={true}
                   onPress={() => setJogoFilter("ao_vivo")}
-                  style={[styles.tabBtn, jogoFilter === "ao_vivo" && styles.tabBtnActive]}
+                  style={({ focused }) => [
+                    styles.tabBtn,
+                    jogoFilter === "ao_vivo" && styles.tabBtnActive,
+                    focused && styles.cardFocused,
+                  ]}
                 >
                   <Text
                     style={[
@@ -836,8 +847,13 @@ export default function HomeTab() {
                 </Pressable>
                 <Pressable
                   focusable={true}
+                  accessible={true}
                   onPress={() => setJogoFilter("proximos")}
-                  style={[styles.tabBtn, jogoFilter === "proximos" && styles.tabBtnActive]}
+                  style={({ focused }) => [
+                    styles.tabBtn,
+                    jogoFilter === "proximos" && styles.tabBtnActive,
+                    focused && styles.cardFocused,
+                  ]}
                 >
                   <Text
                     style={[
@@ -853,8 +869,9 @@ export default function HomeTab() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Pressable
                   onPress={() => carregarJogos(true)}
-                  style={styles.closeBtn}
+                  style={({ focused }) => [styles.closeBtn, focused && styles.cardFocused]}
                   focusable={true}
+                  accessible={true}
                 >
                   <Ionicons name="refresh" size={18} color="#E9C46A" />
                 </Pressable>
@@ -864,8 +881,9 @@ export default function HomeTab() {
                     setHighlightsVideoId(null);
                     setShowJogosModal(false);
                   }}
-                  style={styles.closeBtn}
+                  style={({ focused }) => [styles.closeBtn, focused && styles.cardFocused]}
                   focusable={true}
+                  accessible={true}
                 >
                   <Ionicons name="close" size={18} color="#FFF" />
                 </Pressable>
@@ -880,11 +898,12 @@ export default function HomeTab() {
                   </Text>
                   <Pressable
                     focusable={true}
+                    accessible={true}
                     onPress={() => {
                       setHighlightsMatch(null);
                       setHighlightsVideoId(null);
                     }}
-                    style={styles.smallCloseBtn}
+                    style={({ focused }) => [styles.smallCloseBtn, focused && styles.cardFocused]}
                   >
                     <Ionicons name="close" size={14} color="#FFF" />
                   </Pressable>
@@ -1015,6 +1034,7 @@ export default function HomeTab() {
                       <View style={styles.matchActionsRow}>
                         <Pressable
                           focusable={true}
+                          accessible={true}
                           onPress={() => handleOpenHighlights(g)}
                           style={({ focused }) => [
                             styles.actionPillBtn,
@@ -1027,6 +1047,7 @@ export default function HomeTab() {
 
                         <Pressable
                           focusable={true}
+                          accessible={true}
                           onPress={() => handleGoToMatchChannel(g)}
                           style={({ focused }) => [
                             styles.actionPillGoldBtn,
@@ -1059,8 +1080,9 @@ export default function HomeTab() {
               <Text style={styles.modalTitle}>🔍 BUSCAR NO CATÁLOGO</Text>
               <Pressable
                 onPress={() => setShowSearchModal(false)}
-                style={styles.closeBtn}
+                style={({ focused }) => [styles.closeBtn, focused && styles.cardFocused]}
                 focusable={true}
+                accessible={true}
               >
                 <Ionicons name="close" size={18} color="#FFF" />
               </Pressable>
@@ -1072,7 +1094,9 @@ export default function HomeTab() {
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}
-              autoFocus={true}
+              focusable={true}
+              accessible={true}
+              showSoftInputOnFocus={true}
             />
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
@@ -1080,6 +1104,7 @@ export default function HomeTab() {
                 <Pressable
                   key={`sr-ch-${idx}`}
                   focusable={true}
+                  accessible={true}
                   onPress={() => {
                     setShowSearchModal(false);
                     router.push({
@@ -1087,7 +1112,7 @@ export default function HomeTab() {
                       params: { search: c?.name || c?.title || "" },
                     });
                   }}
-                  style={styles.searchResultRow}
+                  style={({ focused }) => [styles.searchResultRow, focused && styles.cardFocused]}
                 >
                   <Ionicons name="tv-outline" size={16} color="#2A9D8F" />
                   <Text style={styles.searchResultText} numberOfLines={1}>
@@ -1100,6 +1125,7 @@ export default function HomeTab() {
                 <Pressable
                   key={`sr-mv-${idx}`}
                   focusable={true}
+                  accessible={true}
                   onPress={() => {
                     setShowSearchModal(false);
                     router.push({
@@ -1107,7 +1133,7 @@ export default function HomeTab() {
                       params: { id: String(m?.stream_id || "") },
                     });
                   }}
-                  style={styles.searchResultRow}
+                  style={({ focused }) => [styles.searchResultRow, focused && styles.cardFocused]}
                 >
                   <Ionicons name="film-outline" size={16} color="#E76F51" />
                   <Text style={styles.searchResultText} numberOfLines={1}>
@@ -1120,6 +1146,7 @@ export default function HomeTab() {
                 <Pressable
                   key={`sr-sr-${idx}`}
                   focusable={true}
+                  accessible={true}
                   onPress={() => {
                     setShowSearchModal(false);
                     router.push({
@@ -1127,7 +1154,7 @@ export default function HomeTab() {
                       params: { id: String(s?.series_id || "") },
                     });
                   }}
-                  style={styles.searchResultRow}
+                  style={({ focused }) => [styles.searchResultRow, focused && styles.cardFocused]}
                 >
                   <Ionicons name="albums-outline" size={16} color="#F4A261" />
                   <Text style={styles.searchResultText} numberOfLines={1}>
@@ -1159,8 +1186,9 @@ export default function HomeTab() {
 
               <Pressable
                 onPress={() => setShowEpgModal(false)}
-                style={styles.closeBtn}
+                style={({ focused }) => [styles.closeBtn, focused && styles.cardFocused]}
                 focusable={true}
+                accessible={true}
               >
                 <Ionicons name="close" size={18} color="#FFF" />
               </Pressable>
@@ -1174,8 +1202,13 @@ export default function HomeTab() {
             >
               <Pressable
                 focusable={true}
+                accessible={true}
                 onPress={() => setSelectedEpgCat("all")}
-                style={[styles.tabBtn, selectedEpgCat === "all" && styles.tabBtnActive]}
+                style={({ focused }) => [
+                  styles.tabBtn,
+                  selectedEpgCat === "all" && styles.tabBtnActive,
+                  focused && styles.cardFocused,
+                ]}
               >
                 <Text
                   style={[
@@ -1193,8 +1226,13 @@ export default function HomeTab() {
                   <Pressable
                     key={`epg-cat-${catId}-${idx}`}
                     focusable={true}
+                    accessible={true}
                     onPress={() => setSelectedEpgCat(catId)}
-                    style={[styles.tabBtn, active && styles.tabBtnActive]}
+                    style={({ focused }) => [
+                      styles.tabBtn,
+                      active && styles.tabBtnActive,
+                      focused && styles.cardFocused,
+                    ]}
                   >
                     <Text style={[styles.tabBtnText, active && styles.tabBtnTextActive]}>
                       {cat?.category_name || cat?.name || "Categoria"}
@@ -1215,6 +1253,7 @@ export default function HomeTab() {
                   <Pressable
                     key={`epg-ch-${chId}-${idx}`}
                     focusable={true}
+                    accessible={true}
                     onPress={() => {
                       setShowEpgModal(false);
                       router.push({
@@ -1429,6 +1468,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 8,
     backgroundColor: "#1E2230",
+    borderWidth: 2,
+    borderColor: "transparent",
   },
   tabBtnActive: { backgroundColor: "#E9C46A" },
   tabBtnText: { color: "#D1D5DB", fontSize: 11, fontWeight: "700" },
@@ -1440,14 +1481,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#222634",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
   },
   smallCloseBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: "#222634",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
   },
   highlightsBox: {
     backgroundColor: "#10131C",
@@ -1554,7 +1599,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 5,
     backgroundColor: "rgba(233,196,106,0.14)",
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: "rgba(233,196,106,0.35)",
     paddingHorizontal: 9,
     paddingVertical: 5,
@@ -1566,6 +1611,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     backgroundColor: "#E9C46A",
+    borderWidth: 2,
+    borderColor: "transparent",
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 7,
@@ -1588,6 +1635,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#1A1E2D",
     padding: 12,
     borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "transparent",
   },
   searchResultText: { color: "#FFF", fontSize: 13, fontWeight: "700", flex: 1 },
 
@@ -1598,7 +1647,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#1A1E2D",
     padding: 12,
     borderRadius: 12,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: "rgba(255,255,255,0.06)",
   },
   epgChannelLeft: {
