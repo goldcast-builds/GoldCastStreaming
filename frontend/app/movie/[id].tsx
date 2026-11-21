@@ -10,6 +10,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, radius, spacing } from "../../src/utils/theme";
 import { useSession } from "../../src/store/session";
 import { movieUrls, xtream } from "../../src/services/xtream";
+import { fetchStrictMediaEnrichment, StrictMediaEnrichment } from "../../src/services/tmdb";
 
 export default function MovieDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -21,15 +22,32 @@ export default function MovieDetails() {
   const toggleFav = useSession((s) => s.toggleFav);
   const setQueue = useSession((s) => s.setQueue);
   const progress = useSession((s) => s.ud.progress[`vod:${id}`]);
+
   const [info, setInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [enrichment, setEnrichment] = useState<StrictMediaEnrichment | null>(null);
+  const [selectedScene, setSelectedScene] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session || !id) return;
     let cancelled = false;
     setLoading(true);
-    xtream.vodInfo(session, id).then((d) => !cancelled && setInfo(d)).catch(() => {}).finally(() => !cancelled && setLoading(false));
-    return () => { cancelled = true; };
+    setEnrichment(null);
+    setSelectedScene(null);
+
+    xtream
+      .vodInfo(session, id)
+      .then((d) => {
+        if (!cancelled) setInfo(d);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [session?.server, id]);
 
   const meta = info?.info || {};
@@ -37,22 +55,52 @@ export default function MovieDetails() {
   const title = data.name || base?.name || "Filme";
   const poster = meta.movie_image || meta.cover_big || base?.stream_icon;
   const ext = data.container_extension || base?.container_extension;
-  const year = (meta.releasedate || meta.release_date || base?.year || "").toString().slice(0, 4) || null;
-  const rows = useMemo(() => [
-    ["Ano", year],
-    ["Gênero", meta.genre || base?.genre],
-    ["Duração", meta.duration],
-    ["Avaliação", meta.rating ? String(meta.rating) : null],
-    ["Direção", meta.director],
-    ["Elenco", meta.cast],
-  ].filter(([, v]) => !!v) as [string, string][], [meta, year, base]);
+  const year =
+    (meta.releasedate || meta.release_date || base?.year || "").toString().slice(0, 4) || null;
+
+  useEffect(() => {
+    if (!info) return;
+    let active = true;
+    fetchStrictMediaEnrichment("movie", meta, title, year).then((res) => {
+      if (active) setEnrichment(res);
+    });
+    return () => {
+      active = false;
+    };
+  }, [info, meta, title, year]);
+
+  const activeBackdrop = selectedScene || enrichment?.backdropUrl || poster;
+
+  const rows = useMemo(
+    () =>
+      [
+        ["Ano", year],
+        ["Gênero", meta.genre || base?.genre],
+        ["Duração", meta.duration],
+        ["Avaliação", meta.rating ? String(meta.rating) : null],
+        ["Direção", meta.director],
+        ["Elenco", meta.cast],
+      ].filter(([, v]) => !!v) as [string, string][],
+    [meta, year, base]
+  );
 
   const play = () => {
     if (!session) return;
-    setQueue([{
-      kind: "vod", id: String(id), title, subtitle: meta.genre || base?.genre, logo: poster, urls: movieUrls(session, id!, ext), progressKey: `vod:${id}`,
-      raw: base || { stream_id: Number(id), name: title, stream_icon: poster },
-    }], 0);
+    setQueue(
+      [
+        {
+          kind: "vod",
+          id: String(id),
+          title,
+          subtitle: meta.genre || base?.genre,
+          logo: poster,
+          urls: movieUrls(session, id!, ext),
+          progressKey: `vod:${id}`,
+          raw: base || { stream_id: Number(id), name: title, stream_icon: poster },
+        },
+      ],
+      0
+    );
     router.push("/player");
   };
 
@@ -63,9 +111,17 @@ export default function MovieDetails() {
     <View style={styles.root} testID="movie-details">
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxl }}>
         <View style={styles.hero}>
-          {poster ? <Image source={{ uri: poster }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={12} /> : null}
-          <LinearGradient colors={["rgba(0,0,0,0.3)", colors.bg]} style={StyleSheet.absoluteFill} />
-          
+          {activeBackdrop ? (
+            <Image
+              source={{ uri: activeBackdrop }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              blurRadius={selectedScene ? 2 : 9}
+              cachePolicy="memory-disk"
+            />
+          ) : null}
+          <LinearGradient colors={["rgba(0,0,0,0.35)", colors.bg]} style={StyleSheet.absoluteFill} />
+
           {/* PAINEL DE AVALIAÇÕES (IMDb, Rotten, Metacritic) E FICHA TÉCNICA */}
           <MovieMetadataPanel title={title} />
 
@@ -74,13 +130,23 @@ export default function MovieDetails() {
 
           <View style={[styles.heroRow, { paddingTop: insets.top + spacing.sm }]}>
             <View style={styles.posterWrap}>
-              {poster ? <Image source={{ uri: poster }} style={{ width: "100%", height: "100%" }} contentFit="cover" /> : <Ionicons name="film" size={40} color={colors.textDim} />}
+              {poster ? (
+                <Image
+                  source={{ uri: poster }}
+                  style={{ width: "100%", height: "100%" }}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                />
+              ) : (
+                <Ionicons name="film" size={40} color={colors.textDim} />
+              )}
             </View>
             <View style={{ flex: 1, justifyContent: "flex-end", gap: 6 }}>
               <Text style={styles.title}>{title}</Text>
               {rows.slice(0, 3).map(([k, v]) => (
                 <Text key={k} style={styles.metaLine} numberOfLines={1}>
-                  <Text style={styles.metaKey}>{k}: </Text>{v}
+                  <Text style={styles.metaKey}>{k}: </Text>
+                  {v}
                 </Text>
               ))}
             </View>
@@ -90,7 +156,9 @@ export default function MovieDetails() {
         <View style={styles.body}>
           {pct > 0.01 && pct < 0.97 && (
             <View style={styles.progressBox} testID="movie-progress">
-              <Text style={styles.progressText}>Continuar assistindo · {Math.round(pct * 100)}% concluído</Text>
+              <Text style={styles.progressText}>
+                Continuar assistindo · {Math.round(pct * 100)}% concluído
+              </Text>
               <View style={styles.progTrack}>
                 <View style={[styles.progFill, { width: `${pct * 100}%` }]} />
               </View>
@@ -113,6 +181,91 @@ export default function MovieDetails() {
                   <Text style={styles.plot}>{meta.plot}</Text>
                 </>
               )}
+
+              {/* CENAS DO FILME (ALTERA O PLANO DE FUNDO AO FOCAR/TOCAR) */}
+              {enrichment?.gallery && enrichment.gallery.length > 0 && (
+                <View style={{ gap: 8 }}>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.sectionTitle}>Cenas do Filme</Text>
+                    {selectedScene && (
+                      <Pressable
+                        focusable={true}
+                        onPress={() => setSelectedScene(null)}
+                        style={styles.resetBgBtn}
+                      >
+                        <Text style={styles.resetBgText}>Restaurar fundo</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
+                  >
+                    {enrichment.gallery.map((sceneUrl, idx) => {
+                      const isCurrent = selectedScene === sceneUrl;
+                      return (
+                        <Pressable
+                          key={`mv-scene-${idx}`}
+                          focusable={true}
+                          onFocus={() => setSelectedScene(sceneUrl)}
+                          onPress={() => setSelectedScene(sceneUrl)}
+                          style={({ focused }) => [
+                            styles.sceneCard,
+                            isCurrent && styles.sceneCardActive,
+                            focused && styles.sceneCardFocused,
+                          ]}
+                        >
+                          <Image
+                            source={{ uri: sceneUrl }}
+                            style={{ width: "100%", height: "100%" }}
+                            contentFit="cover"
+                            cachePolicy="memory-disk"
+                          />
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* ELENCO VALIDADO */}
+              {enrichment?.cast && enrichment.cast.length > 0 && (
+                <View style={{ gap: 8 }}>
+                  <Text style={styles.sectionTitle}>Elenco</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 12, paddingVertical: 4 }}
+                  >
+                    {enrichment.cast.map((actor) => (
+                      <View key={`actor-${actor.id}`} style={styles.actorCard}>
+                        {actor.profileUrl ? (
+                          <Image
+                            source={{ uri: actor.profileUrl }}
+                            style={styles.actorAvatar}
+                            contentFit="cover"
+                            cachePolicy="memory-disk"
+                          />
+                        ) : (
+                          <View style={[styles.actorAvatar, styles.actorAvatarFallback]}>
+                            <Ionicons name="person" size={22} color={colors.textDim} />
+                          </View>
+                        )}
+                        <Text style={styles.actorName} numberOfLines={1}>
+                          {actor.name}
+                        </Text>
+                        {!!actor.character && (
+                          <Text style={styles.actorRole} numberOfLines={1}>
+                            {actor.character}
+                          </Text>
+                        )}
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
               {rows.length > 0 && (
                 <View style={styles.infoCard}>
                   {rows.map(([k, v]) => (
@@ -123,7 +276,11 @@ export default function MovieDetails() {
                   ))}
                 </View>
               )}
-              {!meta.plot && rows.length === 0 && <Text style={styles.hint}>Informações adicionais não informadas pelo servidor.</Text>}
+              {!meta.plot && rows.length === 0 && (
+                <Text style={styles.hint}>
+                  Informações adicionais não informadas pelo servidor.
+                </Text>
+              )}
             </>
           )}
         </View>
@@ -166,7 +323,11 @@ function TVFavBtn({ fav, onPress }: { fav: boolean; onPress: () => void }) {
       onPress={onPress}
       style={[styles.favBtn, fav && styles.favBtnActive, isFocused && styles.favBtnFocused]}
     >
-      <Ionicons name={fav ? "star" : "star-outline"} size={22} color={isFocused ? "#000000" : colors.gold} />
+      <Ionicons
+        name={fav ? "star" : "star-outline"}
+        size={22}
+        color={isFocused ? "#000000" : colors.gold}
+      />
     </Pressable>
   );
 }
@@ -192,7 +353,17 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   hero: { minHeight: 300, overflow: "hidden" },
   heroRow: { flexDirection: "row", gap: spacing.lg, padding: spacing.lg, paddingTop: 60 },
-  posterWrap: { width: 130, aspectRatio: 2 / 3, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surface2, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(212,175,55,0.4)" },
+  posterWrap: {
+    width: 130,
+    aspectRatio: 2 / 3,
+    borderRadius: radius.md,
+    overflow: "hidden",
+    backgroundColor: colors.surface2,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "rgba(212,175,55,0.4)",
+  },
   title: { color: colors.text, fontSize: 22, fontWeight: "700" },
   metaLine: { color: colors.textMuted, fontSize: 13 },
   metaKey: { color: colors.gold, fontWeight: "600" },
@@ -202,19 +373,127 @@ const styles = StyleSheet.create({
   progTrack: { height: 4, backgroundColor: colors.surface3, borderRadius: 2 },
   progFill: { height: 4, backgroundColor: colors.gold, borderRadius: 2 },
   actionRow: { flexDirection: "row", gap: spacing.md, alignItems: "center" },
-  playBtn: { flex: 1, height: 52, backgroundColor: colors.gold, borderRadius: radius.md, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 2, borderColor: "transparent" },
-  playBtnFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3.5, transform: [{ scale: 1.04 }], elevation: 16, zIndex: 99 },
+  playBtn: {
+    flex: 1,
+    height: 52,
+    backgroundColor: colors.gold,
+    borderRadius: radius.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  playBtnFocused: {
+    backgroundColor: "#FFD700",
+    borderColor: "#FFFFFF",
+    borderWidth: 3.5,
+    transform: [{ scale: 1.04 }],
+    elevation: 16,
+    zIndex: 99,
+  },
   playBtnText: { color: colors.onGold, fontSize: 14, fontWeight: "800", letterSpacing: 0.5 },
-  favBtn: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: colors.gold, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
+  favBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
   favBtnActive: { backgroundColor: "rgba(229, 169, 59, 0.2)" },
-  favBtnFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3, transform: [{ scale: 1.12 }], elevation: 12 },
-  sectionTitle: { color: colors.gold, fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6, marginTop: spacing.sm },
+  favBtnFocused: {
+    backgroundColor: "#FFD700",
+    borderColor: "#FFFFFF",
+    borderWidth: 3,
+    transform: [{ scale: 1.12 }],
+    elevation: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  sectionTitle: {
+    color: colors.gold,
+    fontSize: 13,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginTop: spacing.xs,
+  },
+  resetBgBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  resetBgText: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
+  sceneCard: {
+    width: 136,
+    height: 76,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: colors.surface2,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  sceneCardActive: { borderColor: colors.gold },
+  sceneCardFocused: {
+    borderColor: "#FFD700",
+    borderWidth: 3,
+    transform: [{ scale: 1.05 }],
+  },
+  actorCard: { width: 88, alignItems: "center", gap: 4 },
+  actorAvatar: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: colors.surface2,
+  },
+  actorAvatarFallback: { alignItems: "center", justifyContent: "center" },
+  actorName: { color: colors.text, fontSize: 11, fontWeight: "700", textAlign: "center" },
+  actorRole: { color: colors.textDim, fontSize: 9.5, textAlign: "center" },
   plot: { color: colors.textMuted, fontSize: 14, lineHeight: 21 },
-  infoCard: { backgroundColor: colors.surface2, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
+  infoCard: {
+    backgroundColor: colors.surface2,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
   infoRow: { flexDirection: "row", gap: spacing.md },
-  infoKey: { color: colors.textDim, width: 90, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 },
+  infoKey: {
+    color: colors.textDim,
+    width: 90,
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
   infoVal: { color: colors.text, fontSize: 13, flex: 1 },
   hint: { color: colors.textDim, fontSize: 12, fontStyle: "italic" },
-  backBtn: { position: "absolute", left: spacing.md, width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(0,0,0,0.65)", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)" },
-  backBtnFocused: { backgroundColor: "#FFD700", borderColor: "#FFFFFF", borderWidth: 3, transform: [{ scale: 1.15 }], elevation: 14, zIndex: 999 },
+  backBtn: {
+    position: "absolute",
+    left: spacing.md,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  backBtnFocused: {
+    backgroundColor: "#FFD700",
+    borderColor: "#FFFFFF",
+    borderWidth: 3,
+    transform: [{ scale: 1.15 }],
+    elevation: 14,
+    zIndex: 999,
+  },
 });
