@@ -450,6 +450,7 @@ export default function PlayerScreen() {
           <Pressable
             focusable={true}
             accessible={true}
+            hasTVPreferredFocus={true}
             disabled={launching}
             style={({ focused }) => [
               styles.primaryActionBtn,
@@ -480,7 +481,6 @@ export default function PlayerScreen() {
         </View>
       </View>
 
-      {/* Seletor Rápido de Canais */}
       <Modal
         visible={channelPickerVisible}
         transparent={true}
@@ -493,6 +493,7 @@ export default function PlayerScreen() {
               <Text style={styles.pickerTitle}>Troca Rápida de Canal</Text>
               <Pressable
                 focusable={true}
+                accessible={true}
                 onPress={() => setChannelPickerVisible(false)}
                 style={({ focused }) => [styles.pickerClose, focused && styles.cardFocused]}
               >
@@ -504,6 +505,7 @@ export default function PlayerScreen() {
               data={liveChannelsList.slice(0, 120)}
               keyExtractor={(item: any, idx) => `qp-${item?.stream_id || item?.id || idx}-${idx}`}
               showsVerticalScrollIndicator={false}
+              removeClippedSubviews={false}
               renderItem={({ item }: { item: any }) => {
                 const chId = String(item?.stream_id || item?.id || "");
                 const chName = item?.name || item?.title || "Canal";
@@ -513,6 +515,7 @@ export default function PlayerScreen() {
                 return (
                   <Pressable
                     focusable={true}
+                    accessible={true}
                     onPress={() => switchToLiveChannel(item)}
                     style={({ focused }) => [
                       styles.pickerRow,
