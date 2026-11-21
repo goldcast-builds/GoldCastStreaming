@@ -19,12 +19,16 @@ let isLoaded = false;
 const listeners = new Set<() => void>();
 
 function notify() {
-  listeners.forEach((cb) => cb());
+  listeners.forEach((cb) => {
+    try {
+      cb();
+    } catch {}
+  });
 }
 
 export const FavoritesStore = {
   async init(): Promise<FavoriteItem[]> {
-    if (isLoaded) return favoritesCache;
+    if (isLoaded) return [...favoritesCache];
     try {
       const raw = await AsyncStorage.getItem(FAVORITES_STORAGE_KEY);
       if (raw) {
@@ -38,11 +42,11 @@ export const FavoritesStore = {
     }
     isLoaded = true;
     notify();
-    return favoritesCache;
+    return [...favoritesCache];
   },
 
   getAll(): FavoriteItem[] {
-    return favoritesCache;
+    return [...favoritesCache];
   },
 
   getByType(type: FavoriteType): FavoriteItem[] {
