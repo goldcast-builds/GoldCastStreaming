@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  NativeModules,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -17,9 +16,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Logo } from "../src/components/Logo";
 import { useSession } from "../src/store/session";
 import { createM3UUrl, listLists, setActiveListId } from "../src/utils/api";
-
-// Deteta se é uma plataforma de TV de forma segura
-const isTV = Platform.isTV || (Platform.OS === "android" && NativeModules.PlatformConstants?.uiMode === "television");
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -33,7 +29,7 @@ export default function LoginScreen() {
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const [remember, setRemember] = useState(true);
+  const [remember] = useState(true);
 
   const [m3uName, setM3uName] = useState("");
   const [m3uUrl, setM3uUrl] = useState("");
@@ -58,8 +54,8 @@ export default function LoginScreen() {
           AsyncStorage.getItem("@goldcast_saved_user"),
         ]);
 
-        if (savedServer) setServer(savedServer);
-        if (savedUser) setUser(savedUser);
+        if (savedServer && mounted.current) setServer(savedServer);
+        if (savedUser && mounted.current) setUser(savedUser);
       } catch {}
     })();
 
@@ -86,7 +82,9 @@ export default function LoginScreen() {
       await login(server.trim(), user.trim(), pass, remember, (s, d) => {
         if (mounted.current) setStatusMsg(d || "A carregar conteúdos...");
       });
-      setTimeout(() => router.replace("/(tabs)"), 350);
+      setTimeout(() => {
+        if (mounted.current) router.replace("/(tabs)");
+      }, 350);
     } catch (e: any) {
       if (mounted.current) {
         setError(e?.message || "Falha ao ligar ao servidor. Verifique os dados com o seu fornecedor.");
@@ -124,7 +122,9 @@ export default function LoginScreen() {
         }
       }
 
-      setTimeout(() => router.replace("/(tabs)"), 350);
+      setTimeout(() => {
+        if (mounted.current) router.replace("/(tabs)");
+      }, 350);
     } catch (e: any) {
       if (mounted.current) {
         setError(e?.message || "Falha ao processar a lista M3U. Verifique a ligação informada.");
@@ -174,7 +174,9 @@ export default function LoginScreen() {
         throw new Error("Este período de demonstração já se encontra expirado.");
       }
 
-      setTimeout(() => router.replace("/(tabs)"), 350);
+      setTimeout(() => {
+        if (mounted.current) router.replace("/(tabs)");
+      }, 350);
     } catch (e: any) {
       if (mounted.current) {
         setError(e?.message || "Falha na ligação de teste.");
@@ -205,6 +207,7 @@ export default function LoginScreen() {
           <TVTabButton
             label="🔑 Servidor Xtream"
             active={connectMode === "xtream"}
+            preferredFocus={connectMode === "xtream"}
             onPress={() => {
               setConnectMode("xtream");
               setError(null);
@@ -240,6 +243,8 @@ export default function LoginScreen() {
                 onChangeText={setServer}
                 keyboardType="url"
                 autoCapitalize="none"
+                returnKeyType="next"
+                onSubmitEditing={() => userRef.current?.focus()}
               />
             </View>
 
@@ -253,6 +258,8 @@ export default function LoginScreen() {
                   value={user}
                   onChangeText={setUser}
                   autoCapitalize="none"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passRef.current?.focus()}
                 />
               </View>
 
@@ -266,10 +273,13 @@ export default function LoginScreen() {
                   onChangeText={setPass}
                   secureTextEntry={!showPass}
                   autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={handleConnectIPTV}
                   rightElement={
-                    <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
-                      <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
-                    </Pressable>
+                    <TVEyeButton
+                      showPass={showPass}
+                      onPress={() => setShowPass((v) => !v)}
+                    />
                   }
                 />
               </View>
@@ -293,6 +303,8 @@ export default function LoginScreen() {
                 placeholder="Ex: Minha Lista Principal"
                 value={m3uName}
                 onChangeText={setM3uName}
+                returnKeyType="next"
+                onSubmitEditing={() => m3uUrlRef.current?.focus()}
               />
             </View>
 
@@ -306,6 +318,8 @@ export default function LoginScreen() {
                 onChangeText={setM3uUrl}
                 keyboardType="url"
                 autoCapitalize="none"
+                returnKeyType="done"
+                onSubmitEditing={handleConnectM3U}
               />
             </View>
 
@@ -329,6 +343,8 @@ export default function LoginScreen() {
                 onChangeText={setServer}
                 keyboardType="url"
                 autoCapitalize="none"
+                returnKeyType="next"
+                onSubmitEditing={() => userRef.current?.focus()}
               />
             </View>
 
@@ -342,6 +358,8 @@ export default function LoginScreen() {
                   value={user}
                   onChangeText={setUser}
                   autoCapitalize="none"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passRef.current?.focus()}
                 />
               </View>
 
@@ -355,10 +373,13 @@ export default function LoginScreen() {
                   onChangeText={setPass}
                   secureTextEntry={!showPass}
                   autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={handleConnectTrial}
                   rightElement={
-                    <Pressable focusable={true} onPress={() => setShowPass((v) => !v)} hitSlop={8}>
-                      <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
-                    </Pressable>
+                    <TVEyeButton
+                      showPass={showPass}
+                      onPress={() => setShowPass((v) => !v)}
+                    />
                   }
                 />
               </View>
@@ -390,7 +411,6 @@ export default function LoginScreen() {
   );
 }
 
-// COMPONENTE TVINPUTFIELD ADAPTATIVO (TV / MÓVEL)
 function TVInputField({
   inputRef,
   icon,
@@ -400,20 +420,35 @@ function TVInputField({
   secureTextEntry,
   keyboardType,
   autoCapitalize,
+  returnKeyType,
+  onSubmitEditing,
   rightElement,
 }: any) {
   const [isFocused, setIsFocused] = useState(false);
 
+  const handleOpenInput = () => {
+    setIsFocused(true);
+    requestAnimationFrame(() => {
+      inputRef?.current?.focus();
+    });
+  };
+
   return (
     <Pressable
-      onPress={() => {
-        inputRef.current?.focus();
-      }}
+      focusable={true}
+      accessible={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={handleOpenInput}
       style={[styles.inputBox, isFocused && styles.inputBoxFocused]}
     >
       {icon && <Text style={styles.inputEmoji}>{icon}</Text>}
       <TextInput
         ref={inputRef}
+        editable={true}
+        focusable={true}
+        accessible={true}
+        showSoftInputOnFocus={true}
         placeholder={placeholder}
         placeholderTextColor={isFocused ? "#D1D5DB" : "#6B7280"}
         value={value}
@@ -422,7 +457,9 @@ function TVInputField({
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
-        showSoftInputOnFocus={isTV ? false : true}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
+        blurOnSubmit={returnKeyType === "done"}
         style={[styles.textInput, isFocused && { color: "#FFF", fontWeight: "700" }]}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
@@ -432,12 +469,48 @@ function TVInputField({
   );
 }
 
-function TVTabButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function TVEyeButton({
+  showPass,
+  onPress,
+}: {
+  showPass: boolean;
+  onPress: () => void;
+}) {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
     <Pressable
       focusable={true}
+      accessible={true}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onPress={onPress}
+      hitSlop={8}
+      style={[styles.eyeBtn, isFocused && styles.eyeBtnFocused]}
+    >
+      <Text style={{ fontSize: 16 }}>{showPass ? "🙈" : "👁️"}</Text>
+    </Pressable>
+  );
+}
+
+function TVTabButton({
+  label,
+  active,
+  preferredFocus = false,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  preferredFocus?: boolean;
+  onPress: () => void;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Pressable
+      focusable={true}
+      accessible={true}
+      hasTVPreferredFocus={preferredFocus}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
@@ -460,12 +533,21 @@ function TVTabButton({ label, active, onPress }: { label: string; active: boolea
   );
 }
 
-function TVActionButton({ label, loading, onPress }: { label: string; loading: boolean; onPress: () => void }) {
+function TVActionButton({
+  label,
+  loading,
+  onPress,
+}: {
+  label: string;
+  loading: boolean;
+  onPress: () => void;
+}) {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
     <Pressable
       focusable={true}
+      accessible={true}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={onPress}
@@ -485,34 +567,135 @@ function TVActionButton({ label, loading, onPress }: { label: string; loading: b
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#1B3B4B" },
-  content: { paddingHorizontal: 30, maxWidth: 620, width: "100%", alignSelf: "center", justifyContent: "center" },
+  content: {
+    paddingHorizontal: 30,
+    maxWidth: 620,
+    width: "100%",
+    alignSelf: "center",
+    justifyContent: "center",
+  },
   logoWrap: { alignItems: "center", marginBottom: 2 },
-  brand: { color: "#E9C46A", fontSize: 20, fontWeight: "900", textAlign: "center", letterSpacing: 0.8, marginBottom: 2 },
-  subtitle: { color: "#9CA3AF", fontSize: 11, textAlign: "center", marginBottom: 10, fontWeight: "600" },
-  
-  tabSelector: { flexDirection: "row", backgroundColor: "#152E3B", borderRadius: 10, padding: 3, marginBottom: 10, borderWidth: 1, borderColor: "rgba(233,196,106,0.15)" },
-  tabButton: { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 8, borderWidth: 2, borderColor: "transparent" },
+  brand: {
+    color: "#E9C46A",
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  subtitle: {
+    color: "#9CA3AF",
+    fontSize: 11,
+    textAlign: "center",
+    marginBottom: 10,
+    fontWeight: "600",
+  },
+
+  tabSelector: {
+    flexDirection: "row",
+    backgroundColor: "#152E3B",
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(233,196,106,0.15)",
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
   tabButtonActive: { backgroundColor: "#E9C46A" },
-  tabButtonFocused: { borderColor: "#FFF", backgroundColor: "#1B3B4B", transform: [{ scale: 1.02 }] },
+  tabButtonFocused: {
+    borderColor: "#FFF",
+    backgroundColor: "#1B3B4B",
+    transform: [{ scale: 1.03 }],
+  },
   tabButtonText: { color: "#9CA3AF", fontSize: 11, fontWeight: "800" },
 
   formWrap: { gap: 10 },
   fieldGroup: { width: "100%" },
   rowFields: { flexDirection: "row", gap: 12 },
-  fieldLabel: { color: "#E9C46A", fontSize: 9, marginBottom: 4, fontWeight: "800", letterSpacing: 0.5 },
-  
-  inputBox: { flexDirection: "row", alignItems: "center", backgroundColor: "#152E3B", borderRadius: 10, borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.08)", paddingHorizontal: 12, height: 44 },
-  inputBoxFocused: { borderColor: "#E9C46A", borderWidth: 2.5, backgroundColor: "#1B3B4B", transform: [{ scale: 1.01 }] },
+  fieldLabel: {
+    color: "#E9C46A",
+    fontSize: 9,
+    marginBottom: 4,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+
+  inputBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#152E3B",
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    paddingHorizontal: 12,
+    height: 46,
+  },
+  inputBoxFocused: {
+    borderColor: "#E9C46A",
+    borderWidth: 3,
+    backgroundColor: "#1B3B4B",
+    transform: [{ scale: 1.02 }],
+  },
   inputEmoji: { fontSize: 14, marginRight: 8 },
   textInput: { flex: 1, color: "#FFF", fontSize: 13, fontWeight: "700" },
 
-  btnGold: { backgroundColor: "#E9C46A", height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", marginTop: 4, borderWidth: 2, borderColor: "transparent" },
-  btnGoldFocused: { borderColor: "#FFF", borderWidth: 2.5, transform: [{ scale: 1.01 }] },
+  eyeBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+  },
+  eyeBtnFocused: {
+    borderColor: "#E9C46A",
+    backgroundColor: "rgba(233,196,106,0.15)",
+  },
+
+  btnGold: {
+    backgroundColor: "#E9C46A",
+    height: 46,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  btnGoldFocused: {
+    borderColor: "#FFF",
+    borderWidth: 3,
+    transform: [{ scale: 1.02 }],
+  },
   btnGoldText: { color: "#000", fontSize: 12, fontWeight: "900", letterSpacing: 0.8 },
 
-  statusBox: { marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 10, backgroundColor: "#152E3B", borderRadius: 10 },
+  statusBox: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 10,
+    backgroundColor: "#152E3B",
+    borderRadius: 10,
+  },
   statusText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
-  
-  errorBox: { marginTop: 8, flexDirection: "row", alignItems: "center", padding: 10, backgroundColor: "rgba(231,111,81,0.12)", borderRadius: 10, borderWidth: 1, borderColor: "rgba(231,111,81,0.3)" },
+
+  errorBox: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    backgroundColor: "rgba(231,111,81,0.12)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(231,111,81,0.3)",
+  },
   errorText: { color: "#E76F51", flex: 1, fontSize: 11, fontWeight: "700" },
 });
