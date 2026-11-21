@@ -7,17 +7,32 @@ import {
   ActivityIndicator,
   Platform,
   NativeModules,
-  StatusBar,
   DeviceEventEmitter,
-  AppState,
+  Modal,
+  FlatList,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import Ionicons from "@react-native-vector-icons/ionicons";
+import { Image } from "expo-image";
 import { Logo } from "../src/components/Logo";
 import { colors, radius, spacing } from "../src/utils/theme";
 import { reportError } from "../src/utils/logger";
 import { useSession, PlayItem } from "../src/store/session";
+
+function buildLiveUrl(sessionObj: any, channelId: string | number): string {
+  const server = sessionObj?.server || sessionObj?.url || "";
+  const username = sessionObj?.user || sessionObj?.username || sessionObj?.userInfo?.username || "";
+  const password = sessionObj?.pass || sessionObj?.password || sessionObj?.userInfo?.password || "";
+  if (!server || !username || !password || !channelId) return "";
+  const cleanServer = String(server).replace(/\/+$/, "");
+  let url = `${cleanServer}/live/${username}/${password}/${channelId}.ts`;
+  if (url.toLowerCase().startsWith("https://")) {
+    url = "http://" + url.substring(8);
+  }
+  return url;
+}
 
 export default function PlayerScreen() {
   const router = useRouter();
@@ -26,11 +41,24 @@ export default function PlayerScreen() {
 
   const queue = useSession((s: any) => s.queue || []) as PlayItem[];
   const queueIndex = useSession((s: any) => s.queueIndex ?? s.currentIndex ?? s.index ?? 0);
+  const setQueue = useSession((s: any) => s.setQueue);
   const session = useSession((s: any) => s.session || s);
+  const catalog = useSession((s: any) => s.catalog);
   const ud = useSession((s: any) => s.ud);
   const saveProgress = useSession((s: any) => s.saveProgress);
   const removeProgress = useSession((s: any) => s.removeProgress);
   const addRecent = useSession((s: any) => s.addRecent);
+
+  const [channelPickerVisible, setChannelPickerVisible] = useState(false);
+  const [launching, setLaunching] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const hasAutoLaunched = useRef(false);
+  const lastAutoUrlRef = useRef<string>("");
+
+  const liveChannelsList = useMemo(() => {
+    const rawList = catalog?.live || catalog?.channels || [];
+    return Array.isArray(rawList) ? rawList : [];
+  }, [catalog]);
 
   const activePlayItem = useMemo(() => {
     if (Array.isArray(queue) && queue.length > 0 && queueIndex >= 0 && queueIndex < queue.length) {
@@ -50,14 +78,16 @@ export default function PlayerScreen() {
   }, [rawParams, activePlayItem]);
 
   const streamType = useMemo(() => {
-    return (
+    return String(
       rawParams.type ||
-      rawParams.stream_type ||
-      rawParams.kind ||
-      activePlayItem?.kind ||
-      "live"
+        rawParams.stream_type ||
+        rawParams.kind ||
+        activePlayItem?.kind ||
+        "live"
     ).toLowerCase();
   }, [rawParams, activePlayItem]);
+
+  const isLive = streamType === "live";
 
   const streamId = useMemo(() => {
     return (
@@ -73,18 +103,25 @@ export default function PlayerScreen() {
   const progressKey = useMemo(() => {
     if (activePlayItem?.progressKey) return activePlayItem.progressKey;
     if (streamId) {
-      return streamType !== "live" ? `${streamType}_${streamId}` : "";
+      return !isLive ? `${streamType}_${streamId}` : "";
     }
     return "";
-  }, [activePlayItem, streamId, streamType]);
+  }, [activePlayItem, streamId, streamType, isLive]);
 
   const savedProgress = useMemo(() => {
-    if (!progressKey || streamType === "live") return null;
+    if (!progressKey || isLive) return null;
     const allProgress = ud?.progress || {};
     return allProgress[progressKey] || (streamId ? allProgress[String(streamId)] : null) || null;
-  }, [progressKey, streamId, streamType, ud]);
+  }, [progressKey, streamId, isLive, ud]);
 
   const startPositionMs = useMemo(() => {
+    if (isLive) return 0;
+
+    const paramResumeSec = Number(rawParams?.resumeSec || rawParams?.resume || 0);
+    if (paramResumeSec > 10) {
+      return Math.round(paramResumeSec * 1000);
+    }
+
     if (!savedProgress) return 0;
     const pos = Number(savedProgress.position) || 0;
     const dur = Number(savedProgress.duration) || 0;
@@ -93,14 +130,18 @@ export default function PlayerScreen() {
     if (pos < 10) return 0;
 
     return pos > 100000 ? pos : Math.round(pos * 1000);
-  }, [savedProgress]);
+  }, [savedProgress, isLive, rawParams]);
 
   const streamUrl = useMemo(() => {
     let rawUrl = "";
 
     if (activePlayItem?.urls && activePlayItem.urls.length > 0) {
       const firstUrl = activePlayItem.urls[0];
-      if (firstUrl && typeof firstUrl === "string" && (firstUrl.startsWith("http://") || firstUrl.startsWith("https://"))) {
+      if (
+        firstUrl &&
+        typeof firstUrl === "string" &&
+        (firstUrl.startsWith("http://") || firstUrl.startsWith("https://"))
+      ) {
         rawUrl = firstUrl;
       }
     }
@@ -114,7 +155,11 @@ export default function PlayerScreen() {
         rawParams.videoUrl ||
         rawParams.link;
 
-      if (directUrl && typeof directUrl === "string" && (directUrl.startsWith("http://") || directUrl.startsWith("https://"))) {
+      if (
+        directUrl &&
+        typeof directUrl === "string" &&
+        (directUrl.startsWith("http://") || directUrl.startsWith("https://"))
+      ) {
         rawUrl = directUrl;
       }
     }
@@ -125,7 +170,7 @@ export default function PlayerScreen() {
       const password = session?.pass || session?.password || session?.userInfo?.password || "";
 
       if (streamId && server && username && password) {
-        const cleanServer = server.replace(/\/+$/, "");
+        const cleanServer = String(server).replace(/\/+$/, "");
         let typeFolder = "live";
         let extension = "ts";
 
@@ -150,19 +195,68 @@ export default function PlayerScreen() {
     return rawUrl;
   }, [rawParams, activePlayItem, session, streamId, streamType]);
 
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextAppState) => {
-      if (nextAppState === "active") {
-        if (router.canGoBack()) {
-          router.back();
-        }
-      }
-    });
+  const currentLiveIndex = useMemo(() => {
+    if (!isLive || liveChannelsList.length === 0 || !streamId) return -1;
+    return liveChannelsList.findIndex(
+      (c: any) => String(c?.stream_id || c?.id || "") === String(streamId)
+    );
+  }, [isLive, liveChannelsList, streamId]);
 
-    return () => {
-      subscription.remove();
-    };
-  }, [router]);
+  const switchToLiveChannel = useCallback(
+    (channelItem: any) => {
+      if (!channelItem) return;
+      const chId = String(channelItem?.stream_id || channelItem?.id || "");
+      const chName = channelItem?.name || channelItem?.title || "Canal ao Vivo";
+      const chLogo = channelItem?.stream_icon || "";
+      const url = buildLiveUrl(session, chId);
+
+      if (!url) {
+        setErrorMsg("Não foi possível gerar a URL deste canal.");
+        return;
+      }
+
+      const nextPlayItem: PlayItem = {
+        kind: "live" as any,
+        id: chId,
+        title: chName,
+        subtitle: "Canal ao Vivo",
+        logo: chLogo,
+        urls: [url],
+        raw: channelItem,
+      };
+
+      setChannelPickerVisible(false);
+      setErrorMsg(null);
+      hasAutoLaunched.current = false;
+      lastAutoUrlRef.current = "";
+
+      if (typeof setQueue === "function") {
+        setQueue([nextPlayItem], 0);
+      }
+
+      router.replace({
+        pathname: "/player",
+        params: {
+          title: chName,
+          type: "live",
+          stream_id: chId,
+          url,
+          logo: chLogo,
+        },
+      });
+    },
+    [session, setQueue, router]
+  );
+
+  const handleStepChannel = useCallback(
+    (delta: -1 | 1) => {
+      if (!isLive || liveChannelsList.length === 0) return;
+      const baseIdx = currentLiveIndex >= 0 ? currentLiveIndex : 0;
+      const nextIdx = (baseIdx + delta + liveChannelsList.length) % liveChannelsList.length;
+      switchToLiveChannel(liveChannelsList[nextIdx]);
+    },
+    [isLive, liveChannelsList, currentLiveIndex, switchToLiveChannel]
+  );
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener(
@@ -175,18 +269,20 @@ export default function PlayerScreen() {
       }) => {
         if (!data || !data.progressKey || data.streamType === "live") return;
 
-        const posSec = Math.round(data.position);
-        const durSec = Math.round(data.duration);
+        const posSec = Math.round(Number(data.position) || 0);
+        const durSec = Math.round(Number(data.duration) || 0);
 
         if (durSec > 0 && posSec > 10) {
           const ratio = posSec / durSec;
           if (ratio >= 0.95) {
-            removeProgress(data.progressKey);
-          } else {
+            if (typeof removeProgress === "function") {
+              removeProgress(data.progressKey);
+            }
+          } else if (typeof saveProgress === "function") {
             const itemToSave: PlayItem = activePlayItem || {
               kind: (data.streamType as any) || "vod",
               id: String(streamId),
-              title: title,
+              title: String(title),
               urls: streamUrl ? [streamUrl] : [],
               progressKey: data.progressKey,
               logo: rawParams.logo || rawParams.stream_icon,
@@ -195,7 +291,7 @@ export default function PlayerScreen() {
             saveProgress(data.progressKey, {
               position: posSec,
               duration: durSec,
-              title: title,
+              title: String(title),
               logo: activePlayItem?.logo || rawParams.logo || rawParams.stream_icon,
               item: itemToSave,
             });
@@ -208,10 +304,6 @@ export default function PlayerScreen() {
       sub.remove();
     };
   }, [activePlayItem, saveProgress, removeProgress, streamId, title, streamUrl, rawParams]);
-
-  const [launching, setLaunching] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const hasAutoLaunched = useRef(false);
 
   const abrirNoJustPlayer = useCallback(async () => {
     if (!streamUrl) {
@@ -228,13 +320,16 @@ export default function PlayerScreen() {
         NativeModules.JustPlayer &&
         typeof NativeModules.JustPlayer.play === "function"
       ) {
-        if (activePlayItem || streamId) {
-          addRecent((streamType as any) || "live", activePlayItem || { id: streamId, title, urls: [streamUrl] });
+        if ((activePlayItem || streamId) && typeof addRecent === "function") {
+          addRecent(
+            (streamType as any) || "live",
+            activePlayItem || { id: streamId, title, urls: [streamUrl] }
+          );
         }
 
         NativeModules.JustPlayer.play(
           streamUrl,
-          title,
+          String(title),
           startPositionMs,
           progressKey,
           streamType
@@ -254,8 +349,10 @@ export default function PlayerScreen() {
   }, [streamUrl, title, startPositionMs, progressKey, streamType, activePlayItem, streamId, addRecent]);
 
   useEffect(() => {
-    if (!hasAutoLaunched.current && streamUrl) {
+    if (!streamUrl) return;
+    if (!hasAutoLaunched.current || lastAutoUrlRef.current !== streamUrl) {
       hasAutoLaunched.current = true;
+      lastAutoUrlRef.current = streamUrl;
       const timer = setTimeout(() => {
         abrirNoJustPlayer();
       }, 300);
@@ -263,13 +360,9 @@ export default function PlayerScreen() {
     }
   }, [streamUrl, abrirNoJustPlayer]);
 
-  useEffect(() => {
-    hasAutoLaunched.current = false;
-  }, [queueIndex]);
-
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#07080A" hidden={false} />
+      <StatusBar hidden={true} translucent={true} />
 
       <View style={styles.header}>
         <Pressable
@@ -281,6 +374,40 @@ export default function PlayerScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.gold} />
           <Text style={styles.backBtnText}>Voltar</Text>
         </Pressable>
+
+        {isLive && liveChannelsList.length > 0 && (
+          <View style={styles.zappingHeaderGroup}>
+            <Pressable
+              focusable={true}
+              accessible={true}
+              style={({ focused }) => [styles.zappingBtn, focused && styles.cardFocused]}
+              onPress={() => handleStepChannel(-1)}
+            >
+              <Ionicons name="chevron-back" size={18} color="#FFF" />
+              <Text style={styles.zappingBtnText}>Anterior</Text>
+            </Pressable>
+
+            <Pressable
+              focusable={true}
+              accessible={true}
+              style={({ focused }) => [styles.zappingBtnGold, focused && styles.cardFocused]}
+              onPress={() => setChannelPickerVisible(true)}
+            >
+              <Ionicons name="list" size={16} color="#000" />
+              <Text style={styles.zappingBtnGoldText}>Canais</Text>
+            </Pressable>
+
+            <Pressable
+              focusable={true}
+              accessible={true}
+              style={({ focused }) => [styles.zappingBtn, focused && styles.cardFocused]}
+              onPress={() => handleStepChannel(1)}
+            >
+              <Text style={styles.zappingBtnText}>Próximo</Text>
+              <Ionicons name="chevron-forward" size={18} color="#FFF" />
+            </Pressable>
+          </View>
+        )}
       </View>
 
       <View style={styles.content}>
@@ -352,6 +479,68 @@ export default function PlayerScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* Seletor Rápido de Canais */}
+      <Modal
+        visible={channelPickerVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setChannelPickerVisible(false)}
+      >
+        <View style={styles.pickerOverlay}>
+          <View style={styles.pickerCard}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Troca Rápida de Canal</Text>
+              <Pressable
+                focusable={true}
+                onPress={() => setChannelPickerVisible(false)}
+                style={({ focused }) => [styles.pickerClose, focused && styles.cardFocused]}
+              >
+                <Ionicons name="close" size={20} color="#FFF" />
+              </Pressable>
+            </View>
+
+            <FlatList
+              data={liveChannelsList.slice(0, 120)}
+              keyExtractor={(item: any, idx) => `qp-${item?.stream_id || item?.id || idx}-${idx}`}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }: { item: any }) => {
+                const chId = String(item?.stream_id || item?.id || "");
+                const chName = item?.name || item?.title || "Canal";
+                const chLogo = item?.stream_icon || "";
+                const isCurrent = String(chId) === String(streamId);
+
+                return (
+                  <Pressable
+                    focusable={true}
+                    onPress={() => switchToLiveChannel(item)}
+                    style={({ focused }) => [
+                      styles.pickerRow,
+                      isCurrent && styles.pickerRowActive,
+                      focused && styles.cardFocused,
+                    ]}
+                  >
+                    {chLogo ? (
+                      <Image
+                        source={{ uri: chLogo }}
+                        style={styles.pickerLogo}
+                        contentFit="contain"
+                        cachePolicy="memory-disk"
+                      />
+                    ) : (
+                      <Ionicons name="tv-outline" size={20} color={colors.gold} />
+                    )}
+                    <Text style={styles.pickerRowText} numberOfLines={1}>
+                      {chName}
+                    </Text>
+                    {isCurrent && <Ionicons name="radio" size={16} color={colors.gold} />}
+                  </Pressable>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -362,14 +551,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#07080A",
   },
   header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+    gap: 12,
+    flexWrap: "wrap",
   },
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    alignSelf: "flex-start",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: radius.sm,
@@ -381,6 +574,43 @@ const styles = StyleSheet.create({
     color: colors.gold,
     fontSize: 14,
     fontWeight: "700",
+  },
+  zappingHeaderGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  zappingBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    borderRadius: radius.sm,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  zappingBtnText: {
+    color: "#FFF",
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+  zappingBtnGold: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: radius.sm,
+    backgroundColor: colors.gold,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  zappingBtnGoldText: {
+    color: "#000",
+    fontSize: 12.5,
+    fontWeight: "900",
   },
   content: {
     flex: 1,
@@ -501,5 +731,67 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     transform: [{ scale: 1.02 }],
     backgroundColor: "rgba(229, 169, 59, 0.15)",
+  },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  pickerCard: {
+    width: "100%",
+    maxWidth: 520,
+    maxHeight: "82%",
+    backgroundColor: "#141722",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "rgba(229,169,59,0.4)",
+    padding: 16,
+    gap: 10,
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  pickerTitle: {
+    color: colors.gold,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  pickerClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#222634",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  pickerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "#1A1E2D",
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  pickerRowActive: {
+    borderColor: "rgba(229,169,59,0.5)",
+  },
+  pickerLogo: {
+    width: 34,
+    height: 24,
+  },
+  pickerRowText: {
+    color: "#FFF",
+    fontSize: 13,
+    fontWeight: "700",
+    flex: 1,
   },
 });
