@@ -20,6 +20,8 @@ import { createM3UUrl, listLists, setActiveListId } from "../src/utils/api";
 type DnsKey = "dns1" | "dns2";
 type XtreamStep = "code" | "dns" | "credentials";
 
+const VALID_ACCESS_CODE = "202728";
+
 const DNS_OPTIONS: Record<DnsKey, { title: string; subtitle: string; url: string }> = {
   dns1: {
     title: "Servidor 1 (DNS 1)",
@@ -90,10 +92,17 @@ export default function LoginScreen() {
   const handleConfirmAccessCode = () => {
     setError(null);
     const cleanCode = accessCode.trim();
+
     if (!cleanCode) {
       setError("Digite o código de acesso para continuar.");
       return;
     }
+
+    if (cleanCode !== VALID_ACCESS_CODE) {
+      setError("Código inválido. Digite o código de acesso correto.");
+      return;
+    }
+
     AsyncStorage.setItem("@goldcast_saved_code", cleanCode).catch(() => {});
     setXtreamStep("dns");
   };
@@ -295,10 +304,11 @@ export default function LoginScreen() {
                   <TVInputField
                     inputRef={codeRef}
                     icon="🎟️"
-                    placeholder="Digite o código"
+                    placeholder="Digite o código (ex: 202728)"
                     value={accessCode}
                     onChangeText={setAccessCode}
-                    autoCapitalize="characters"
+                    keyboardType="numeric"
+                    autoCapitalize="none"
                     returnKeyType="done"
                     onSubmitEditing={handleConfirmAccessCode}
                   />
