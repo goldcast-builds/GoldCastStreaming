@@ -3,33 +3,45 @@ import { View, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useSession } from "../src/store/session";
 
 export default function IntroScreen() {
   const router = useRouter();
+  const restore = useSession((s) => s.restore);
 
-  // Configura o leitor com o ficheiro Intro.mp4 na pasta assets
   const player = useVideoPlayer(require("../assets/Intro.mp4"), (playerInstance) => {
     playerInstance.loop = false;
     playerInstance.play();
   });
 
   useEffect(() => {
-    // Temporizador ajustado para 13.5 segundos (cobre os 13s da nova intro sem cortes)
+    let isMounted = true;
+
+    // Já inicia a restauração da sessão em paralelo à introdução
+    restore().catch(() => {});
+
     const timer = setTimeout(async () => {
+      if (!isMounted) return;
       try {
+        await restore().catch(() => {});
+        const currentSession = useSession.getState().session;
         const savedCode = await AsyncStorage.getItem("@goldcast_saved_code");
-        if (savedCode && savedCode.length > 3) {
-          router.replace("/(tabs)"); // Se já tiver sessão, vai direto para a Home
+
+        if (currentSession || (savedCode && savedCode.length > 3)) {
+          router.replace("/(tabs)");
         } else {
-          router.replace("/login"); // Se não tiver, vai para a tela de login
+          router.replace("/login");
         }
       } catch {
         router.replace("/login");
       }
     }, 13500);
 
-    return () => clearTimeout(timer);
-  }, [router]);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [router, restore]);
 
   return (
     <View style={styles.container}>
