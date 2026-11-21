@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
@@ -18,6 +19,9 @@ import { FavoritesStore } from "../../src/store/favorites";
 
 export default function LiveScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isWideTv = width >= 900;
+
   const params = useLocalSearchParams<{ search?: string; query?: string }>();
   const initialQuery = (params?.search || params?.query || "").trim();
 
@@ -26,7 +30,7 @@ export default function LiveScreen() {
   const loadLive = useSession((s) => s.loadLive);
   const setQueue = useSession((s) => s.setQueue);
   const loading = useSession((s) => s.loading.live);
-  const parentalPin = useSession((s) => s.parentalPin || s.settings?.parentalPin || "1234");
+  const parentalPin = useSession((s) => (s as any).parentalPin || s.prefs?.parentalPin || "1234");
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -64,22 +68,22 @@ export default function LiveScreen() {
     return adultKeywords.some((kw) => lower.includes(kw));
   };
 
-  const categories = catalog?.liveCats || catalog?.categories?.live || [];
-  const channels = catalog?.live || catalog?.channels || [];
+  const categories = catalog?.liveCats || (catalog as any)?.categories?.live || [];
+  const channels = catalog?.live || (catalog as any)?.channels || [];
 
   const filteredChannels = useMemo(() => {
     let result = channels;
 
     if (selectedCategory === "favorites") {
       const favIds = new Set(favList.map((f) => String(f.id)));
-      result = result.filter((c) => favIds.has(String(c?.stream_id || c?.id || "")));
+      result = result.filter((c: any) => favIds.has(String(c?.stream_id || c?.id || "")));
     } else if (selectedCategory !== "all") {
-      result = result.filter((c) => String(c?.category_id) === String(selectedCategory));
+      result = result.filter((c: any) => String(c?.category_id) === String(selectedCategory));
     }
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter((c) => (c?.name || c?.title || "").toLowerCase().includes(query));
+      result = result.filter((c: any) => (c?.name || c?.title || "").toLowerCase().includes(query));
     }
 
     return result;
@@ -99,7 +103,12 @@ export default function LiveScreen() {
     }
   };
 
-  const handleChannelPress = (channelId: string, channelName: string, logoUri: string, rawItem: any) => {
+  const handleChannelPress = (
+    channelId: string,
+    channelName: string,
+    logoUri: string,
+    rawItem: any
+  ) => {
     const action = () => {
       if (!session) return;
       const liveStreamUrl = `${session.server.replace(/\/+$/, "")}/live/${session.username}/${session.password}/${channelId}.ts`;
@@ -129,7 +138,12 @@ export default function LiveScreen() {
     }
   };
 
-  const handleToggleFav = (channelId: string, channelName: string, logoUri: string, rawItem: any) => {
+  const handleToggleFav = (
+    channelId: string,
+    channelName: string,
+    logoUri: string,
+    rawItem: any
+  ) => {
     FavoritesStore.toggleFavorite({
       id: channelId,
       type: "live",
@@ -162,23 +176,30 @@ export default function LiveScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="#FFF" />
         </Pressable>
-        <Text style={styles.headerTitle}>CANAIS</Text>
+        <Text style={[styles.headerTitle, isWideTv && { fontSize: 22 }]}>CANAIS</Text>
       </View>
 
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={18} color="#E9C46A" />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, isWideTv && { fontSize: 15 }]}
           placeholder="Buscar canais..."
           placeholderTextColor="#6B7280"
           value={searchQuery}
           onChangeText={setSearchQuery}
-          blurOnSubmit={false}
+          returnKeyType="search"
+          blurOnSubmit={true}
           autoCorrect={false}
           autoCapitalize="none"
         />
         {searchQuery.length > 0 && (
-          <Pressable focusable={true} onPress={() => setSearchQuery("")} hitSlop={8}>
+          <Pressable
+            focusable={true}
+            accessible={true}
+            onPress={() => setSearchQuery("")}
+            hitSlop={8}
+            style={({ focused }) => [focused && styles.cardFocused]}
+          >
             <Ionicons name="close-circle" size={18} color="#9CA3AF" />
           </Pressable>
         )}
@@ -194,15 +215,15 @@ export default function LiveScreen() {
           <View style={styles.gridWrapper}>
             <FlatList
               data={filteredChannels}
-              keyExtractor={(item, idx) => `live-${item?.stream_id || item?.id || idx}-${idx}`}
+              keyExtractor={(item: any, idx) => `live-${item?.stream_id || item?.id || idx}-${idx}`}
               numColumns={4}
               contentContainerStyle={styles.gridContainer}
               columnWrapperStyle={styles.columnWrapper}
               showsVerticalScrollIndicator={false}
               initialNumToRender={16}
               maxToRenderPerBatch={16}
-              windowSize={5}
-              removeClippedSubviews={true}
+              windowSize={7}
+              removeClippedSubviews={false}
               ListEmptyComponent={
                 <View style={styles.loadingContainer}>
                   <Ionicons
@@ -217,7 +238,7 @@ export default function LiveScreen() {
                   </Text>
                 </View>
               }
-              renderItem={({ item }) => {
+              renderItem={({ item }: { item: any }) => {
                 const channelId = String(item?.stream_id || item?.id || "");
                 const channelName = item?.name || item?.title || "Canal sem nome";
                 const logoUri = item?.stream_icon || "";
@@ -229,7 +250,11 @@ export default function LiveScreen() {
                     accessible={true}
                     onPress={() => handleChannelPress(channelId, channelName, logoUri, item)}
                     onLongPress={() => handleToggleFav(channelId, channelName, logoUri, item)}
-                    style={({ focused }) => [styles.mediaCard, focused && styles.cardFocused]}
+                    style={({ focused }) => [
+                      styles.mediaCard,
+                      isWideTv && { height: 112 },
+                      focused && styles.cardFocused,
+                    ]}
                   >
                     {isFav && (
                       <View style={styles.favBadge}>
@@ -239,16 +264,19 @@ export default function LiveScreen() {
                     {logoUri ? (
                       <Image
                         source={{ uri: logoUri }}
-                        style={styles.logo}
+                        style={[styles.logo, isWideTv && { height: 56 }]}
                         contentFit="contain"
                         cachePolicy="memory-disk"
                       />
                     ) : (
-                      <View style={styles.noLogo}>
+                      <View style={[styles.noLogo, isWideTv && { height: 56 }]}>
                         <Ionicons name="tv-outline" size={24} color="#E9C46A" />
                       </View>
                     )}
-                    <Text style={styles.mediaTitle} numberOfLines={1}>
+                    <Text
+                      style={[styles.mediaTitle, isWideTv && { fontSize: 12 }]}
+                      numberOfLines={1}
+                    >
                       {channelName}
                     </Text>
                   </Pressable>
@@ -258,8 +286,8 @@ export default function LiveScreen() {
           </View>
         )}
 
-        <View style={styles.sidebarCategories}>
-          <Text style={styles.sidebarTitle}>CATEGORIAS</Text>
+        <View style={[styles.sidebarCategories, isWideTv && { width: 250 }]}>
+          <Text style={[styles.sidebarTitle, isWideTv && { fontSize: 14 }]}>CATEGORIAS</Text>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sidebarScroll}>
             <Pressable
               focusable={true}
@@ -271,7 +299,13 @@ export default function LiveScreen() {
                 focused && styles.cardFocused,
               ]}
             >
-              <Text style={[styles.catText, selectedCategory === "all" && styles.catTextActive]}>
+              <Text
+                style={[
+                  styles.catText,
+                  isWideTv && { fontSize: 13 },
+                  selectedCategory === "all" && styles.catTextActive,
+                ]}
+              >
                 Todas
               </Text>
             </Pressable>
@@ -287,13 +321,17 @@ export default function LiveScreen() {
               ]}
             >
               <Text
-                style={[styles.catText, selectedCategory === "favorites" && styles.catTextActive]}
+                style={[
+                  styles.catText,
+                  isWideTv && { fontSize: 13 },
+                  selectedCategory === "favorites" && styles.catTextActive,
+                ]}
               >
                 ⭐ Favoritos ({favList.length})
               </Text>
             </Pressable>
 
-            {categories.map((cat, idx) => {
+            {categories.map((cat: any, idx: number) => {
               const catId = String(cat?.category_id || cat?.id || idx);
               const catName = cat?.category_name || cat?.name || "Categoria";
               const isSelected = selectedCategory === catId;
@@ -310,7 +348,11 @@ export default function LiveScreen() {
                   ]}
                 >
                   <Text
-                    style={[styles.catText, isSelected && styles.catTextActive]}
+                    style={[
+                      styles.catText,
+                      isWideTv && { fontSize: 13 },
+                      isSelected && styles.catTextActive,
+                    ]}
                     numberOfLines={2}
                   >
                     {catName}
@@ -322,7 +364,6 @@ export default function LiveScreen() {
         </View>
       </View>
 
-      {/* Modal de PIN Parental */}
       {pinModalVisible && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -339,12 +380,14 @@ export default function LiveScreen() {
               value={enteredPin}
               onChangeText={setEnteredPin}
               maxLength={6}
-              autoFocus={true}
+              focusable={true}
+              showSoftInputOnFocus={true}
             />
 
             <View style={styles.modalActions}>
               <Pressable
                 focusable={true}
+                accessible={true}
                 onPress={() => setPinModalVisible(false)}
                 style={({ focused }) => [styles.modalBtnCancel, focused && styles.cardFocused]}
               >
@@ -353,6 +396,7 @@ export default function LiveScreen() {
 
               <Pressable
                 focusable={true}
+                accessible={true}
                 onPress={confirmPin}
                 style={({ focused }) => [styles.modalBtnConfirm, focused && styles.cardFocused]}
               >
@@ -386,7 +430,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#152E3B",
     borderRadius: 12,
     paddingHorizontal: 14,
-    height: 40,
+    height: 42,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: "rgba(233,196,106,0.2)",
@@ -420,7 +464,7 @@ const styles = StyleSheet.create({
   cardFocused: {
     borderColor: "#E9C46A",
     borderWidth: 3,
-    transform: [{ scale: 1.05 }],
+    transform: [{ scale: 1.04 }],
     backgroundColor: "rgba(233,196,106,0.15)",
   },
   favBadge: {
@@ -460,7 +504,7 @@ const styles = StyleSheet.create({
   },
   sidebarScroll: { gap: 6 },
   catItem: {
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 10,
     borderRadius: 8,
     backgroundColor: "rgba(255,255,255,0.03)",
