@@ -146,7 +146,14 @@ export default function RootLayout() {
       }
     } catch {}
 
-    useSession.getState().restore();
+    useSession
+      .getState()
+      .restore()
+      .then(() => {
+        useSession.getState().preloadCatalog().catch(() => {});
+      })
+      .catch(() => {});
+
     _WARM.forEach((a) => {
       try {
         const uri = Image.resolveAssetSource(a)?.uri;
