@@ -58,7 +58,7 @@ export default function SeriesScreen() {
           focusable={true}
           accessible={true}
           onPress={() => router.back()}
-          style={({ focused }) => [styles.backBtn, focused && styles.cardFocused]}
+          style={({ focused }) => [styles.backBtn, focused && styles.cardFocusedHighVis]}
           hitSlop={10}
         >
           <Ionicons name="arrow-back" size={24} color="#FFF" />
@@ -67,13 +67,16 @@ export default function SeriesScreen() {
       </View>
 
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={18} color="#E9C46A" />
+        <Ionicons name="search" size={18} color="#FFD700" />
         <TextInput
           style={[styles.searchInput, isWideTv && { fontSize: 15 }]}
           placeholder="Buscar séries..."
           placeholderTextColor="#6B7280"
           value={searchQuery}
           onChangeText={setSearchQuery}
+          focusable={true}
+          accessible={true}
+          showSoftInputOnFocus={true}
           returnKeyType="search"
           blurOnSubmit={true}
           autoCorrect={false}
@@ -84,7 +87,7 @@ export default function SeriesScreen() {
       <View style={styles.contentBody}>
         {loading && series.length === 0 ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#E9C46A" />
+            <ActivityIndicator size="large" color="#FFD700" />
             <Text style={styles.loadingText}>A carregar catálogo de séries...</Text>
           </View>
         ) : (
@@ -112,7 +115,7 @@ export default function SeriesScreen() {
                     style={({ focused }) => [
                       styles.mediaCard,
                       isWideTv && { height: 215 },
-                      focused && styles.cardFocused,
+                      focused && styles.cardFocusedHighVis,
                     ]}
                   >
                     {posterUri ? (
@@ -124,7 +127,7 @@ export default function SeriesScreen() {
                       />
                     ) : (
                       <View style={[styles.noPoster, isWideTv && { height: 178 }]}>
-                        <Ionicons name="tv-outline" size={28} color="#E9C46A" />
+                        <Ionicons name="tv-outline" size={28} color="#FFD700" />
                       </View>
                     )}
                     <Text
@@ -150,7 +153,7 @@ export default function SeriesScreen() {
               style={({ focused }) => [
                 styles.catItem,
                 selectedCategory === "all" && styles.catItemActive,
-                focused && styles.cardFocused,
+                focused && styles.catFocusedHighVis,
               ]}
             >
               <Text
@@ -176,7 +179,7 @@ export default function SeriesScreen() {
                   style={({ focused }) => [
                     styles.catItem,
                     isSelected && styles.catItemActive,
-                    focused && styles.cardFocused,
+                    focused && styles.catFocusedHighVis,
                   ]}
                 >
                   <Text
@@ -228,9 +231,9 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, color: "#FFF", fontSize: 13, fontWeight: "700" },
   contentBody: { flex: 1, flexDirection: "row", gap: 16 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
-  loadingText: { color: "#E9C46A", fontSize: 13, fontWeight: "700" },
+  loadingText: { color: "#FFD700", fontSize: 13, fontWeight: "700" },
   gridWrapper: { flex: 1 },
-  gridContainer: { paddingBottom: 20 },
+  gridContainer: { paddingBottom: 20, paddingTop: 4 },
   columnWrapper: { justifyContent: "space-between", marginBottom: 14 },
   mediaCard: {
     width: "18.8%",
@@ -242,11 +245,21 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
     justifyContent: "space-between",
   },
-  cardFocused: {
-    borderColor: "#E9C46A",
+  cardFocusedHighVis: {
+    borderColor: "#FFD700",
+    borderWidth: 3.5,
+    transform: [{ scale: 1.06 }],
+    backgroundColor: "rgba(255, 215, 0, 0.22)",
+    elevation: 16,
+    zIndex: 999,
+  },
+  catFocusedHighVis: {
+    borderColor: "#FFD700",
     borderWidth: 3,
-    transform: [{ scale: 1.04 }],
-    backgroundColor: "rgba(233,196,106,0.15)",
+    transform: [{ scale: 1.03 }],
+    backgroundColor: "rgba(255, 215, 0, 0.24)",
+    elevation: 12,
+    zIndex: 99,
   },
   poster: { width: "100%", height: 152 },
   noPoster: {
@@ -273,14 +286,14 @@ const styles = StyleSheet.create({
     borderColor: "rgba(233,196,106,0.2)",
   },
   sidebarTitle: {
-    color: "#E9C46A",
+    color: "#FFD700",
     fontSize: 12,
     fontWeight: "900",
     marginBottom: 8,
     textAlign: "center",
     letterSpacing: 1,
   },
-  sidebarScroll: { gap: 6 },
+  sidebarScroll: { gap: 6, paddingVertical: 2 },
   catItem: {
     paddingVertical: 9,
     paddingHorizontal: 10,
