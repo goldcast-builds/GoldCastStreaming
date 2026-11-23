@@ -297,9 +297,9 @@ export default function HomeTab() {
         })
         .catch(() => {});
       if (session) {
-        if (loadVod) loadVod(true).catch(() => {});
-        if (loadSeries) loadSeries(true).catch(() => {});
-        if (loadLive) loadLive().catch(() => {});
+        if (loadVod) loadVod(false).catch(() => {});
+        if (loadSeries) loadSeries(false).catch(() => {});
+        if (loadLive) loadLive(false).catch(() => {});
       }
       return () => {
         isMounted = false;
@@ -311,7 +311,7 @@ export default function HomeTab() {
     const animMovies = Animated.loop(
       Animated.timing(scrollAnimMovies, {
         toValue: 1,
-        duration: 26000,
+        duration: 32000,
         easing: Easing.linear,
         useNativeDriver: true,
       })
@@ -321,7 +321,7 @@ export default function HomeTab() {
     const animSeries = Animated.loop(
       Animated.timing(scrollAnimSeries, {
         toValue: 1,
-        duration: 26000,
+        duration: 32000,
         easing: Easing.linear,
         useNativeDriver: true,
       })
@@ -513,18 +513,19 @@ export default function HomeTab() {
     outputRange: [-520, 0],
   });
 
-  const cardW = Math.round(94 * tvScale);
-  const cardH = Math.round(126 * tvScale);
+  const cardW = Math.round(98 * tvScale);
+  const cardH = Math.round(132 * tvScale);
 
   return (
     <View style={[styles.root, { backgroundColor: "#1B3B4B" }]}>
+      {/* CABEÇALHO SUPERIOR */}
       <View style={styles.tvHeader}>
         <View style={styles.headerLeft}>
           <Pressable
             focusable={true}
             accessible={true}
             onPress={() => router.push("/(tabs)/settings")}
-            style={({ focused }) => [styles.headerIconBtn, focused && styles.cardFocused]}
+            style={({ focused }) => [styles.headerIconBtn, focused && styles.focusHighVis]}
             hitSlop={10}
           >
             <Ionicons name="menu" size={Math.round(26 * tvScale)} color="#FFF" />
@@ -546,7 +547,7 @@ export default function HomeTab() {
             focusable={true}
             accessible={true}
             onPress={() => setShowEpgModal(true)}
-            style={({ focused }) => [styles.epgHeaderBtn, focused && styles.cardFocused]}
+            style={({ focused }) => [styles.epgHeaderBtn, focused && styles.focusHighVis]}
           >
             <Ionicons name="list" size={16} color="#E9C46A" />
             <Text style={[styles.epgBtnText, { fontSize: Math.round(11 * tvScale) }]}>EPG</Text>
@@ -555,7 +556,7 @@ export default function HomeTab() {
           <Pressable
             focusable={true}
             accessible={true}
-            style={({ focused }) => [styles.headerIconBtn, focused && styles.cardFocused]}
+            style={({ focused }) => [styles.headerIconBtn, focused && styles.focusHighVis]}
           >
             <Ionicons name="cart-outline" size={Math.round(22 * tvScale)} color="#FFF" />
           </Pressable>
@@ -563,7 +564,7 @@ export default function HomeTab() {
           <Pressable
             focusable={true}
             accessible={true}
-            style={({ focused }) => [styles.headerIconBtn, focused && styles.cardFocused]}
+            style={({ focused }) => [styles.headerIconBtn, focused && styles.focusHighVis]}
             onPress={() => setShowSearchModal(true)}
           >
             <Ionicons name="search-outline" size={Math.round(22 * tvScale)} color="#FFF" />
@@ -580,13 +581,12 @@ export default function HomeTab() {
 
       <View style={styles.mainLayoutContainer}>
         <View style={styles.leftContainer}>
+          {/* SEÇÃO FILMES | NOVIDADES */}
           <View style={styles.dynamicRowSection}>
-            <Text
-              style={[styles.sectionCategoryTitle, { fontSize: Math.round(12.5 * tvScale) }]}
-            >
+            <Text style={[styles.sectionCategoryTitle, { fontSize: Math.round(13 * tvScale) }]}>
               🎬 Filmes | Novidades
             </Text>
-            <View style={[styles.tickerWrapper, { height: cardH }]}>
+            <View style={[styles.tickerWrapper, { height: cardH + 10 }]}>
               <Animated.View
                 style={[styles.tickerTrack, { transform: [{ translateX: translateXMovies }] }]}
               >
@@ -604,18 +604,18 @@ export default function HomeTab() {
                     style={({ focused }) => [
                       styles.tickerCard,
                       { width: cardW, height: cardH },
-                      focused && styles.cardFocused,
+                      focused && styles.cardFocusedHighVis,
                     ]}
                   >
                     <Image
                       source={{ uri: item.stream_icon }}
                       style={styles.fullSize}
-                      contentFit="contain"
+                      contentFit="cover"
                       cachePolicy="memory-disk"
                     />
                     <View style={styles.tickerGradient}>
                       <Text
-                        style={[styles.tickerTitle, { fontSize: Math.round(9.5 * tvScale) }]}
+                        style={[styles.tickerTitle, { fontSize: Math.round(10 * tvScale) }]}
                         numberOfLines={1}
                       >
                         {item.name}
@@ -627,13 +627,12 @@ export default function HomeTab() {
             </View>
           </View>
 
+          {/* SEÇÃO SÉRIES | EM ALTA */}
           <View style={styles.dynamicRowSection}>
-            <Text
-              style={[styles.sectionCategoryTitle, { fontSize: Math.round(12.5 * tvScale) }]}
-            >
+            <Text style={[styles.sectionCategoryTitle, { fontSize: Math.round(13 * tvScale) }]}>
               🍿 Séries | Em Alta
             </Text>
-            <View style={[styles.tickerWrapper, { height: cardH }]}>
+            <View style={[styles.tickerWrapper, { height: cardH + 10 }]}>
               <Animated.View
                 style={[styles.tickerTrack, { transform: [{ translateX: translateXSeries }] }]}
               >
@@ -651,18 +650,18 @@ export default function HomeTab() {
                     style={({ focused }) => [
                       styles.tickerCard,
                       { width: cardW, height: cardH },
-                      focused && styles.cardFocused,
+                      focused && styles.cardFocusedHighVis,
                     ]}
                   >
                     <Image
                       source={{ uri: s.cover }}
                       style={styles.fullSize}
-                      contentFit="contain"
+                      contentFit="cover"
                       cachePolicy="memory-disk"
                     />
                     <View style={styles.tickerGradient}>
                       <Text
-                        style={[styles.tickerTitle, { fontSize: Math.round(9.5 * tvScale) }]}
+                        style={[styles.tickerTitle, { fontSize: Math.round(10 * tvScale) }]}
                         numberOfLines={1}
                       >
                         {s.name}
@@ -674,12 +673,16 @@ export default function HomeTab() {
             </View>
           </View>
 
+          {/* BARRA INFERIOR DE BOTÕES */}
           <View style={styles.bottomBarBelow}>
             <Pressable
               focusable={true}
               accessible={true}
               onPress={() => setShowJogosModal(true)}
-              style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}
+              style={({ focused }) => [
+                styles.bottomCard,
+                focused && styles.cardFocusedHighVis,
+              ]}
             >
               <Ionicons name="football-outline" size={20} color="#FFF" />
               <Text style={[styles.bottomCardText, { fontSize: Math.round(11 * tvScale) }]}>
@@ -691,7 +694,10 @@ export default function HomeTab() {
               focusable={true}
               accessible={true}
               onPress={() => router.push("/(tabs)/updates")}
-              style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}
+              style={({ focused }) => [
+                styles.bottomCard,
+                focused && styles.cardFocusedHighVis,
+              ]}
             >
               <Ionicons name="logo-youtube" size={20} color="#FF0000" />
               <Text style={[styles.bottomCardText, { fontSize: Math.round(11 * tvScale) }]}>
@@ -703,7 +709,10 @@ export default function HomeTab() {
               focusable={true}
               accessible={true}
               onPress={() => router.push("/continue")}
-              style={({ focused }) => [styles.bottomCard, focused && styles.cardFocused]}
+              style={({ focused }) => [
+                styles.bottomCard,
+                focused && styles.cardFocusedHighVis,
+              ]}
             >
               <Ionicons name="play-circle-outline" size={20} color="#E9C46A" />
               <Text
@@ -730,15 +739,17 @@ export default function HomeTab() {
           </View>
         </View>
 
+        {/* COLUNA LATERAL DIREITA: FILMES, SÉRIES, CANAIS */}
         <View style={[styles.rightColumn, { width: Math.round(190 * tvScale) }]}>
           <Pressable
             focusable={true}
             accessible={true}
+            hasTVPreferredFocus={true}
             onPress={() => router.push("/(tabs)/movies")}
             style={({ focused }) => [
               styles.cardTriple,
               { backgroundColor: "#E76F51" },
-              focused && styles.cardFocused,
+              focused && styles.cardFocusedHighVis,
             ]}
           >
             <View style={styles.cardTripleInner}>
@@ -756,7 +767,7 @@ export default function HomeTab() {
             style={({ focused }) => [
               styles.cardTriple,
               { backgroundColor: "#F4A261" },
-              focused && styles.cardFocused,
+              focused && styles.cardFocusedHighVis,
             ]}
           >
             <View style={styles.cardTripleInner}>
@@ -774,7 +785,7 @@ export default function HomeTab() {
             style={({ focused }) => [
               styles.cardTriple,
               { backgroundColor: "#2A9D8F" },
-              focused && styles.cardFocused,
+              focused && styles.cardFocusedHighVis,
             ]}
           >
             <View style={styles.cardTripleInner}>
@@ -787,7 +798,7 @@ export default function HomeTab() {
         </View>
       </View>
 
-      {/* MODAL PREMIUM DE FUTEBOL — JOGOS DE HOJE */}
+      {/* MODAL JOGOS DE HOJE */}
       <Modal
         visible={showJogosModal}
         animationType="fade"
@@ -817,7 +828,7 @@ export default function HomeTab() {
                   style={({ focused }) => [
                     styles.tabBtn,
                     jogoFilter === "todos" && styles.tabBtnActive,
-                    focused && styles.cardFocused,
+                    focused && styles.cardFocusedHighVis,
                   ]}
                 >
                   <Text
@@ -826,6 +837,7 @@ export default function HomeTab() {
                     Todos
                   </Text>
                 </Pressable>
+
                 <Pressable
                   focusable={true}
                   accessible={true}
@@ -833,7 +845,7 @@ export default function HomeTab() {
                   style={({ focused }) => [
                     styles.tabBtn,
                     jogoFilter === "ao_vivo" && styles.tabBtnActive,
-                    focused && styles.cardFocused,
+                    focused && styles.cardFocusedHighVis,
                   ]}
                 >
                   <Text
@@ -845,6 +857,7 @@ export default function HomeTab() {
                     🔴 Ao Vivo
                   </Text>
                 </Pressable>
+
                 <Pressable
                   focusable={true}
                   accessible={true}
@@ -852,7 +865,7 @@ export default function HomeTab() {
                   style={({ focused }) => [
                     styles.tabBtn,
                     jogoFilter === "proximos" && styles.tabBtnActive,
-                    focused && styles.cardFocused,
+                    focused && styles.cardFocusedHighVis,
                   ]}
                 >
                   <Text
@@ -869,7 +882,7 @@ export default function HomeTab() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Pressable
                   onPress={() => carregarJogos(true)}
-                  style={({ focused }) => [styles.closeBtn, focused && styles.cardFocused]}
+                  style={({ focused }) => [styles.closeBtn, focused && styles.focusHighVis]}
                   focusable={true}
                   accessible={true}
                 >
@@ -881,7 +894,7 @@ export default function HomeTab() {
                     setHighlightsVideoId(null);
                     setShowJogosModal(false);
                   }}
-                  style={({ focused }) => [styles.closeBtn, focused && styles.cardFocused]}
+                  style={({ focused }) => [styles.closeBtn, focused && styles.focusHighVis]}
                   focusable={true}
                   accessible={true}
                 >
@@ -903,7 +916,7 @@ export default function HomeTab() {
                       setHighlightsMatch(null);
                       setHighlightsVideoId(null);
                     }}
-                    style={({ focused }) => [styles.smallCloseBtn, focused && styles.cardFocused]}
+                    style={({ focused }) => [styles.smallCloseBtn, focused && styles.focusHighVis]}
                   >
                     <Ionicons name="close" size={14} color="#FFF" />
                   </Pressable>
@@ -1038,7 +1051,7 @@ export default function HomeTab() {
                           onPress={() => handleOpenHighlights(g)}
                           style={({ focused }) => [
                             styles.actionPillBtn,
-                            focused && styles.cardFocused,
+                            focused && styles.cardFocusedHighVis,
                           ]}
                         >
                           <Ionicons name="play-circle" size={13} color="#E9C46A" />
@@ -1051,7 +1064,7 @@ export default function HomeTab() {
                           onPress={() => handleGoToMatchChannel(g)}
                           style={({ focused }) => [
                             styles.actionPillGoldBtn,
-                            focused && styles.cardFocused,
+                            focused && styles.cardFocusedHighVis,
                           ]}
                         >
                           <Ionicons name="tv" size={13} color="#000" />
@@ -1080,7 +1093,7 @@ export default function HomeTab() {
               <Text style={styles.modalTitle}>🔍 BUSCAR NO CATÁLOGO</Text>
               <Pressable
                 onPress={() => setShowSearchModal(false)}
-                style={({ focused }) => [styles.closeBtn, focused && styles.cardFocused]}
+                style={({ focused }) => [styles.closeBtn, focused && styles.focusHighVis]}
                 focusable={true}
                 accessible={true}
               >
@@ -1112,7 +1125,7 @@ export default function HomeTab() {
                       params: { search: c?.name || c?.title || "" },
                     });
                   }}
-                  style={({ focused }) => [styles.searchResultRow, focused && styles.cardFocused]}
+                  style={({ focused }) => [styles.searchResultRow, focused && styles.cardFocusedHighVis]}
                 >
                   <Ionicons name="tv-outline" size={16} color="#2A9D8F" />
                   <Text style={styles.searchResultText} numberOfLines={1}>
@@ -1133,7 +1146,7 @@ export default function HomeTab() {
                       params: { id: String(m?.stream_id || "") },
                     });
                   }}
-                  style={({ focused }) => [styles.searchResultRow, focused && styles.cardFocused]}
+                  style={({ focused }) => [styles.searchResultRow, focused && styles.cardFocusedHighVis]}
                 >
                   <Ionicons name="film-outline" size={16} color="#E76F51" />
                   <Text style={styles.searchResultText} numberOfLines={1}>
@@ -1154,7 +1167,7 @@ export default function HomeTab() {
                       params: { id: String(s?.series_id || "") },
                     });
                   }}
-                  style={({ focused }) => [styles.searchResultRow, focused && styles.cardFocused]}
+                  style={({ focused }) => [styles.searchResultRow, focused && styles.cardFocusedHighVis]}
                 >
                   <Ionicons name="albums-outline" size={16} color="#F4A261" />
                   <Text style={styles.searchResultText} numberOfLines={1}>
@@ -1167,7 +1180,7 @@ export default function HomeTab() {
         </View>
       </Modal>
 
-      {/* MODAL EPG RICO EM TEMPO REAL */}
+      {/* MODAL EPG */}
       <Modal
         visible={showEpgModal}
         animationType="fade"
@@ -1186,7 +1199,7 @@ export default function HomeTab() {
 
               <Pressable
                 onPress={() => setShowEpgModal(false)}
-                style={({ focused }) => [styles.closeBtn, focused && styles.cardFocused]}
+                style={({ focused }) => [styles.closeBtn, focused && styles.focusHighVis]}
                 focusable={true}
                 accessible={true}
               >
@@ -1197,7 +1210,7 @@ export default function HomeTab() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={{ maxHeight: 38, marginBottom: 8 }}
+              style={{ maxHeight: 42, marginBottom: 8 }}
               contentContainerStyle={{ gap: 8 }}
             >
               <Pressable
@@ -1207,7 +1220,7 @@ export default function HomeTab() {
                 style={({ focused }) => [
                   styles.tabBtn,
                   selectedEpgCat === "all" && styles.tabBtnActive,
-                  focused && styles.cardFocused,
+                  focused && styles.cardFocusedHighVis,
                 ]}
               >
                 <Text
@@ -1231,7 +1244,7 @@ export default function HomeTab() {
                     style={({ focused }) => [
                       styles.tabBtn,
                       active && styles.tabBtnActive,
-                      focused && styles.cardFocused,
+                      focused && styles.cardFocusedHighVis,
                     ]}
                   >
                     <Text style={[styles.tabBtnText, active && styles.tabBtnTextActive]}>
@@ -1263,7 +1276,7 @@ export default function HomeTab() {
                     }}
                     style={({ focused }) => [
                       styles.epgChannelCard,
-                      focused && styles.cardFocused,
+                      focused && styles.cardFocusedHighVis,
                     ]}
                   >
                     <View style={styles.epgChannelLeft}>
@@ -1365,13 +1378,11 @@ const styles = StyleSheet.create({
 
   mainLayoutContainer: { flex: 1, flexDirection: "row", gap: 16 },
   leftContainer: { flex: 1, justifyContent: "space-between" },
-  dynamicRowSection: { marginBottom: 6 },
-  sectionCategoryTitle: { color: "#FFF", fontSize: 12.5, fontWeight: "800", marginBottom: 5 },
-  tickerWrapper: { height: 126, overflow: "hidden", borderRadius: 12 },
-  tickerTrack: { flexDirection: "row", gap: 10 },
+  dynamicRowSection: { marginBottom: 4 },
+  sectionCategoryTitle: { color: "#FFF", fontSize: 13, fontWeight: "800", marginBottom: 4 },
+  tickerWrapper: { height: 138, overflow: "hidden", borderRadius: 12 },
+  tickerTrack: { flexDirection: "row", gap: 12, paddingVertical: 4 },
   tickerCard: {
-    width: 94,
-    height: 126,
     borderRadius: 10,
     overflow: "hidden",
     backgroundColor: "#152E3B",
@@ -1384,11 +1395,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "rgba(0,0,0,0.78)",
-    paddingHorizontal: 5,
-    paddingVertical: 3,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    paddingHorizontal: 6,
+    paddingVertical: 4,
   },
-  tickerTitle: { color: "#FFF", fontSize: 9.5, fontWeight: "700" },
+  tickerTitle: { color: "#FFF", fontSize: 10, fontWeight: "800", textAlign: "center" },
 
   bottomBarBelow: {
     flexDirection: "row",
@@ -1417,15 +1428,27 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: "transparent",
   },
   cardTripleInner: { alignItems: "center", gap: 6 },
   cardTitleTriple: { color: "#FFF", fontSize: 14, fontWeight: "900", letterSpacing: 1 },
-  cardFocused: {
-    borderColor: "#E9C46A",
+
+  // ESTILOS DE FOCO DE ALTO CONTRASTE (D-PAD TV BOX)
+  cardFocusedHighVis: {
+    borderColor: "#FFD700",
+    borderWidth: 3.5,
+    backgroundColor: "rgba(255, 215, 0, 0.22)",
+    transform: [{ scale: 1.08 }],
+    elevation: 16,
+    zIndex: 999,
+  },
+  focusHighVis: {
+    borderColor: "#FFD700",
     borderWidth: 3,
-    transform: [{ scale: 1.03 }],
+    backgroundColor: "rgba(255, 215, 0, 0.2)",
+    transform: [{ scale: 1.1 }],
+    elevation: 12,
   },
 
   modalOverlay: {
@@ -1464,8 +1487,8 @@ const styles = StyleSheet.create({
   modalTitle: { color: "#E9C46A", fontSize: 14, fontWeight: "900" },
   tabToggleRow: { flexDirection: "row", gap: 6 },
   tabBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 8,
     backgroundColor: "#1E2230",
     borderWidth: 2,
@@ -1601,11 +1624,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(233,196,106,0.14)",
     borderWidth: 2,
     borderColor: "rgba(233,196,106,0.35)",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  actionPillText: { color: "#E9C46A", fontSize: 10.5, fontWeight: "800" },
+  actionPillText: { color: "#E9C46A", fontSize: 11, fontWeight: "800" },
   actionPillGoldBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1613,11 +1636,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#E9C46A",
     borderWidth: 2,
     borderColor: "transparent",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  actionPillGoldText: { color: "#000", fontSize: 10.5, fontWeight: "900" },
+  actionPillGoldText: { color: "#000", fontSize: 11, fontWeight: "900" },
 
   searchInput: {
     backgroundColor: "#1A1E2D",
