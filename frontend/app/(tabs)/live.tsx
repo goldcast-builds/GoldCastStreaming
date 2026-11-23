@@ -171,7 +171,7 @@ export default function LiveScreen() {
           focusable={true}
           accessible={true}
           onPress={() => router.back()}
-          style={({ focused }) => [styles.backBtn, focused && styles.cardFocused]}
+          style={({ focused }) => [styles.backBtn, focused && styles.cardFocusedHighVis]}
           hitSlop={10}
         >
           <Ionicons name="arrow-back" size={24} color="#FFF" />
@@ -180,13 +180,16 @@ export default function LiveScreen() {
       </View>
 
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={18} color="#E9C46A" />
+        <Ionicons name="search" size={18} color="#FFD700" />
         <TextInput
           style={[styles.searchInput, isWideTv && { fontSize: 15 }]}
           placeholder="Buscar canais..."
           placeholderTextColor="#6B7280"
           value={searchQuery}
           onChangeText={setSearchQuery}
+          focusable={true}
+          accessible={true}
+          showSoftInputOnFocus={true}
           returnKeyType="search"
           blurOnSubmit={true}
           autoCorrect={false}
@@ -198,7 +201,7 @@ export default function LiveScreen() {
             accessible={true}
             onPress={() => setSearchQuery("")}
             hitSlop={8}
-            style={({ focused }) => [focused && styles.cardFocused]}
+            style={({ focused }) => [focused && styles.cardFocusedHighVis]}
           >
             <Ionicons name="close-circle" size={18} color="#9CA3AF" />
           </Pressable>
@@ -208,7 +211,7 @@ export default function LiveScreen() {
       <View style={styles.contentBody}>
         {loading && channels.length === 0 ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#E9C46A" />
+            <ActivityIndicator size="large" color="#FFD700" />
             <Text style={styles.loadingText}>A carregar lista de canais...</Text>
           </View>
         ) : (
@@ -229,7 +232,7 @@ export default function LiveScreen() {
                   <Ionicons
                     name={selectedCategory === "favorites" ? "star-outline" : "tv-outline"}
                     size={40}
-                    color="#E9C46A"
+                    color="#FFD700"
                   />
                   <Text style={styles.loadingText}>
                     {selectedCategory === "favorites"
@@ -253,12 +256,12 @@ export default function LiveScreen() {
                     style={({ focused }) => [
                       styles.mediaCard,
                       isWideTv && { height: 112 },
-                      focused && styles.cardFocused,
+                      focused && styles.cardFocusedHighVis,
                     ]}
                   >
                     {isFav && (
                       <View style={styles.favBadge}>
-                        <Ionicons name="star" size={12} color="#E9C46A" />
+                        <Ionicons name="star" size={12} color="#FFD700" />
                       </View>
                     )}
                     {logoUri ? (
@@ -270,7 +273,7 @@ export default function LiveScreen() {
                       />
                     ) : (
                       <View style={[styles.noLogo, isWideTv && { height: 56 }]}>
-                        <Ionicons name="tv-outline" size={24} color="#E9C46A" />
+                        <Ionicons name="tv-outline" size={24} color="#FFD700" />
                       </View>
                     )}
                     <Text
@@ -296,7 +299,7 @@ export default function LiveScreen() {
               style={({ focused }) => [
                 styles.catItem,
                 selectedCategory === "all" && styles.catItemActive,
-                focused && styles.cardFocused,
+                focused && styles.catFocusedHighVis,
               ]}
             >
               <Text
@@ -317,7 +320,7 @@ export default function LiveScreen() {
               style={({ focused }) => [
                 styles.catItem,
                 selectedCategory === "favorites" && styles.catItemActive,
-                focused && styles.cardFocused,
+                focused && styles.catFocusedHighVis,
               ]}
             >
               <Text
@@ -344,7 +347,7 @@ export default function LiveScreen() {
                   style={({ focused }) => [
                     styles.catItem,
                     isSelected && styles.catItemActive,
-                    focused && styles.cardFocused,
+                    focused && styles.catFocusedHighVis,
                   ]}
                 >
                   <Text
@@ -367,7 +370,7 @@ export default function LiveScreen() {
       {pinModalVisible && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <Ionicons name="lock-closed" size={32} color="#E9C46A" />
+            <Ionicons name="lock-closed" size={32} color="#FFD700" />
             <Text style={styles.modalTitle}>Controlo Parental</Text>
             <Text style={styles.modalSub}>Introduza o PIN para aceder ao canal restrito</Text>
 
@@ -381,6 +384,7 @@ export default function LiveScreen() {
               onChangeText={setEnteredPin}
               maxLength={6}
               focusable={true}
+              accessible={true}
               showSoftInputOnFocus={true}
             />
 
@@ -389,7 +393,7 @@ export default function LiveScreen() {
                 focusable={true}
                 accessible={true}
                 onPress={() => setPinModalVisible(false)}
-                style={({ focused }) => [styles.modalBtnCancel, focused && styles.cardFocused]}
+                style={({ focused }) => [styles.modalBtnCancel, focused && styles.cardFocusedHighVis]}
               >
                 <Text style={styles.modalBtnCancelText}>Cancelar</Text>
               </Pressable>
@@ -398,7 +402,10 @@ export default function LiveScreen() {
                 focusable={true}
                 accessible={true}
                 onPress={confirmPin}
-                style={({ focused }) => [styles.modalBtnConfirm, focused && styles.cardFocused]}
+                style={({ focused }) => [
+                  styles.modalBtnConfirm,
+                  focused && styles.cardFocusedHighVis,
+                ]}
               >
                 <Text style={styles.modalBtnConfirmText}>Confirmar</Text>
               </Pressable>
@@ -440,14 +447,14 @@ const styles = StyleSheet.create({
   contentBody: { flex: 1, flexDirection: "row", gap: 16 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
   loadingText: {
-    color: "#E9C46A",
+    color: "#FFD700",
     fontSize: 13,
     fontWeight: "700",
     textAlign: "center",
     paddingHorizontal: 20,
   },
   gridWrapper: { flex: 1 },
-  gridContainer: { paddingBottom: 20 },
+  gridContainer: { paddingBottom: 20, paddingTop: 4 },
   columnWrapper: { justifyContent: "space-between", marginBottom: 12 },
   mediaCard: {
     width: "23.5%",
@@ -461,11 +468,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     position: "relative",
   },
-  cardFocused: {
-    borderColor: "#E9C46A",
+  cardFocusedHighVis: {
+    borderColor: "#FFD700",
+    borderWidth: 3.5,
+    transform: [{ scale: 1.06 }],
+    backgroundColor: "rgba(255, 215, 0, 0.22)",
+    elevation: 16,
+    zIndex: 999,
+  },
+  catFocusedHighVis: {
+    borderColor: "#FFD700",
     borderWidth: 3,
-    transform: [{ scale: 1.04 }],
-    backgroundColor: "rgba(233,196,106,0.15)",
+    transform: [{ scale: 1.03 }],
+    backgroundColor: "rgba(255, 215, 0, 0.24)",
+    elevation: 12,
+    zIndex: 99,
   },
   favBadge: {
     position: "absolute",
@@ -495,14 +512,14 @@ const styles = StyleSheet.create({
     borderColor: "rgba(233,196,106,0.2)",
   },
   sidebarTitle: {
-    color: "#E9C46A",
+    color: "#FFD700",
     fontSize: 12,
     fontWeight: "900",
     marginBottom: 8,
     textAlign: "center",
     letterSpacing: 1,
   },
-  sidebarScroll: { gap: 6 },
+  sidebarScroll: { gap: 6, paddingVertical: 2 },
   catItem: {
     paddingVertical: 9,
     paddingHorizontal: 10,
@@ -533,7 +550,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: "center",
     borderWidth: 2,
-    borderColor: "#E9C46A",
+    borderColor: "#FFD700",
   },
   modalTitle: { color: "#FFF", fontSize: 18, fontWeight: "900", marginTop: 10 },
   modalSub: { color: "#9CA3AF", fontSize: 11, textAlign: "center", marginVertical: 10 },
