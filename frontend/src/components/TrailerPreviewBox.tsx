@@ -9,6 +9,7 @@ interface TrailerPreviewProps {
   title: string;
   year?: string | number;
   mediaType?: "movie" | "series" | "tv";
+  youtubeKey?: string | null;
 }
 
 interface CandidateVideo {
@@ -179,17 +180,22 @@ function scoreCandidate(
   return score;
 }
 
-export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProps) {
+export function TrailerPreviewBox({ title, year, mediaType, youtubeKey }: TrailerPreviewProps) {
   const router = useRouter();
-  const [candidates, setCandidates] = useState<CandidateVideo[]>([]);
+  const [candidates, setCandidates] = useState<CandidateVideo[]>(
+    youtubeKey ? [{ videoId: youtubeKey, title: `${title} Trailer`, score: 100 }] : []
+  );
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [thumbFailed, setThumbFailed] = useState(false);
 
   useEffect(() => {
     setCurrentIndex(0);
     setThumbFailed(false);
-  }, [title, year, mediaType]);
+    setCandidates(
+      youtubeKey ? [{ videoId: youtubeKey, title: `${title} Trailer`, score: 100 }] : []
+    );
+  }, [title, year, mediaType, youtubeKey]);
 
   useEffect(() => {
     setThumbFailed(false);
@@ -213,6 +219,14 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
 
         const strictMap = new Map<string, CandidateVideo>();
         const fallbackMap = new Map<string, CandidateVideo>();
+
+        if (youtubeKey) {
+          strictMap.set(youtubeKey, {
+            videoId: youtubeKey,
+            title: `${title} Trailer Oficial`,
+            score: 100,
+          });
+        }
 
         for (const q of queries) {
           const encoded = encodeURIComponent(q);
@@ -252,14 +266,12 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
         const rankedFallback = [...fallbackMap.values()].sort((a, b) => b.score - a.score);
         const finalList = rankedStrict.length > 0 ? rankedStrict : rankedFallback;
 
-        if (isMounted) {
+        if (isMounted && finalList.length > 0) {
           setCandidates(finalList);
           setCurrentIndex(0);
         }
       } catch {
-        if (isMounted) {
-          setCandidates([]);
-        }
+        // Mantém candidatos existentes ou fallback limpo sem travar
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -271,7 +283,7 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
     return () => {
       isMounted = false;
     };
-  }, [title, year, mediaType]);
+  }, [title, year, mediaType, youtubeKey]);
 
   const activeCandidate = candidates[currentIndex] ?? null;
   const activeVideoId = activeCandidate?.videoId ?? null;
@@ -312,7 +324,7 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
         focusable={true}
         accessible={true}
         onPress={handleOpenTrailer}
-        hitSlop={10}
+        hitSlop={12}
         style={({ focused }) => [
           styles.container,
           focused && styles.containerFocused,
@@ -336,9 +348,12 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
               />
             ) : (
               <View pointerEvents="none" style={styles.fallbackBg}>
-                <Ionicons name="film-outline" size={28} color={colors.gold} />
+                <Ionicons name="videocam-outline" size={26} color={colors.gold} />
                 <Text style={styles.fallbackTitle} numberOfLines={1}>
                   {title}
+                </Text>
+                <Text style={styles.fallbackSub} numberOfLines={1}>
+                  {year ? `${year} • ` : ""}Toque para abrir
                 </Text>
               </View>
             )}
@@ -351,7 +366,7 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
 
             <View pointerEvents="none" style={styles.adFreePill}>
               <Text style={styles.adFreePillText}>
-                {activeVideoId ? "SEM ANÚNCIOS • REPRODUZIR" : "BUSCAR NO YOUTUBE • TOCAR"}
+                {activeVideoId ? "SEM ANÚNCIOS • REPRODUZIR" : "ABRIR NO YOUTUBE • SEM ANÚNCIOS"}
               </Text>
             </View>
           </>
@@ -362,7 +377,7 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
         focusable={true}
         accessible={true}
         onPress={handleReportIncorrect}
-        hitSlop={8}
+        hitSlop={10}
         style={({ focused }) => [
           styles.reportBtn,
           focused && styles.reportBtnFocused,
@@ -381,14 +396,14 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
 
 const styles = StyleSheet.create({
   wrapper: {
-    position: "absolute",
-    right: 24,
-    top: 20,
     width: 300,
+    alignSelf: "flex-end",
+    marginTop: 12,
+    marginRight: 20,
     alignItems: "flex-end",
     gap: 6,
-    zIndex: 60,
-    elevation: 24,
+    zIndex: 80,
+    elevation: 30,
   },
   badgeRow: {
     flexDirection: "row",
@@ -412,7 +427,7 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#142632",
+    backgroundColor: "#162A36",
     borderWidth: 2,
     borderColor: "rgba(233, 196, 106, 0.35)",
     alignItems: "center",
@@ -430,18 +445,25 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#152E3B",
+    backgroundColor: "#162A36",
     paddingHorizontal: 14,
-    gap: 6,
+    paddingBottom: 22,
+    gap: 4,
   },
   fallbackTitle: {
     color: "#FFF",
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: "800",
+    textAlign: "center",
+  },
+  fallbackSub: {
+    color: "#9CA3AF",
+    fontSize: 10.5,
+    fontWeight: "700",
   },
   thumbOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.28)",
+    backgroundColor: "rgba(0,0,0,0.22)",
   },
   playCircle: {
     width: 48,
