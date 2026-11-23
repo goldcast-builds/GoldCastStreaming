@@ -17,6 +17,7 @@ interface TrailerPreviewProps {
   year?: string | number;
   mediaType?: "movie" | "series" | "tv";
   youtubeKey?: string | null;
+  fallbackImage?: string | null;
 }
 
 interface CandidateVideo {
@@ -187,7 +188,13 @@ function scoreCandidate(
   return score;
 }
 
-export function TrailerPreviewBox({ title, year, mediaType, youtubeKey }: TrailerPreviewProps) {
+export function TrailerPreviewBox({
+  title,
+  year,
+  mediaType,
+  youtubeKey,
+  fallbackImage,
+}: TrailerPreviewProps) {
   const [candidates, setCandidates] = useState<CandidateVideo[]>(
     youtubeKey ? [{ videoId: youtubeKey, title: `${title} Trailer`, score: 100 }] : []
   );
@@ -295,8 +302,11 @@ export function TrailerPreviewBox({ title, year, mediaType, youtubeKey }: Traile
 
   const activeCandidate = candidates[currentIndex] ?? null;
   const activeVideoId = activeCandidate?.videoId ?? null;
-  const thumbUri =
-    activeVideoId && !thumbFailed ? `https://img.youtube.com/vi/${activeVideoId}/hqdefault.jpg` : "";
+
+  const previewImageUri =
+    activeVideoId && !thumbFailed
+      ? `https://img.youtube.com/vi/${activeVideoId}/hqdefault.jpg`
+      : fallbackImage || "";
 
   const cleanQuery = `${cleanMediaTitle(title) || title.trim()} trailer oficial`;
   const targetUrl = activeVideoId
@@ -339,9 +349,9 @@ export function TrailerPreviewBox({ title, year, mediaType, youtubeKey }: Traile
           </View>
         ) : (
           <>
-            {thumbUri ? (
+            {previewImageUri ? (
               <Image
-                source={{ uri: thumbUri }}
+                source={{ uri: previewImageUri }}
                 style={styles.thumbImage}
                 contentFit="cover"
                 cachePolicy="memory-disk"
@@ -368,7 +378,7 @@ export function TrailerPreviewBox({ title, year, mediaType, youtubeKey }: Traile
 
             <View pointerEvents="none" style={styles.adFreePill}>
               <Text style={styles.adFreePillText}>
-                {activeVideoId ? "SEM ANÚNCIOS • REPRODUZIR" : "ABRIR NO YOUTUBE • TOCAR"}
+                {activeVideoId ? "SEM ANÚNCIOS • REPRODUZIR" : "ABRIR NO YOUTUBE • SEM ANÚNCIOS"}
               </Text>
             </View>
           </>
@@ -437,14 +447,14 @@ export function TrailerPreviewBox({ title, year, mediaType, youtubeKey }: Traile
 
 const styles = StyleSheet.create({
   wrapper: {
-    width: 300,
-    alignSelf: "flex-end",
-    marginTop: 12,
-    marginRight: 20,
+    position: "absolute",
+    right: 20,
+    top: 12,
+    width: 280,
     alignItems: "flex-end",
     gap: 6,
-    zIndex: 80,
-    elevation: 30,
+    zIndex: 60,
+    elevation: 24,
   },
   badgeRow: {
     flexDirection: "row",
@@ -464,8 +474,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   container: {
-    width: 300,
-    height: 160,
+    width: 280,
+    height: 145,
     borderRadius: 12,
     overflow: "hidden",
     backgroundColor: "#162A36",
@@ -504,7 +514,7 @@ const styles = StyleSheet.create({
   },
   thumbOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.22)",
+    backgroundColor: "rgba(0,0,0,0.32)",
   },
   playCircle: {
     width: 48,
