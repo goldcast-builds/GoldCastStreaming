@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ActivityIndicator, Text, Pressable } from "react-native";
-import YoutubePlayer from "react-native-youtube-iframe";
+import {
+  View,
+  StyleSheet,
+  ActivityIndicator,
+  Text,
+  Pressable,
+  Modal,
+} from "react-native";
+import { Image } from "expo-image";
+import { WebView } from "react-native-webview";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, radius } from "../utils/theme";
 
@@ -69,11 +77,14 @@ function cleanMediaTitle(rawTitle: string): string {
     .trim();
 }
 
+function buildAdFreeTrailerUrl(videoId: string): string {
+  return `https://www.yout-ube.com/watch?v=${encodeURIComponent(videoId)}`;
+}
+
 function extractSearchCandidates(htmlText: string): Array<{ videoId: string; videoTitle: string }> {
   const results: Array<{ videoId: string; videoTitle: string }> = [];
   const seen = new Set<string>();
 
-  // Tenta extrair videoId + título próximo no HTML/JSON do YouTube
   const rendererRegex =
     /"videoId":"([a-zA-Z0-9_-]{11})"[\s\S]{0,800}?"title":\{"runs":\[\{"text":"([^"]+)"\}/g;
 
@@ -91,7 +102,6 @@ function extractSearchCandidates(htmlText: string): Array<{ videoId: string; vid
     if (results.length >= 25) break;
   }
 
-  // Fallback de extração apenas de videoId caso o formato do JSON varie
   if (results.length === 0) {
     const idMatches = [...htmlText.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)];
     for (const m of idMatches) {
@@ -117,7 +127,6 @@ function scoreCandidate(
   const normTitle = normalizeText(cleanTitle);
   if (!normTitle) return 0;
 
-  // Se o HTML não trouxe título legível, dá nota neutra baixa em vez de descartar tudo
   if (!normVideo) return 15;
 
   for (const blocked of HARD_BLOCKED) {
@@ -175,9 +184,11 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
   const [candidates, setCandidates] = useState<CandidateVideo[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [playerVisible, setPlayerVisible] = useState(false);
 
   useEffect(() => {
     setCurrentIndex(0);
+    setPlayerVisible(false);
   }, [title, year, mediaType]);
 
   useEffect(() => {
@@ -258,46 +269,71 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
     };
   }, [title, year, mediaType]);
 
+  const activeCandidate = candidates[currentIndex] ?? null;
+  const activeVideoId = activeCandidate?.videoId ?? null;
+  const thumbUri = activeVideoId ? `https://img.youtube.com/vi/${activeVideoId}/hqdefault.jpg` : "";
+  const adFreeUrl = activeVideoId ? buildAdFreeTrailerUrl(activeVideoId) : null;
+
+  const handleOpenAdFreeTrailer = () => {
+    if (!activeVideoId) return;
+    setPlayerVisible(true);
+  };
+
   const handleReportIncorrect = () => {
     if (candidates.length === 0) return;
     setCurrentIndex((prev) => (prev + 1) % candidates.length);
   };
 
-  const activeVideoId = candidates[currentIndex]?.videoId ?? null;
-
   return (
     <View style={styles.wrapper}>
-      {/* Rótulo de Destaque */}
-      <View style={styles.badgeRow}>
+      <View pointerEvents="none" style={styles.badgeRow}>
         <Ionicons name="film" size={13} color={colors.gold} />
         <Text style={styles.badgeText}>TRAILER OFICIAL</Text>
       </View>
 
-      {/* Caixa do Vídeo */}
-      <View style={styles.container}>
+      <Pressable
+        focusable={true}
+        accessible={true}
+        disabled={!activeVideoId}
+        onPress={handleOpenAdFreeTrailer}
+        style={({ focused }) => [
+          styles.container,
+          focused && styles.containerFocused,
+          !activeVideoId && { opacity: 0.75 },
+        ]}
+      >
         {loading ? (
-          <View style={styles.loadingBox}>
+          <View pointerEvents="none" style={styles.loadingBox}>
             <ActivityIndicator size="small" color={colors.gold} />
           </View>
-        ) : activeVideoId ? (
-          <YoutubePlayer
-            height={160}
-            width={300}
-            play={false}
-            videoId={activeVideoId}
-            webViewStyle={{ opacity: 0.99 }}
-          />
+        ) : activeVideoId && thumbUri ? (
+          <>
+            <Image
+              source={{ uri: thumbUri }}
+              style={styles.thumbImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              pointerEvents="none"
+            />
+            <View pointerEvents="none" style={styles.thumbOverlay} />
+            <View pointerEvents="none" style={styles.playCircle}>
+              <Ionicons name="play" size={22} color="#000" />
+            </View>
+            <View pointerEvents="none" style={styles.adFreePill}>
+              <Text style={styles.adFreePillText}>SEM ANÚNCIOS • TOCAR PARA VER</Text>
+            </View>
+          </>
         ) : (
-          <View style={styles.loadingBox}>
+          <View pointerEvents="none" style={styles.loadingBox}>
             <Ionicons name="videocam-off-outline" size={22} color="#9CA3AF" />
             <Text style={styles.emptyText}>Trailer não encontrado</Text>
           </View>
         )}
-      </View>
+      </Pressable>
 
-      {/* Botão de Reportar Vídeo Incorreto */}
       <Pressable
         focusable={true}
+        accessible={true}
         onPress={handleReportIncorrect}
         disabled={candidates.length <= 1}
         style={({ focused }) => [
@@ -313,6 +349,45 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
             : "Não é este o trailer? Reportar / Trocar"}
         </Text>
       </Pressable>
+
+      <Modal
+        visible={playerVisible && !!adFreeUrl}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setPlayerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle} numberOfLines={1}>
+                {activeCandidate?.title || title} — Sem Propaganda
+              </Text>
+              <Pressable
+                focusable={true}
+                accessible={true}
+                hasTVPreferredFocus={true}
+                onPress={() => setPlayerVisible(false)}
+                style={({ focused }) => [styles.closeBtn, focused && styles.closeBtnFocused]}
+              >
+                <Ionicons name="close" size={18} color="#FFF" />
+                <Text style={styles.closeBtnText}>Fechar</Text>
+              </Pressable>
+            </View>
+
+            {adFreeUrl && (
+              <WebView
+                source={{ uri: adFreeUrl }}
+                style={styles.webview}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                allowsInlineMediaPlayback={true}
+                mediaPlaybackRequiresUserAction={false}
+                scalesPageToFit={true}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -325,7 +400,8 @@ const styles = StyleSheet.create({
     width: 300,
     alignItems: "flex-end",
     gap: 6,
-    zIndex: 10,
+    zIndex: 40,
+    elevation: 16,
   },
   badgeRow: {
     flexDirection: "row",
@@ -350,10 +426,46 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
     backgroundColor: "#000",
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: "rgba(255, 255, 255, 0.2)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  containerFocused: {
+    borderColor: "#FFD700",
+    borderWidth: 3.5,
+    transform: [{ scale: 1.04 }],
+  },
+  thumbImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  thumbOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  playCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  adFreePill: {
+    position: "absolute",
+    bottom: 8,
+    backgroundColor: "rgba(0,0,0,0.82)",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(233,196,106,0.4)",
+  },
+  adFreePillText: {
+    color: colors.gold,
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
   loadingBox: {
     flex: 1,
@@ -388,5 +500,61 @@ const styles = StyleSheet.create({
     color: "#FCA5A5",
     fontSize: 9.5,
     fontWeight: "800",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 18,
+  },
+  modalBox: {
+    width: "100%",
+    maxWidth: 860,
+    height: "82%",
+    backgroundColor: "#11161F",
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: colors.gold,
+  },
+  modalHeader: {
+    height: 48,
+    backgroundColor: "#0B0E14",
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  modalTitle: {
+    color: colors.gold,
+    fontSize: 12.5,
+    fontWeight: "900",
+    flex: 1,
+  },
+  closeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#1F2937",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  closeBtnFocused: {
+    borderColor: "#FFD700",
+    backgroundColor: "#374151",
+  },
+  closeBtnText: {
+    color: "#FFF",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: "#000",
   },
 });
