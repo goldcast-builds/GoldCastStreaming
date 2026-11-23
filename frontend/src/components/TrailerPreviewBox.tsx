@@ -1,14 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  View,
-  StyleSheet,
-  ActivityIndicator,
-  Text,
-  Pressable,
-  Modal,
-} from "react-native";
+import { View, StyleSheet, ActivityIndicator, Text, Pressable } from "react-native";
 import { Image } from "expo-image";
-import { WebView } from "react-native-webview";
+import { useRouter } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, radius } from "../utils/theme";
 
@@ -77,12 +70,14 @@ function cleanMediaTitle(rawTitle: string): string {
     .trim();
 }
 
-function buildAdFreeTrailerUrl(videoId: string): string {
+// Hífen aplicado apenas na reprodução direta do vídeo
+function buildAdFreeWatchUrl(videoId: string): string {
   return `https://www.yout-ube.com/watch?v=${encodeURIComponent(videoId)}`;
 }
 
-function buildAdFreeSearchUrl(query: string): string {
-  return `https://www.yout-ube.com/results?search_query=${encodeURIComponent(query)}`;
+// Busca/navegação sem hífen para não quebrar o site do YouTube
+function buildNormalSearchUrl(query: string): string {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
 function extractSearchCandidates(htmlText: string): Array<{ videoId: string; videoTitle: string }> {
@@ -185,15 +180,14 @@ function scoreCandidate(
 }
 
 export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProps) {
+  const router = useRouter();
   const [candidates, setCandidates] = useState<CandidateVideo[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [playerVisible, setPlayerVisible] = useState(false);
   const [thumbFailed, setThumbFailed] = useState(false);
 
   useEffect(() => {
     setCurrentIndex(0);
-    setPlayerVisible(false);
     setThumbFailed(false);
   }, [title, year, mediaType]);
 
@@ -285,21 +279,27 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
     activeVideoId && !thumbFailed ? `https://img.youtube.com/vi/${activeVideoId}/hqdefault.jpg` : "";
 
   const cleanQuery = `${cleanMediaTitle(title) || title.trim()} trailer oficial`;
-  const adFreeUrl = activeVideoId
-    ? buildAdFreeTrailerUrl(activeVideoId)
-    : buildAdFreeSearchUrl(cleanQuery);
+  const targetUrl = activeVideoId
+    ? buildAdFreeWatchUrl(activeVideoId)
+    : buildNormalSearchUrl(cleanQuery);
 
-  const handleOpenAdFreeTrailer = useCallback(() => {
-    setPlayerVisible(true);
-  }, []);
+  const handleOpenTrailer = useCallback(() => {
+    router.push({
+      pathname: "/trailer",
+      params: {
+        url: targetUrl,
+        title: activeCandidate?.title || title,
+      },
+    });
+  }, [router, targetUrl, activeCandidate, title]);
 
   const handleReportIncorrect = useCallback(() => {
     if (candidates.length <= 1) {
-      setPlayerVisible(true);
+      handleOpenTrailer();
       return;
     }
     setCurrentIndex((prev) => (prev + 1) % candidates.length);
-  }, [candidates.length]);
+  }, [candidates.length, handleOpenTrailer]);
 
   return (
     <View style={styles.wrapper}>
@@ -311,8 +311,8 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
       <Pressable
         focusable={true}
         accessible={true}
-        onPress={handleOpenAdFreeTrailer}
-        hitSlop={8}
+        onPress={handleOpenTrailer}
+        hitSlop={10}
         style={({ focused }) => [
           styles.container,
           focused && styles.containerFocused,
@@ -350,7 +350,9 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
             </View>
 
             <View pointerEvents="none" style={styles.adFreePill}>
-              <Text style={styles.adFreePillText}>SEM ANÚNCIOS • REPRODUZIR</Text>
+              <Text style={styles.adFreePillText}>
+                {activeVideoId ? "SEM ANÚNCIOS • REPRODUZIR" : "BUSCAR NO YOUTUBE • TOCAR"}
+              </Text>
             </View>
           </>
         )}
@@ -360,7 +362,7 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
         focusable={true}
         accessible={true}
         onPress={handleReportIncorrect}
-        hitSlop={6}
+        hitSlop={8}
         style={({ focused }) => [
           styles.reportBtn,
           focused && styles.reportBtnFocused,
@@ -373,45 +375,6 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
             : "Não é este o trailer? Abrir / Trocar"}
         </Text>
       </Pressable>
-
-      <Modal
-        visible={playerVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setPlayerVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle} numberOfLines={1}>
-                {activeCandidate?.title || title} — Sem Propaganda
-              </Text>
-              <Pressable
-                focusable={true}
-                accessible={true}
-                hasTVPreferredFocus={true}
-                onPress={() => setPlayerVisible(false)}
-                style={({ focused }) => [styles.closeBtn, focused && styles.closeBtnFocused]}
-              >
-                <Ionicons name="close" size={18} color="#FFF" />
-                <Text style={styles.closeBtnText}>Fechar</Text>
-              </Pressable>
-            </View>
-
-            {playerVisible && (
-              <WebView
-                source={{ uri: adFreeUrl }}
-                style={styles.webview}
-                javaScriptEnabled={true}
-                domStorageEnabled={true}
-                allowsInlineMediaPlayback={true}
-                mediaPlaybackRequiresUserAction={false}
-                scalesPageToFit={true}
-              />
-            )}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -534,61 +497,5 @@ const styles = StyleSheet.create({
     color: "#FCA5A5",
     fontSize: 9.5,
     fontWeight: "800",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.92)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 18,
-  },
-  modalBox: {
-    width: "100%",
-    maxWidth: 860,
-    height: "82%",
-    backgroundColor: "#11161F",
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: 2,
-    borderColor: colors.gold,
-  },
-  modalHeader: {
-    height: 48,
-    backgroundColor: "#0B0E14",
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  modalTitle: {
-    color: colors.gold,
-    fontSize: 12.5,
-    fontWeight: "900",
-    flex: 1,
-  },
-  closeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#1F2937",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  closeBtnFocused: {
-    borderColor: "#FFD700",
-    backgroundColor: "#374151",
-  },
-  closeBtnText: {
-    color: "#FFF",
-    fontSize: 11.5,
-    fontWeight: "800",
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: "#000",
   },
 });
