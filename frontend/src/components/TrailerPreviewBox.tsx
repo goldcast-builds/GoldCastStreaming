@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, StyleSheet, ActivityIndicator, Text, Pressable } from "react-native";
+import {
+  View,
+  StyleSheet,
+  ActivityIndicator,
+  Text,
+  Pressable,
+  Modal,
+} from "react-native";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { WebView } from "react-native-webview";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, radius } from "../utils/theme";
 
@@ -181,17 +188,18 @@ function scoreCandidate(
 }
 
 export function TrailerPreviewBox({ title, year, mediaType, youtubeKey }: TrailerPreviewProps) {
-  const router = useRouter();
   const [candidates, setCandidates] = useState<CandidateVideo[]>(
     youtubeKey ? [{ videoId: youtubeKey, title: `${title} Trailer`, score: 100 }] : []
   );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [thumbFailed, setThumbFailed] = useState(false);
+  const [playerVisible, setPlayerVisible] = useState(false);
 
   useEffect(() => {
     setCurrentIndex(0);
     setThumbFailed(false);
+    setPlayerVisible(false);
     setCandidates(
       youtubeKey ? [{ videoId: youtubeKey, title: `${title} Trailer`, score: 100 }] : []
     );
@@ -271,7 +279,7 @@ export function TrailerPreviewBox({ title, year, mediaType, youtubeKey }: Traile
           setCurrentIndex(0);
         }
       } catch {
-        // Mantém candidatos existentes ou fallback limpo sem travar
+        // Mantém fallback seguro sem quebrar
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -296,22 +304,16 @@ export function TrailerPreviewBox({ title, year, mediaType, youtubeKey }: Traile
     : buildNormalSearchUrl(cleanQuery);
 
   const handleOpenTrailer = useCallback(() => {
-    router.push({
-      pathname: "/trailer",
-      params: {
-        url: targetUrl,
-        title: activeCandidate?.title || title,
-      },
-    });
-  }, [router, targetUrl, activeCandidate, title]);
+    setPlayerVisible(true);
+  }, []);
 
   const handleReportIncorrect = useCallback(() => {
     if (candidates.length <= 1) {
-      handleOpenTrailer();
+      setPlayerVisible(true);
       return;
     }
     setCurrentIndex((prev) => (prev + 1) % candidates.length);
-  }, [candidates.length, handleOpenTrailer]);
+  }, [candidates.length]);
 
   return (
     <View style={styles.wrapper}>
@@ -366,7 +368,7 @@ export function TrailerPreviewBox({ title, year, mediaType, youtubeKey }: Traile
 
             <View pointerEvents="none" style={styles.adFreePill}>
               <Text style={styles.adFreePillText}>
-                {activeVideoId ? "SEM ANÚNCIOS • REPRODUZIR" : "ABRIR NO YOUTUBE • SEM ANÚNCIOS"}
+                {activeVideoId ? "SEM ANÚNCIOS • REPRODUZIR" : "ABRIR NO YOUTUBE • TOCAR"}
               </Text>
             </View>
           </>
@@ -390,6 +392,45 @@ export function TrailerPreviewBox({ title, year, mediaType, youtubeKey }: Traile
             : "Não é este o trailer? Abrir / Trocar"}
         </Text>
       </Pressable>
+
+      <Modal
+        visible={playerVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setPlayerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle} numberOfLines={1}>
+                {activeCandidate?.title || title}
+              </Text>
+              <Pressable
+                focusable={true}
+                accessible={true}
+                hasTVPreferredFocus={true}
+                onPress={() => setPlayerVisible(false)}
+                style={({ focused }) => [styles.closeBtn, focused && styles.closeBtnFocused]}
+              >
+                <Ionicons name="close" size={18} color="#FFF" />
+                <Text style={styles.closeBtnText}>Fechar</Text>
+              </Pressable>
+            </View>
+
+            {playerVisible && (
+              <WebView
+                source={{ uri: targetUrl }}
+                style={styles.webview}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                allowsInlineMediaPlayback={true}
+                mediaPlaybackRequiresUserAction={false}
+                scalesPageToFit={true}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -519,5 +560,61 @@ const styles = StyleSheet.create({
     color: "#FCA5A5",
     fontSize: 9.5,
     fontWeight: "800",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 18,
+  },
+  modalBox: {
+    width: "100%",
+    maxWidth: 860,
+    height: "82%",
+    backgroundColor: "#11161F",
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: colors.gold,
+  },
+  modalHeader: {
+    height: 48,
+    backgroundColor: "#0B0E14",
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  modalTitle: {
+    color: colors.gold,
+    fontSize: 12.5,
+    fontWeight: "900",
+    flex: 1,
+  },
+  closeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#1F2937",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  closeBtnFocused: {
+    borderColor: "#FFD700",
+    backgroundColor: "#374151",
+  },
+  closeBtnText: {
+    color: "#FFF",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: "#000",
   },
 });
