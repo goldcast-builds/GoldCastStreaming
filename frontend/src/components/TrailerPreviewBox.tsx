@@ -4,6 +4,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Text,
+  TouchableOpacity,
   Pressable,
   Modal,
 } from "react-native";
@@ -332,15 +333,13 @@ export function TrailerPreviewBox({
         <Text style={styles.badgeText}>TRAILER OFICIAL</Text>
       </View>
 
-      <Pressable
+      <TouchableOpacity
+        activeOpacity={0.85}
         focusable={true}
         accessible={true}
         onPress={handleOpenTrailer}
-        hitSlop={12}
-        style={({ focused }) => [
-          styles.container,
-          focused && styles.containerFocused,
-        ]}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        style={styles.container}
       >
         {loading ? (
           <View pointerEvents="none" style={styles.loadingBox}>
@@ -383,17 +382,15 @@ export function TrailerPreviewBox({
             </View>
           </>
         )}
-      </Pressable>
+      </TouchableOpacity>
 
-      <Pressable
+      <TouchableOpacity
+        activeOpacity={0.85}
         focusable={true}
         accessible={true}
         onPress={handleReportIncorrect}
-        hitSlop={10}
-        style={({ focused }) => [
-          styles.reportBtn,
-          focused && styles.reportBtnFocused,
-        ]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={styles.reportBtn}
       >
         <Ionicons name="alert-circle-outline" size={12} color="#EF4444" />
         <Text style={styles.reportText}>
@@ -401,7 +398,7 @@ export function TrailerPreviewBox({
             ? `Não é este o trailer? Trocar (${currentIndex + 1}/${candidates.length})`
             : "Não é este o trailer? Abrir / Trocar"}
         </Text>
-      </Pressable>
+      </TouchableOpacity>
 
       <Modal
         visible={playerVisible}
@@ -453,8 +450,8 @@ const styles = StyleSheet.create({
     width: 280,
     alignItems: "flex-end",
     gap: 6,
-    zIndex: 60,
-    elevation: 24,
+    zIndex: 100,
+    elevation: 40,
   },
   badgeRow: {
     flexDirection: "row",
@@ -478,16 +475,11 @@ const styles = StyleSheet.create({
     height: 145,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#162A36",
+    backgroundColor: "#1D3547",
     borderWidth: 2,
-    borderColor: "rgba(233, 196, 106, 0.35)",
+    borderColor: "rgba(233, 196, 106, 0.45)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  containerFocused: {
-    borderColor: "#FFD700",
-    borderWidth: 3.5,
-    transform: [{ scale: 1.04 }],
   },
   thumbImage: {
     ...StyleSheet.absoluteFillObject,
@@ -496,7 +488,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#162A36",
+    backgroundColor: "#1D3547",
     paddingHorizontal: 14,
     paddingBottom: 22,
     gap: 4,
@@ -508,13 +500,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   fallbackSub: {
-    color: "#9CA3AF",
+    color: "#D1D5DB",
     fontSize: 10.5,
     fontWeight: "700",
   },
   thumbOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.32)",
+    backgroundColor: "rgba(0,0,0,0.28)",
   },
   playCircle: {
     width: 48,
@@ -555,16 +547,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "rgba(239, 68, 68, 0.14)",
+    backgroundColor: "rgba(239, 68, 68, 0.16)",
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.35)",
-  },
-  reportBtnFocused: {
-    backgroundColor: "#EF4444",
-    borderColor: "#FFF",
+    borderColor: "rgba(239, 68, 68, 0.4)",
   },
   reportText: {
     color: "#FCA5A5",
