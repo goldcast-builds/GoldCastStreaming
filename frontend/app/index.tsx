@@ -8,6 +8,7 @@ import { useSession } from "../src/store/session";
 export default function IntroScreen() {
   const router = useRouter();
   const restore = useSession((s) => s.restore);
+  const preloadCatalog = useSession((s) => s.preloadCatalog);
 
   const player = useVideoPlayer(require("../assets/Intro.mp4"), (playerInstance) => {
     playerInstance.loop = false;
@@ -17,13 +18,18 @@ export default function IntroScreen() {
   useEffect(() => {
     let isMounted = true;
 
-    // Já inicia a restauração da sessão em paralelo à introdução
-    restore().catch(() => {});
+    // Dispara a restauração e o pré-carregamento do catálogo imediatamente durante o vídeo
+    restore()
+      .then(() => {
+        if (isMounted) {
+          preloadCatalog().catch(() => {});
+        }
+      })
+      .catch(() => {});
 
     const timer = setTimeout(async () => {
       if (!isMounted) return;
       try {
-        await restore().catch(() => {});
         const currentSession = useSession.getState().session;
         const savedCode = await AsyncStorage.getItem("@goldcast_saved_code");
 
@@ -41,7 +47,7 @@ export default function IntroScreen() {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [router, restore]);
+  }, [router, restore, preloadCatalog]);
 
   return (
     <View style={styles.container}>
