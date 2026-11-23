@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -79,6 +79,10 @@ function cleanMediaTitle(rawTitle: string): string {
 
 function buildAdFreeTrailerUrl(videoId: string): string {
   return `https://www.yout-ube.com/watch?v=${encodeURIComponent(videoId)}`;
+}
+
+function buildAdFreeSearchUrl(query: string): string {
+  return `https://www.yout-ube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
 function extractSearchCandidates(htmlText: string): Array<{ videoId: string; videoTitle: string }> {
@@ -185,11 +189,17 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [playerVisible, setPlayerVisible] = useState(false);
+  const [thumbFailed, setThumbFailed] = useState(false);
 
   useEffect(() => {
     setCurrentIndex(0);
     setPlayerVisible(false);
+    setThumbFailed(false);
   }, [title, year, mediaType]);
+
+  useEffect(() => {
+    setThumbFailed(false);
+  }, [currentIndex]);
 
   useEffect(() => {
     if (!title) return;
@@ -271,18 +281,25 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
 
   const activeCandidate = candidates[currentIndex] ?? null;
   const activeVideoId = activeCandidate?.videoId ?? null;
-  const thumbUri = activeVideoId ? `https://img.youtube.com/vi/${activeVideoId}/hqdefault.jpg` : "";
-  const adFreeUrl = activeVideoId ? buildAdFreeTrailerUrl(activeVideoId) : null;
+  const thumbUri =
+    activeVideoId && !thumbFailed ? `https://img.youtube.com/vi/${activeVideoId}/hqdefault.jpg` : "";
 
-  const handleOpenAdFreeTrailer = () => {
-    if (!activeVideoId) return;
+  const cleanQuery = `${cleanMediaTitle(title) || title.trim()} trailer oficial`;
+  const adFreeUrl = activeVideoId
+    ? buildAdFreeTrailerUrl(activeVideoId)
+    : buildAdFreeSearchUrl(cleanQuery);
+
+  const handleOpenAdFreeTrailer = useCallback(() => {
     setPlayerVisible(true);
-  };
+  }, []);
 
-  const handleReportIncorrect = () => {
-    if (candidates.length === 0) return;
+  const handleReportIncorrect = useCallback(() => {
+    if (candidates.length <= 1) {
+      setPlayerVisible(true);
+      return;
+    }
     setCurrentIndex((prev) => (prev + 1) % candidates.length);
-  };
+  }, [candidates.length]);
 
   return (
     <View style={styles.wrapper}>
@@ -294,40 +311,48 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
       <Pressable
         focusable={true}
         accessible={true}
-        disabled={!activeVideoId}
         onPress={handleOpenAdFreeTrailer}
+        hitSlop={8}
         style={({ focused }) => [
           styles.container,
           focused && styles.containerFocused,
-          !activeVideoId && { opacity: 0.75 },
         ]}
       >
         {loading ? (
           <View pointerEvents="none" style={styles.loadingBox}>
             <ActivityIndicator size="small" color={colors.gold} />
+            <Text style={styles.loadingHint}>A preparar trailer...</Text>
           </View>
-        ) : activeVideoId && thumbUri ? (
+        ) : (
           <>
-            <Image
-              source={{ uri: thumbUri }}
-              style={styles.thumbImage}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              pointerEvents="none"
-            />
+            {thumbUri ? (
+              <Image
+                source={{ uri: thumbUri }}
+                style={styles.thumbImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                pointerEvents="none"
+                onError={() => setThumbFailed(true)}
+              />
+            ) : (
+              <View pointerEvents="none" style={styles.fallbackBg}>
+                <Ionicons name="film-outline" size={28} color={colors.gold} />
+                <Text style={styles.fallbackTitle} numberOfLines={1}>
+                  {title}
+                </Text>
+              </View>
+            )}
+
             <View pointerEvents="none" style={styles.thumbOverlay} />
+
             <View pointerEvents="none" style={styles.playCircle}>
               <Ionicons name="play" size={22} color="#000" />
             </View>
+
             <View pointerEvents="none" style={styles.adFreePill}>
-              <Text style={styles.adFreePillText}>SEM ANÚNCIOS • TOCAR PARA VER</Text>
+              <Text style={styles.adFreePillText}>SEM ANÚNCIOS • REPRODUZIR</Text>
             </View>
           </>
-        ) : (
-          <View pointerEvents="none" style={styles.loadingBox}>
-            <Ionicons name="videocam-off-outline" size={22} color="#9CA3AF" />
-            <Text style={styles.emptyText}>Trailer não encontrado</Text>
-          </View>
         )}
       </Pressable>
 
@@ -335,23 +360,22 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
         focusable={true}
         accessible={true}
         onPress={handleReportIncorrect}
-        disabled={candidates.length <= 1}
+        hitSlop={6}
         style={({ focused }) => [
           styles.reportBtn,
           focused && styles.reportBtnFocused,
-          candidates.length <= 1 && styles.reportBtnDisabled,
         ]}
       >
         <Ionicons name="alert-circle-outline" size={12} color="#EF4444" />
         <Text style={styles.reportText}>
           {candidates.length > 1
             ? `Não é este o trailer? Trocar (${currentIndex + 1}/${candidates.length})`
-            : "Não é este o trailer? Reportar / Trocar"}
+            : "Não é este o trailer? Abrir / Trocar"}
         </Text>
       </Pressable>
 
       <Modal
-        visible={playerVisible && !!adFreeUrl}
+        visible={playerVisible}
         animationType="fade"
         transparent={true}
         onRequestClose={() => setPlayerVisible(false)}
@@ -374,7 +398,7 @@ export function TrailerPreviewBox({ title, year, mediaType }: TrailerPreviewProp
               </Pressable>
             </View>
 
-            {adFreeUrl && (
+            {playerVisible && (
               <WebView
                 source={{ uri: adFreeUrl }}
                 style={styles.webview}
@@ -400,19 +424,19 @@ const styles = StyleSheet.create({
     width: 300,
     alignItems: "flex-end",
     gap: 6,
-    zIndex: 40,
-    elevation: 16,
+    zIndex: 60,
+    elevation: 24,
   },
   badgeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(212,175,55,0.15)",
+    backgroundColor: "rgba(212,175,55,0.18)",
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: "rgba(212,175,55,0.3)",
+    borderColor: "rgba(212,175,55,0.35)",
   },
   badgeText: {
     color: colors.gold,
@@ -425,9 +449,9 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#000",
+    backgroundColor: "#142632",
     borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.2)",
+    borderColor: "rgba(233, 196, 106, 0.35)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -439,9 +463,22 @@ const styles = StyleSheet.create({
   thumbImage: {
     ...StyleSheet.absoluteFillObject,
   },
+  fallbackBg: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#152E3B",
+    paddingHorizontal: 14,
+    gap: 6,
+  },
+  fallbackTitle: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
   thumbOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(0,0,0,0.28)",
   },
   playCircle: {
     width: 48,
@@ -454,12 +491,12 @@ const styles = StyleSheet.create({
   adFreePill: {
     position: "absolute",
     bottom: 8,
-    backgroundColor: "rgba(0,0,0,0.82)",
+    backgroundColor: "rgba(0,0,0,0.85)",
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "rgba(233,196,106,0.4)",
+    borderColor: "rgba(233,196,106,0.45)",
   },
   adFreePillText: {
     color: colors.gold,
@@ -473,28 +510,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
   },
-  emptyText: {
-    color: "#9CA3AF",
-    fontSize: 11,
+  loadingHint: {
+    color: "#D1D5DB",
+    fontSize: 10.5,
     fontWeight: "700",
   },
   reportBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "rgba(239, 68, 68, 0.12)",
+    backgroundColor: "rgba(239, 68, 68, 0.14)",
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.3)",
+    borderColor: "rgba(239, 68, 68, 0.35)",
   },
   reportBtnFocused: {
     backgroundColor: "#EF4444",
     borderColor: "#FFF",
-  },
-  reportBtnDisabled: {
-    opacity: 0.55,
   },
   reportText: {
     color: "#FCA5A5",
@@ -503,7 +537,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.9)",
+    backgroundColor: "rgba(0,0,0,0.92)",
     justifyContent: "center",
     alignItems: "center",
     padding: 18,
