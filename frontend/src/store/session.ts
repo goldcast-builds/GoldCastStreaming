@@ -107,6 +107,7 @@ interface State {
   loadLive: (force?: boolean) => Promise<void>;
   loadVod: (force?: boolean) => Promise<void>;
   loadSeries: (force?: boolean) => Promise<void>;
+  preloadCatalog: () => Promise<void>;
   refreshAccount: () => Promise<void>;
 
   isFav: (kind: Kind, id: string | number) => boolean;
@@ -141,6 +142,7 @@ function persistUD(s: XtreamSession | null, ud: UserData) {
 }
 
 let restoring: Promise<void> | null = null;
+let preloadingCatalog: Promise<void> | null = null;
 
 export const useSession = create<State>((set, get) => ({
   restored: false,
@@ -158,37 +160,86 @@ export const useSession = create<State>((set, get) => ({
   queue: [],
   queueIndex: 0,
 
+  preloadCatalog: async () => {
+    if (preloadingCatalog) return preloadingCatalog;
+    preloadingCatalog = (async () => {
+      const { session, loadVod, loadSeries, loadLive, catalog } = get();
+      if (!session) return;
+      const tasks: Promise<any>[] = [];
+      if (!catalog.vodLoaded) tasks.push(loadVod(false).catch(() => {}));
+      if (!catalog.seriesLoaded) tasks.push(loadSeries(false).catch(() => {}));
+      if (!catalog.liveLoaded) tasks.push(loadLive(false).catch(() => {}));
+      if (tasks.length > 0) {
+        await Promise.allSettled(tasks);
+      }
+    })().finally(() => {
+      preloadingCatalog = null;
+    });
+    return preloadingCatalog;
+  },
+
   restore: async () => {
     if (get().restored || restoring) return restoring || undefined;
     restoring = (async () => {
-    try {
-      const [raw, src, dm, pr] = await Promise.all([secureGet(SESSION_KEY), AsyncStorage.getItem(SOURCE_KEY), AsyncStorage.getItem(DEVICE_KEY), AsyncStorage.getItem(PREFS_KEY)]);
-      if (dm === "tv" || dm === "mobile") set({ deviceMode: dm });
-      if (pr) { try { set({ prefs: { ...defaultPrefs(), ...JSON.parse(pr) } }); } catch {} }
-      let session: XtreamSession | null = null;
-      if (raw) {
-        const saved = JSON.parse(raw);
-        session = saved as XtreamSession;
-        authenticate(saved.server, saved.username, saved.password)
-          .then(async (fresh) => {
-            set({ session: fresh });
-            await secureSet(SESSION_KEY, JSON.stringify(fresh));
-            get().loadCloudProgress(); // Sincroniza nuvem após autenticar
-          })
-          .catch(async (e) => {
-            if (e?.kind === "auth" || e?.kind === "expired") {
-              set({ session: { ...saved, userInfo: { ...saved.userInfo, status: e.kind === "expired" ? "Expired" : "Invalid", auth: e.kind === "auth" ? 0 : 1 } } });
-            }
-          });
+      try {
+        const [raw, src, dm, pr] = await Promise.all([
+          secureGet(SESSION_KEY),
+          AsyncStorage.getItem(SOURCE_KEY),
+          AsyncStorage.getItem(DEVICE_KEY),
+          AsyncStorage.getItem(PREFS_KEY)
+        ]);
+
+        if (dm === "tv" || dm === "mobile") set({ deviceMode: dm });
+        if (pr) { 
+          try { 
+            set({ prefs: { ...defaultPrefs(), ...JSON.parse(pr) } }); 
+          } catch {} 
+        }
+
+        let session: XtreamSession | null = null;
+        if (raw) {
+          const saved = JSON.parse(raw);
+          session = saved as XtreamSession;
+          
+          // Define a sessão imediatamente para que o pré-carregamento já possa usar
+          set({ session });
+
+          authenticate(saved.server, saved.username, saved.password)
+            .then(async (fresh) => {
+              set({ session: fresh });
+              await secureSet(SESSION_KEY, JSON.stringify(fresh));
+              get().loadCloudProgress();
+              get().preloadCatalog(); // Baixa o catálogo em segundo plano
+            })
+            .catch(async (e) => {
+              if (e?.kind === "auth" || e?.kind === "expired") {
+                set({ 
+                  session: { 
+                    ...saved, 
+                    userInfo: { 
+                      ...saved.userInfo, 
+                      status: e.kind === "expired" ? "Expired" : "Invalid", 
+                      auth: e.kind === "auth" ? 0 : 1 
+                    } 
+                  } 
+                });
+              }
+            });
+        }
+
+        const ud = await loadUD(session);
+        let source: Source | null = src ? JSON.parse(src) : null;
+        if (!source && session) source = { kind: "xtream" };
+
+        set({ session, ud, source, restored: true });
+
+        if (session) {
+          get().loadCloudProgress();
+          get().preloadCatalog(); // Dispara o download dos dados imediatamente
+        }
+      } catch {
+        set({ restored: true });
       }
-      const ud = await loadUD(session);
-      let source: Source | null = src ? JSON.parse(src) : null;
-      if (!source && session) source = { kind: "xtream" };
-      set({ session, ud, source, restored: true });
-      if (session) get().loadCloudProgress();
-    } catch {
-      set({ restored: true });
-    }
     })();
     return restoring;
   },
@@ -202,7 +253,8 @@ export const useSession = create<State>((set, get) => ({
     if (remember) await secureSet(SESSION_KEY, JSON.stringify(session));
     else await secureSet(SESSION_KEY, null);
     onStage?.("done");
-    get().loadCloudProgress(); // Sincroniza nuvem ao entrar
+    get().loadCloudProgress();
+    get().preloadCatalog(); // Inicia logo após o login
     return session;
   },
 
@@ -320,7 +372,6 @@ export const useSession = create<State>((set, get) => ({
     set({ ud: nud });
     persistUD(session, nud);
 
-    // Sincronização em segundo plano com o Supabase
     const username = session?.userInfo?.username || session?.username;
     if (username) {
       fetch(`${SUPABASE_URL}/rest/v1/user_progress`, {
